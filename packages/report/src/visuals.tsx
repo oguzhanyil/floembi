@@ -42,16 +42,37 @@ export function DataGrid({
   const hasSel = selected !== undefined;
   const banded = format.banded !== false;
 
-  // Sütun genişliği: başlık ve ilk 200 değerin uzunluğuna göre
-  const widths = useMemo(
+  // Sütun genişliği: başlık ve ilk 200 değerin uzunluğuna göre. Sığmazsa önce metin
+  // sütunları daralır (en az 72 px); sayılar kesilmesin diye değer sütunlarına dokunulmaz.
+  const [boxW, setBoxW] = useState(0);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setBoxW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const natural = useMemo(
     () =>
       columns.map((c, ci) => {
-        let len = c.name.length;
+        let len = c.kind === "value" ? Math.min(c.name.length, 14) : c.name.length;
         for (const r of rows.slice(0, 200)) len = Math.max(len, fmt(r[ci], c).length);
-        return Math.max(64, Math.min(320, len * 7.4 + 22));
+        return Math.max(64, Math.min(320, len * 7.2 + 20));
       }),
     [columns, rows],
   );
+  const widths = useMemo(() => {
+    const avail = boxW - 12;
+    const total = natural.reduce((s, w) => s + w, 0);
+    if (!boxW || total <= avail) return natural;
+    const textIdx = columns.map((c, i) => (c.kind === "group" ? i : -1)).filter((i) => i >= 0);
+    const textTotal = textIdx.reduce((s, i) => s + natural[i], 0);
+    const need = total - avail;
+    const shrinkable = textTotal - 72 * textIdx.length;
+    if (shrinkable <= 0) return natural;
+    const ratio = Math.min(1, need / shrinkable);
+    return natural.map((w, i) => (columns[i].kind === "group" ? w - (w - 72) * ratio : w));
+  }, [natural, boxW, columns]);
   const template = widths.map((w) => `${w}px`).join(" ") + " 1fr";
 
   return (

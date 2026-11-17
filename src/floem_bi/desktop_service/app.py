@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -127,6 +128,15 @@ def create_app(
     open_path: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Floem BI Desktop servis", version="0.1.0", docs_url=None, redoc_url=None)
+    # Geliştirme modunda arayüz Vite'tan (http://127.0.0.1:5199) yüklenir; tarayıcı bu kaynaktan
+    # servise giden istekler için CORS izni ister. Yalnızca Electron'un bildirdiği o tek adrese
+    # izin verilir; derlenmiş uygulamada değişken yoktur ve hiçbir kaynağa izin açılmaz.
+    dev_origin = os.environ.get("FLOEM_ALLOW_ORIGIN", "").strip()
+    if dev_origin:
+        app.add_middleware(
+            CORSMiddleware, allow_origins=[dev_origin], allow_methods=["*"],
+            allow_headers=["X-Floem-Token", "Content-Type"], allow_credentials=False,
+        )
     store = store or ConnectionStore()
     work_dir = Path(work_dir or default_work_dir())
     # Önceki oturumlardan kalan çalışma klasörleri (Electron tek örnek çalıştırır)

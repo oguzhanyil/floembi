@@ -49,6 +49,8 @@ function startService() {
       cwd,
       env: {
         ...process.env, FLOEM_TOKEN: token, FLOEM_PARENT_PID: String(process.pid),
+        // Yalnızca geliştirmede: Vite adresine CORS izni (derlenmiş uygulamada boş)
+        FLOEM_ALLOW_ORIGIN: DEV_URL ? new URL(DEV_URL).origin : "",
         PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1",
       },
       windowsHide: true,

@@ -147,3 +147,22 @@ def test_real_sqlserver_roundtrip():
     assert len(rs.rows) <= 2
     with pytest.raises(ConnectorError):
         c.run_query(None, "DELETE FROM sys.objects")
+
+
+def test_cors_only_for_dev_origin(tmp_path, monkeypatch):
+    """Geliştirmede yalnızca Vite adresi servise erişebilir; derlenmiş uygulamada CORS kapalı."""
+    def preflight(client, origin):
+        return client.options("/document", headers={
+            "Origin": origin, "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "x-floem-token",
+        })
+
+    store = ConnectionStore(tmp_path, use_keyring=False)
+    monkeypatch.setenv("FLOEM_ALLOW_ORIGIN", "http://127.0.0.1:5199")
+    dev = TestClient(create_app(TOKEN, store=store, connector_factory=FakeConnector, work_dir=tmp_path / "w1"))
+    assert preflight(dev, "http://127.0.0.1:5199").headers.get("access-control-allow-origin") == "http://127.0.0.1:5199"
+    assert "access-control-allow-origin" not in preflight(dev, "https://kotu.example").headers
+    assert dev.get("/document", headers={"Origin": "http://127.0.0.1:5199"}).status_code == 401   # token yine şart
+
+    monkeypatch.delenv("FLOEM_ALLOW_ORIGIN")
+    prod = TestClient(create_app(TOKEN, store=store, connector_factory=FakeConnector, work_dir=tmp_path / "w2"))
+    assert "access-control-allow-origin" not in preflight(prod, "http://127.0.0.1:5199").headers
