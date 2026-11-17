@@ -1,6 +1,6 @@
 import type { ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualType } from "@floem/client";
 import {
-  VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, usesColumn, type CrossFilter, type QueryFn, type WellDef,
+  VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, usesColumn, type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageCanvas } from "./PageCanvas";
@@ -111,19 +111,28 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     return { x: 16, y: 16 };
   }
 
-  function addField(v: Visual, table: string, column: string, well?: WellDef["key"]): Visual {
+  /** Alanı görsele ekler: kutu verilmezse alanın türüne göre (sayı → değer, diğerleri → gruplama). */
+  function addField(v: Visual, table: string, column: string, well?: WellKey): Visual {
     const c = columnOf(table, column);
     if (!c) return v;
-    const role = well ?? defaultRole(c);
-    const def = VISUAL_DEFS[v.type].wells.find((w) => w.key === role) ?? VISUAL_DEFS[v.type].wells[0];
-    if (def.key === "group") {
-      if (v.group.some((g) => sameField(g, { table, column }))) return v;
-      const group = def.max && v.group.length >= def.max ? [{ table, column }] : [...v.group, { table, column }];
-      return { ...v, group };
+    const wells = VISUAL_DEFS[v.type].wells;
+    const wanted = well ?? defaultRole(c);
+    // İstenen kutu bu görselde yoksa ilk uygun kutuya (ör. dilimleyiciye sayı → Alan)
+    const def =
+      wells.find((w) => w.key === wanted) ??
+      wells.find((w) => (wanted === "group" || wanted === "legend" ? w.key === "group" : w.key === "values")) ??
+      wells[0];
+    const field = { table, column };
+    if (def.key === "group" || def.key === "legend") {
+      const cur = def.key === "group" ? v.group : v.legend ?? [];
+      if (cur.some((g) => sameField(g, field))) return v;
+      const next = def.max && cur.length >= def.max ? [field] : [...cur, field];
+      return def.key === "group" ? { ...v, group: next } : { ...v, legend: next };
     }
     const value: ValueRef = { table, column, agg: defaultAgg(c) };
-    const values = def.max && v.values.length >= def.max ? [value] : [...v.values, value];
-    return { ...v, values };
+    const cur = def.key === "values" ? v.values : v.target ?? [];
+    const next = def.max && cur.length >= def.max ? [value] : [...cur, value];
+    return def.key === "values" ? { ...v, values: next } : { ...v, target: next };
   }
 
   function createVisual(type: VisualType, at?: { x: number; y: number }): Visual {
@@ -142,15 +151,24 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   function pickType(t: VisualType) {
     if (selected) {
-      // Türü değiştir: uymayan alanları kırp (kart tek değer, grafik tek eksen alanı)
+      // Türü değiştir: alanları yeni türün kutularına taşı, sığmayanları kırp
       const wells = VISUAL_DEFS[t].wells;
-      const gMax = wells.find((w) => w.key === "group");
-      const vMax = wells.find((w) => w.key === "values");
+      const w = (k: WellKey) => wells.find((x) => x.key === k);
+      const fit = <T,>(items: T[], k: WellKey) => {
+        const d = w(k);
+        if (!d) return [];
+        return d.max ? items.slice(0, d.max) : items;
+      };
+      // Kartlarda gruplama yok; değerleri koru. Dilimleyicide değer yok; ilk gruplama alanını koru.
+      const legend = selected.legend ?? [];
       updateVisual({
         ...selected,
         type: t,
-        group: gMax ? (gMax.max ? selected.group.slice(0, gMax.max) : selected.group) : [],
-        values: vMax?.max ? selected.values.slice(0, vMax.max) : selected.values,
+        group: fit(selected.group.length ? selected.group : legend, "group"),
+        legend: fit(legend, "legend"),
+        values: fit(selected.values, "values"),
+        target: fit(selected.target ?? [], "target"),
+        state: t === selected.type ? selected.state : {},
       });
     } else {
       insert(createVisual(t));
@@ -168,10 +186,14 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   function toggleField(table: string, column: string, checked: boolean) {
     if (!checked) {
       if (!selected) return;
+      const keep = (g: { table: string; column: string }) => !(g.table === table && g.column === column);
+      const keepV = (x: ValueRef) => "measure" in x || keep(x);
       updateVisual({
         ...selected,
-        group: selected.group.filter((g) => !(g.table === table && g.column === column)),
-        values: selected.values.filter((x) => "measure" in x || !(x.table === table && x.column === column)),
+        group: selected.group.filter(keep),
+        legend: (selected.legend ?? []).filter(keep),
+        values: selected.values.filter(keepV),
+        target: (selected.target ?? []).filter(keepV),
       });
       return;
     }

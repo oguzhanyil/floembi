@@ -2,38 +2,88 @@ import type { Agg, ColumnType, FieldRef, ModelColumn, ValueRef, Visual, VisualTy
 
 export const GRID = 8;
 
+export type WellKey = "group" | "legend" | "values" | "target";
+
 export interface WellDef {
-  key: "group" | "values";
+  key: WellKey;
   label: string;
   max?: number;
 }
 
-export const VISUAL_DEFS: Record<VisualType, { label: string; icon: string; wells: WellDef[]; size: [number, number] }> = {
+export interface VisualDef {
+  label: string;
+  icon: string;
+  wells: WellDef[];
+  size: [number, number];
+  /** Görselleştirmeler bölmesindeki grup */
+  group: "Veri" | "Grafik" | "Kart" | "Etkileşim";
+  /** Kategori grafiği mi (eksen + değer + gösterge) */
+  category?: { horizontal?: boolean; stacked?: boolean; line?: boolean; area?: boolean };
+}
+
+const AXIS: WellDef = { key: "group", label: "X ekseni", max: 1 };
+const LEGEND: WellDef = { key: "legend", label: "Gösterge", max: 1 };
+const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
+
+export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   table: {
-    label: "Tablo",
-    icon: "▦",
-    wells: [
-      { key: "group", label: "Sütunlar" },
-      { key: "values", label: "Değerler" },
-    ],
-    size: [480, 320],
+    label: "Tablo", icon: "▦", group: "Veri", size: [480, 320],
+    wells: [{ key: "group", label: "Sütunlar" }, { key: "values", label: "Değerler" }],
   },
   column: {
-    label: "Kümelenmiş sütun grafiği",
-    icon: "▮",
-    wells: [
-      { key: "group", label: "X ekseni", max: 1 },
-      { key: "values", label: "Y ekseni" },
-    ],
-    size: [520, 320],
+    label: "Kümelenmiş sütun grafiği", icon: "▮", group: "Grafik", size: [520, 320], category: {},
+    wells: [AXIS, YVALUES, LEGEND],
+  },
+  stackedcolumn: {
+    label: "Yığılmış sütun grafiği", icon: "▯", group: "Grafik", size: [520, 320], category: { stacked: true },
+    wells: [AXIS, YVALUES, LEGEND],
+  },
+  bar: {
+    label: "Kümelenmiş çubuk grafiği", icon: "▬", group: "Grafik", size: [520, 320], category: { horizontal: true },
+    wells: [{ key: "group", label: "Y ekseni", max: 1 }, { key: "values", label: "X ekseni" }, LEGEND],
+  },
+  stackedbar: {
+    label: "Yığılmış çubuk grafiği", icon: "▭", group: "Grafik", size: [520, 320], category: { horizontal: true, stacked: true },
+    wells: [{ key: "group", label: "Y ekseni", max: 1 }, { key: "values", label: "X ekseni" }, LEGEND],
+  },
+  line: {
+    label: "Çizgi grafiği", icon: "⟋", group: "Grafik", size: [560, 300], category: { line: true },
+    wells: [AXIS, YVALUES, LEGEND],
+  },
+  area: {
+    label: "Alan grafiği", icon: "◭", group: "Grafik", size: [560, 300], category: { line: true, area: true },
+    wells: [AXIS, YVALUES, LEGEND],
+  },
+  pie: {
+    label: "Pasta grafiği", icon: "◔", group: "Grafik", size: [360, 300],
+    wells: [{ key: "group", label: "Gösterge", max: 1 }, { key: "values", label: "Değerler", max: 1 }],
+  },
+  donut: {
+    label: "Halka grafiği", icon: "◎", group: "Grafik", size: [360, 300],
+    wells: [{ key: "group", label: "Gösterge", max: 1 }, { key: "values", label: "Değerler", max: 1 }],
   },
   card: {
-    label: "Kart",
-    icon: "▭",
-    wells: [{ key: "values", label: "Alanlar", max: 1 }],
-    size: [240, 140],
+    label: "Kart", icon: "▢", group: "Kart", size: [240, 140],
+    wells: [{ key: "values", label: "Alan", max: 1 }],
+  },
+  multicard: {
+    label: "Çok satırlı kart", icon: "☰", group: "Kart", size: [300, 240],
+    wells: [{ key: "group", label: "Kategori", max: 1 }, { key: "values", label: "Alanlar" }],
+  },
+  kpi: {
+    label: "KPI kartı", icon: "◆", group: "Kart", size: [280, 160],
+    wells: [{ key: "values", label: "Değer", max: 1 }, { key: "target", label: "Hedef", max: 1 }],
+  },
+  slicer: {
+    label: "Dilimleyici", icon: "☷", group: "Etkileşim", size: [240, 280],
+    wells: [{ key: "group", label: "Alan", max: 1 }],
   },
 };
+
+export const VISUAL_GROUPS: VisualDef["group"][] = ["Grafik", "Kart", "Veri", "Etkileşim"];
+
+/** Görselin tüm gruplama alanları (eksen + gösterge) */
+export const groupFields = (v: Visual): FieldRef[] => [...v.group, ...(v.legend ?? [])];
 
 export const AGG_LABEL: Record<Agg, string> = {
   sum: "Toplam",
@@ -85,8 +135,8 @@ export function sameField(a: FieldRef, b: FieldRef) {
 }
 
 export function usesColumn(v: Visual, table: string, column: string): boolean {
-  return v.group.some((g) => g.table === table && g.column === column) ||
-    v.values.some((x) => !("measure" in x) && x.table === table && x.column === column);
+  return groupFields(v).some((g) => g.table === table && g.column === column) ||
+    [...v.values, ...(v.target ?? [])].some((x) => !("measure" in x) && x.table === table && x.column === column);
 }
 
 // ------------------------------------------------------------------ biçimlendirme

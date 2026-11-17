@@ -1,8 +1,9 @@
-import type { FilterRef, Visual } from "@floem/client";
+import type { ColumnType, FilterRef, Visual, VisualState } from "@floem/client";
 import { useState } from "react";
-import { VISUAL_DEFS, valueLabel } from "./reportUtils";
+import { CategoryChart, PieChartVisual } from "./charts";
+import { VISUAL_DEFS, groupFields, valueLabel } from "./reportUtils";
 import { useVisualData, type QueryFn } from "./useVisualData";
-import { CardVisual, ColumnChart, TableVisual } from "./visuals";
+import { CardVisual, DataGrid, KpiVisual, MultiCard, Slicer } from "./visuals";
 
 export interface CrossFilter {
   visualId: string;
@@ -12,10 +13,12 @@ export interface CrossFilter {
 }
 
 export function visualTitle(v: Visual): string {
+  if (v.format.showTitle === false) return "";
   if (v.title) return v.title;
   const vals = v.values.map(valueLabel);
-  const grp = v.group.map((g) => g.column);
-  if (v.type === "card") return "";
+  const grp = groupFields(v).map((g) => g.column);
+  if (v.type === "card" || v.type === "kpi") return "";
+  if (v.type === "slicer") return grp[0] ?? VISUAL_DEFS.slicer.label;
   if (!vals.length && !grp.length) return VISUAL_DEFS[v.type].label;
   if (!vals.length) return grp.join(", ");
   return grp.length ? `${vals.join(", ")} - ${grp.join(", ")}` : vals.join(", ");
@@ -53,7 +56,7 @@ function ErrorView({ message, detail }: { message: string; detail?: string }) {
 
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
 export function VisualBody({
-  v, extra, dataRev, cross, onCross, run,
+  v, extra, dataRev, cross, onCross, run, state, onState, fieldType,
 }: {
   v: Visual;
   extra: FilterRef[];
@@ -61,8 +64,15 @@ export function VisualBody({
   cross: CrossFilter | null;
   onCross: (value: string | number | boolean | null) => void;
   run: QueryFn;
+  /** Etkileşim durumu (dilimleyici seçimi, sıralama); verilmezse görselin kayıtlı durumu */
+  state?: VisualState;
+  onState?: (s: VisualState) => void;
+  /** Dilimleyici alanının model tipi (aralık dilimleyicisinde tarih/sayı girişi için) */
+  fieldType?: ColumnType;
 }) {
-  const data = useVisualData(v, extra, dataRev, run);
+  const st = state ?? v.state ?? {};
+  const vq = v.type === "table" && st !== v.state ? { ...v, state: st } : v;
+  const data = useVisualData(vq, extra, dataRev, run);
   if (data.state === "empty") {
     return (
       <div className="v-empty">
@@ -75,11 +85,27 @@ export function VisualBody({
   const result = data.state === "ready" ? data.result : data.previous;
   if (!result) return <div className="v-empty v-loading">Yükleniyor…</div>;
   const selected = cross && cross.visualId === v.id ? cross.value : undefined;
+  const def = VISUAL_DEFS[v.type];
   return (
     <div className={`v-body ${data.state === "loading" ? "loading" : ""}`}>
-      {v.type === "table" && <TableVisual result={result} selected={selected} onSelect={onCross} />}
-      {v.type === "column" && <ColumnChart result={result} selected={selected} onSelect={onCross} />}
-      {v.type === "card" && <CardVisual result={result} />}
+      {def.category && (
+        <CategoryChart result={result} def={def} format={v.format} hasLegend={!!v.legend?.length} selected={selected} onSelect={onCross} />
+      )}
+      {(v.type === "pie" || v.type === "donut") && (
+        <PieChartVisual result={result} donut={v.type === "donut"} format={v.format} selected={selected} onSelect={onCross} />
+      )}
+      {v.type === "table" && (
+        <DataGrid
+          result={result} selected={selected} onSelect={onCross} format={v.format}
+          sort={st.sort} onSort={onState ? (sort) => onState({ ...st, sort }) : undefined}
+        />
+      )}
+      {v.type === "card" && <CardVisual result={result} format={v.format} />}
+      {v.type === "multicard" && <MultiCard result={result} selected={selected} onSelect={onCross} />}
+      {v.type === "kpi" && <KpiVisual result={result} format={v.format} />}
+      {v.type === "slicer" && (
+        <Slicer result={result} format={v.format} state={st} onState={(s) => onState?.(s)} fieldType={fieldType} />
+      )}
     </div>
   );
 }

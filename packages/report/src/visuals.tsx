@@ -1,8 +1,10 @@
-import type { VisualResult } from "@floem/client";
-import { useLayoutEffect, useRef, useState } from "react";
-import { SERIES, formatCompact, formatValue } from "./reportUtils";
+import type { VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { formatCompact, formatValue, isNumericType } from "./reportUtils";
 
-export type CrossSelect = (value: string | number | boolean | null) => void;
+type Raw = string | number | boolean | null;
+export type CrossSelect = (value: Raw) => void;
 
 function useSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -17,216 +19,289 @@ function useSize<T extends HTMLElement>() {
   return [ref, size] as const;
 }
 
-// ------------------------------------------------------------------ Tablo
-export function TableVisual({
-  result, selected, onSelect,
+const fmt = (v: Raw | undefined, c: VisualResultColumn) => formatValue(v ?? null, c.type, c.format);
+
+// ------------------------------------------------------------------ Veri ızgarası (Tablo)
+const ROW_H = 26;
+
+/** Sanal kaydırmalı tablo: başlığa tıklayınca sıralar, toplam satırı, satıra tıklayınca çapraz filtre. */
+export function DataGrid({
+  result, selected, onSelect, sort, onSort, format,
 }: {
   result: VisualResult;
   selected?: unknown;
   onSelect?: CrossSelect;
+  sort?: VisualState["sort"];
+  onSort?: (s: VisualState["sort"]) => void;
+  format: VisualFormat;
 }) {
   const { columns, rows, total } = result;
   const groupCount = columns.filter((c) => c.kind === "group").length;
+  const scroller = useRef<HTMLDivElement>(null);
+  const v = useVirtualizer({ count: rows.length, getScrollElement: () => scroller.current, estimateSize: () => ROW_H, overscan: 12 });
   const hasSel = selected !== undefined;
+  const banded = format.banded !== false;
+
+  // Sütun genişliği: başlık ve ilk 200 değerin uzunluğuna göre
+  const widths = useMemo(
+    () =>
+      columns.map((c, ci) => {
+        let len = c.name.length;
+        for (const r of rows.slice(0, 200)) len = Math.max(len, fmt(r[ci], c).length);
+        return Math.max(64, Math.min(320, len * 7.4 + 22));
+      }),
+    [columns, rows],
+  );
+  const template = widths.map((w) => `${w}px`).join(" ") + " 1fr";
+
   return (
-    <div className="v-table-wrap">
-      <table className="v-table">
-        <thead>
-          <tr>
-            {columns.map((c, i) => (
-              <th key={i} className={c.kind === "value" ? "num" : ""}>
-                {c.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, ri) => {
-            const isSel = hasSel && groupCount > 0 && r[0] === selected;
-            return (
-              <tr
-                key={ri}
-                className={hasSel ? (isSel ? "sel" : "dim") : ""}
-                onClick={groupCount && onSelect ? () => onSelect(r[0]) : undefined}
-              >
-                {r.map((v, ci) => (
-                  <td key={ci} className={columns[ci].kind === "value" ? "num" : ""}>
-                    {formatValue(v, columns[ci].type, columns[ci].format)}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-        {total && (
-          <tfoot>
-            <tr>
-              {columns.map((c, ci) =>
-                c.kind === "group" ? (
-                  <td key={ci}>{ci === 0 ? "Toplam" : ""}</td>
-                ) : (
-                  <td key={ci} className="num">
-                    {formatValue(total[ci - groupCount], c.type, c.format)}
-                  </td>
-                ),
-              )}
-            </tr>
-          </tfoot>
-        )}
-      </table>
+    <div className="v-grid" ref={scroller}>
+      <div className="v-grid-head" style={{ gridTemplateColumns: template }}>
+        {columns.map((c, i) => {
+          const active = sort?.index === i;
+          return (
+            <div
+              key={i}
+              className={`v-grid-th ${c.kind === "value" ? "num" : ""} ${onSort ? "sortable" : ""}`}
+              title={onSort ? "Sıralamak için tıklayın" : undefined}
+              onClick={onSort ? () => onSort(active && sort?.desc ? undefined : { index: i, desc: active ? true : c.kind === "value" }) : undefined}
+            >
+              {c.name}
+              {active && <span className="sort-ind">{sort?.desc ? " ▼" : " ▲"}</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ height: v.getTotalSize(), position: "relative" }}>
+        {v.getVirtualItems().map((it) => {
+          const r = rows[it.index];
+          const isSel = hasSel && groupCount > 0 && r[0] === selected;
+          return (
+            <div
+              key={it.key}
+              className={`v-grid-row ${banded && it.index % 2 ? "band" : ""} ${hasSel ? (isSel ? "sel" : "dim") : ""}`}
+              style={{ gridTemplateColumns: template, transform: `translateY(${it.start}px)`, height: ROW_H }}
+              onClick={groupCount && onSelect ? () => onSelect(r[0]) : undefined}
+            >
+              {r.map((val, ci) => (
+                <div key={ci} className={columns[ci].kind === "value" ? "num" : ""}>
+                  {fmt(val, columns[ci])}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      {total && (
+        <div className="v-grid-total" style={{ gridTemplateColumns: template }}>
+          {columns.map((c, ci) =>
+            c.kind === "group" ? (
+              <div key={ci}>{ci === 0 ? "Toplam" : ""}</div>
+            ) : (
+              <div key={ci} className="num">
+                {fmt(total[ci - groupCount], c)}
+              </div>
+            ),
+          )}
+        </div>
+      )}
       {result.truncated && <div className="v-note">İlk {rows.length.toLocaleString("tr-TR")} satır gösteriliyor</div>}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ Kart
-export function CardVisual({ result }: { result: VisualResult }) {
+// ------------------------------------------------------------------ Kartlar
+function bigNumber(v: Raw, c: VisualResultColumn): string {
+  if (v === null) return "(Boş)";
+  return typeof v === "number" && !c.format ? formatCompact(v) : fmt(v, c);
+}
+
+export function CardVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
   const c = result.columns[0];
   const v = result.rows[0]?.[0] ?? null;
   const [ref, size] = useSize<HTMLDivElement>();
-  const text = typeof v === "number" && !c.format ? formatCompact(v) : v === null ? "(Boş)" : formatValue(v, c.type, c.format);
+  const text = bigNumber(v, c);
   const font = Math.max(18, Math.min(size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
   return (
     <div className="v-card" ref={ref}>
-      <div className="v-card-value" style={{ fontSize: font }} title={formatValue(v, c.type, c.format)}>
+      <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)}>
         {text}
       </div>
-      <div className="v-card-label">{c.name}</div>
+      {format.categoryLabel !== false && <div className="v-card-label">{c.name}</div>}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ Kümelenmiş sütun grafiği
-function niceTicks(max: number, min: number, count = 4): number[] {
-  const lo = Math.min(0, min);
-  const hi = Math.max(0, max);
-  if (hi === lo) return [0, 1];
-  const raw = (hi - lo) / count;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
-  const ticks = [];
-  for (let t = Math.floor(lo / step) * step; t <= hi + step * 1e-9; t += step) ticks.push(+t.toFixed(10));
-  if (ticks[ticks.length - 1] < hi) ticks.push(ticks[ticks.length - 1] + step);
-  return ticks;
+/** Çok satırlı kart: kategori başına bir satır, her satırda değerler. */
+export function MultiCard({ result, selected, onSelect }: { result: VisualResult; selected?: unknown; onSelect?: CrossSelect }) {
+  const groupCount = result.columns.filter((c) => c.kind === "group").length;
+  const values = result.columns.slice(groupCount);
+  const hasSel = selected !== undefined;
+  return (
+    <div className="v-multicard">
+      {result.rows.map((r, ri) => (
+        <div
+          key={ri}
+          className={`v-mc-row ${hasSel ? (r[0] === selected ? "sel" : "dim") : ""}`}
+          onClick={groupCount && onSelect ? () => onSelect(r[0]) : undefined}
+        >
+          {groupCount > 0 && <div className="v-mc-title">{fmt(r[0], result.columns[0])}</div>}
+          <div className="v-mc-values">
+            {values.map((c, ci) => (
+              <div key={ci}>
+                <div className="v-mc-value">{bigNumber(r[groupCount + ci], c)}</div>
+                <div className="v-mc-label">{c.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function bar(x: number, y0: number, w: number, y1: number, r: number) {
-  // Üst ucu yuvarlak, tabanı köşeli sütun (negatif değerde ters)
-  const up = y1 < y0;
-  const h = Math.abs(y1 - y0);
-  const rr = Math.min(r, h, w / 2);
-  if (up) {
-    return `M${x},${y0} V${y1 + rr} Q${x},${y1} ${x + rr},${y1} H${x + w - rr} Q${x + w},${y1} ${x + w},${y1 + rr} V${y0} Z`;
+/** KPI: değer, hedef ve fark. Durum renk + simge + metinle gösterilir (yalnızca renk değil). */
+export function KpiVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
+  const [vc, tc] = result.columns;
+  const row = result.rows[0] ?? [];
+  const value = row[0] ?? null;
+  const target = tc ? row[1] ?? null : null;
+  const [ref, size] = useSize<HTMLDivElement>();
+  const higherIsBetter = format.higherIsBetter !== false;
+  let status: "good" | "bad" | null = null;
+  let diffText = "";
+  if (typeof value === "number" && typeof target === "number" && target !== 0) {
+    const diff = (value - target) / Math.abs(target);
+    status = (diff >= 0) === higherIsBetter ? "good" : "bad";
+    diffText = `${diff >= 0 ? "+" : ""}%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(diff * 100)}`;
   }
-  return `M${x},${y0} V${y1 - rr} Q${x},${y1} ${x + rr},${y1} H${x + w - rr} Q${x + w},${y1} ${x + w},${y1 - rr} V${y0} Z`;
+  const text = bigNumber(value, vc);
+  const font = Math.max(18, Math.min(size.h * 0.36, (size.w / Math.max(text.length, 3)) * 1.5));
+  return (
+    <div className="v-kpi" ref={ref}>
+      <div className="v-kpi-main">
+        <span className="v-card-value" style={{ fontSize: font }}>{text}</span>
+        {status && (
+          <span className={`v-kpi-status ${status}`} title={status === "good" ? "Hedefin üstünde" : "Hedefin altında"}>
+            {status === "good" ? "▲" : "▼"} {status === "good" ? "İyi" : "Kötü"}
+          </span>
+        )}
+      </div>
+      <div className="v-card-label">{vc.name}</div>
+      {tc && (
+        <div className="v-kpi-target">
+          Hedef: {bigNumber(target, tc)} {diffText && <strong className={status ?? ""}>({diffText})</strong>}
+        </div>
+      )}
+    </div>
+  );
 }
 
-export function ColumnChart({
-  result, selected, onSelect,
+// ------------------------------------------------------------------ Dilimleyici
+export function Slicer({
+  result, format, state, onState, fieldType,
 }: {
   result: VisualResult;
-  selected?: unknown;
-  onSelect?: CrossSelect;
+  format: VisualFormat;
+  state: VisualState;
+  onState: (s: VisualState) => void;
+  fieldType?: VisualResultColumn["type"];
 }) {
-  const [ref, size] = useSize<HTMLDivElement>();
-  const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
-  const cat = result.columns[0];
-  const series = result.columns.slice(1);
-  const rows = result.rows;
-  const legendH = series.length > 1 ? 22 : 0;
-  const W = size.w;
-  const H = size.h - legendH;
-  const nums = rows.flatMap((r) => r.slice(1).map((v) => (typeof v === "number" ? v : 0)));
-  const ticks = niceTicks(Math.max(0, ...nums), Math.min(0, ...nums));
-  const yMin = ticks[0];
-  const yMax = ticks[ticks.length - 1];
-  const tickLabels = ticks.map((t) => formatCompact(t));
-  const left = Math.max(28, ...tickLabels.map((t) => t.length * 6.5)) + 8;
-  const bottom = 34;
-  const top = 8;
-  const plotW = Math.max(0, W - left - 8);
-  const plotH = Math.max(0, H - top - bottom);
-  const y = (v: number) => top + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
-  const band = rows.length ? plotW / rows.length : 0;
-  const barW = Math.max(2, Math.min(24, (band * 0.7) / Math.max(series.length, 1) - 2));
-  const groupW = barW * series.length + 2 * (series.length - 1);
-  const maxLabel = Math.max(3, Math.floor(band / 6.5));
-  const showEvery = Math.max(1, Math.ceil(28 / Math.max(band, 1)));
-  const hasSel = selected !== undefined;
+  const style = format.slicerStyle ?? "list";
+  if (style === "range") return <RangeSlicer result={result} state={state} onState={onState} fieldType={fieldType} />;
+  return <ListSlicer result={result} state={state} onState={onState} dropdown={style === "dropdown"} />;
+}
 
+function ListSlicer({
+  result, state, onState, dropdown,
+}: {
+  result: VisualResult;
+  state: VisualState;
+  onState: (s: VisualState) => void;
+  dropdown: boolean;
+}) {
+  const col = result.columns[0];
+  const items = result.rows.map((r) => r[0]);
+  const selected = new Set(state.selected ?? []);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const needle = q.trim().toLocaleLowerCase("tr");
+  const shown = needle ? items.filter((it) => fmt(it, col).toLocaleLowerCase("tr").includes(needle)) : items;
+  const toggle = (it: Raw) => {
+    const next = new Set(selected);
+    if (next.has(it)) next.delete(it);
+    else next.add(it);
+    onState({ ...state, selected: [...next] });
+  };
+  const summary = selected.size === 0 ? "Tümü" : selected.size === 1 ? fmt([...selected][0], col) : `${selected.size} seçili`;
+
+  const list = (
+    <div className="v-slicer-list">
+      {items.length > 8 && <input className="v-slicer-search" placeholder="Ara" value={q} onChange={(e) => setQ(e.target.value)} />}
+      <label className="v-slicer-item all">
+        <input type="checkbox" checked={selected.size === 0} onChange={() => onState({ ...state, selected: [] })} />
+        Tümünü seç
+      </label>
+      {shown.map((it, i) => (
+        <label key={i} className="v-slicer-item">
+          <input type="checkbox" checked={selected.has(it)} onChange={() => toggle(it)} />
+          {fmt(it, col) || "(Boş)"}
+        </label>
+      ))}
+    </div>
+  );
+
+  if (!dropdown) return list;
   return (
-    <div className="v-chart" ref={ref}>
-      {W > 0 && H > 40 && (
-        <svg width={W} height={H} role="img" aria-label={`${series.map((s) => s.name).join(", ")} - ${cat.name}`}>
-          {ticks.map((t, i) => (
-            <g key={i}>
-              <line x1={left} x2={left + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? "v-axis" : "v-grid"} />
-              <text x={left - 6} y={y(t)} className="v-tick" textAnchor="end" dominantBaseline="central">
-                {tickLabels[i]}
-              </text>
-            </g>
-          ))}
-          {rows.map((r, i) => {
-            const x0 = left + i * band + (band - groupW) / 2;
-            const isSel = hasSel && r[0] === selected;
-            const label = formatValue(r[0], cat.type, cat.format) || "(Boş)";
-            return (
-              <g
-                key={i}
-                className={`v-cat ${hasSel ? (isSel ? "sel" : "dim") : ""}`}
-                onMouseMove={(e) => {
-                  const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
-                  setHover({ i, x: e.clientX - box.left, y: e.clientY - box.top });
-                }}
-                onMouseLeave={() => setHover(null)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect?.(r[0]);
-                }}
-              >
-                {/* geniş tıklama alanı */}
-                <rect x={left + i * band} y={top} width={band} height={plotH} className="v-hit" />
-                {series.map((_, si) => {
-                  const v = typeof r[si + 1] === "number" ? (r[si + 1] as number) : 0;
-                  return (
-                    <path key={si} d={bar(x0 + si * (barW + 2), y(0), barW, y(v), 4)} fill={SERIES[si % SERIES.length]} />
-                  );
-                })}
-                {i % showEvery === 0 && (
-                  <text x={left + i * band + band / 2} y={top + plotH + 14} className="v-tick" textAnchor="middle">
-                    {label.length > maxLabel * showEvery ? label.slice(0, Math.max(1, maxLabel * showEvery - 1)) + "…" : label}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-          <text x={left + plotW / 2} y={H - 4} className="v-axis-title" textAnchor="middle">
-            {cat.name}
-          </text>
-        </svg>
+    <div className="v-slicer-dd">
+      <button className="v-slicer-dd-btn" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span>{summary}</span>
+        <span>▾</span>
+      </button>
+      {open && <div className="v-slicer-dd-pop">{list}</div>}
+    </div>
+  );
+}
+
+function RangeSlicer({
+  result, state, onState, fieldType,
+}: {
+  result: VisualResult;
+  state: VisualState;
+  onState: (s: VisualState) => void;
+  fieldType?: VisualResultColumn["type"];
+}) {
+  const [minCol] = result.columns;
+  const type = fieldType ?? minCol.type;
+  const isDateField = type === "date" || type === "datetime";
+  const [lo, hi] = [result.rows[0]?.[0] ?? null, result.rows[0]?.[1] ?? null];
+  const range = state.range ?? [null, null];
+  const norm = (v: Raw) => (v === null ? "" : isDateField ? String(v).slice(0, 10) : String(v));
+  const set = (i: 0 | 1, raw: string) => {
+    const val = raw === "" ? null : isDateField ? raw : Number(raw);
+    const next: [string | number | null, string | number | null] = [range[0], range[1]];
+    next[i] = val;
+    onState({ ...state, range: next });
+  };
+  const inputType = isDateField ? "date" : isNumericType(type) ? "number" : "text";
+  return (
+    <div className="v-slicer-range">
+      <label>
+        Başlangıç
+        <input type={inputType} value={norm(range[0])} min={norm(lo)} max={norm(hi)} placeholder={norm(lo)} onChange={(e) => set(0, e.target.value)} />
+      </label>
+      <label>
+        Bitiş
+        <input type={inputType} value={norm(range[1])} min={norm(lo)} max={norm(hi)} placeholder={norm(hi)} onChange={(e) => set(1, e.target.value)} />
+      </label>
+      <div className="v-slicer-hint">
+        Veri aralığı: {fmt(lo, { ...minCol, type })} – {fmt(hi, { ...minCol, type })}
+      </div>
+      {(range[0] !== null || range[1] !== null) && (
+        <button className="v-slicer-clear" onClick={() => onState({ ...state, range: [null, null] })}>
+          Temizle
+        </button>
       )}
-      {series.length > 1 && (
-        <div className="v-legend">
-          {series.map((ser, si) => (
-            <span key={si}>
-              <i style={{ background: SERIES[si % SERIES.length] }} />
-              {ser.name}
-            </span>
-          ))}
-        </div>
-      )}
-      {hover && rows[hover.i] && (
-        <div className="v-tooltip" style={{ left: Math.min(hover.x + 12, W - 180), top: Math.max(0, hover.y - 10) }}>
-          <strong>{formatValue(rows[hover.i][0], cat.type, cat.format) || "(Boş)"}</strong>
-          {series.map((s, si) => (
-            <div key={si}>
-              {series.length > 1 && <i style={{ background: SERIES[si % SERIES.length] }} />}
-              {s.name}: <b>{formatValue(rows[hover.i][si + 1], s.type, s.format)}</b>
-            </div>
-          ))}
-        </div>
-      )}
-      {result.truncated && <div className="v-note">İlk {rows.length} kategori gösteriliyor</div>}
     </div>
   );
 }

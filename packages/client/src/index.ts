@@ -245,7 +245,12 @@ export interface DiagramPosition {
 }
 
 // ------------------------------------------------------------------ rapor
-export type VisualType = "table" | "column" | "card";
+export type VisualType =
+  | "table"
+  | "card" | "multicard" | "kpi"
+  | "column" | "bar" | "stackedcolumn" | "stackedbar" | "line" | "area"
+  | "pie" | "donut"
+  | "slicer";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -272,9 +277,37 @@ export interface Visual {
   h: number;
   title?: string;
   group: FieldRef[];
+  /** Grafik: Gösterge (seriyi böler) */
+  legend?: FieldRef[];
   values: ValueRef[];
+  /** KPI: Hedef */
+  target?: ValueRef[];
   filters: FilterRef[];
-  format: Record<string, unknown>;
+  format: VisualFormat;
+  /** Etkileşim durumu: dilimleyici seçimi, tablo sıralaması */
+  state?: VisualState;
+}
+
+export interface VisualFormat {
+  showTitle?: boolean;
+  dataLabels?: boolean;
+  legend?: "top" | "bottom" | "right" | "none";
+  xAxisTitle?: boolean;
+  yAxisTitle?: boolean;
+  colors?: string[];
+  /** Dilimleyici görünümü */
+  slicerStyle?: "list" | "dropdown" | "range";
+  /** Satır renklendirme, yazı boyutu vb. */
+  [k: string]: unknown;
+}
+
+export interface VisualState {
+  /** Dilimleyici: seçili değerler (liste/açılır) ya da [başlangıç, bitiş] (aralık) */
+  selected?: (string | number | boolean | null)[];
+  range?: [string | number | null, string | number | null];
+  /** Tablo: sıralama (sonuç sütun sırası) */
+  sort?: { index: number; desc: boolean };
+  [k: string]: unknown;
 }
 
 export interface ReportPage {

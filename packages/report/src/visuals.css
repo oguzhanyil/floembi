@@ -55,3 +55,61 @@
 .viewer-empty { padding: 24px; color: var(--muted); }
 .visual.readonly .visual-head { cursor: default; }
 .visual.readonly:hover { border-color: var(--border); }
+
+/* ECharts kabı ve araç ipucu */
+.v-echart { width: 100%; height: 100%; }
+.v-tip { font: 12px "Segoe UI", system-ui, sans-serif; color: var(--text, #201f1e); }
+.v-tip strong { display: block; margin-bottom: 2px; }
+.v-tip i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+
+/* Veri ızgarası */
+.v-grid { height: 100%; overflow: auto; position: relative; font-size: 12px; font-variant-numeric: tabular-nums; }
+.v-grid-head, .v-grid-row, .v-grid-total { display: grid; align-items: center; }
+.v-grid-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--border-strong); font-weight: 600; }
+.v-grid-head > div, .v-grid-row > div, .v-grid-total > div { padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-grid-th { height: 28px; line-height: 28px; }
+.v-grid-th.sortable { cursor: pointer; }
+.v-grid-th.sortable:hover { background: var(--surface-2); }
+.v-grid-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.v-grid-row.band { background: #faf9f8; }
+.v-grid-row:hover { background: #f3f2f1; }
+.v-grid-row.dim { color: #a19f9d; }
+.v-grid-row.sel { background: var(--accent-soft); }
+.v-grid-total { position: sticky; bottom: 0; z-index: 2; background: var(--surface); border-top: 1px solid var(--border-strong); font-weight: 700; height: 28px; }
+.v-grid .num { text-align: right; }
+.sort-ind { font-size: 9px; color: var(--accent); }
+
+/* Çok satırlı kart */
+.v-multicard { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.v-mc-row { border-left: 3px solid var(--accent); padding: 4px 10px; cursor: pointer; }
+.v-mc-row.dim { opacity: 0.45; }
+.v-mc-row.sel { background: var(--accent-soft); }
+.v-mc-title { font-weight: 600; font-size: 13px; }
+.v-mc-values { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.v-mc-value { font-size: 18px; font-weight: 600; }
+.v-mc-label { font-size: 11px; color: var(--muted); }
+
+/* KPI (durum renkleri ayrılmış; simge + metinle birlikte) */
+.v-kpi { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; }
+.v-kpi-main { display: flex; align-items: baseline; gap: 10px; }
+.v-kpi-status { font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
+.v-kpi-status.good, .v-kpi-target strong.good { color: #0b6a0b; }
+.v-kpi-status.good { background: #dff6dd; }
+.v-kpi-status.bad, .v-kpi-target strong.bad { color: #a4262c; }
+.v-kpi-status.bad { background: #fde7e9; }
+.v-kpi-target { font-size: 12px; color: var(--muted); }
+
+/* Dilimleyici */
+.v-slicer-list { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.v-slicer-search { margin-bottom: 4px; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 4px; }
+.v-slicer-item { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-slicer-item:hover { background: var(--surface-2); }
+.v-slicer-item.all { color: var(--muted); border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.v-slicer-dd { position: relative; }
+.v-slicer-dd-btn { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); font-size: 13px; cursor: pointer; }
+.v-slicer-dd-pop { position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 2px); max-height: 240px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 4px; box-shadow: 0 6px 18px #0002; padding: 6px; display: flex; }
+.v-slicer-range { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.v-slicer-range label { display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.v-slicer-range input { padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 13px; color: var(--text); }
+.v-slicer-hint { color: var(--muted); font-size: 11px; }
+.v-slicer-clear { align-self: flex-start; border: none; background: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12px; }

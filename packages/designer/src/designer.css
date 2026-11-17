@@ -40,3 +40,20 @@
 .well input[type="text"] { width: 100%; }
 .dp-col.field { cursor: grab; }
 .dp-col.field input { margin: 0 2px 0 0; }
+
+/* Görselleştirmeler bölmesi: gruplar, sekmeler, biçim */
+.viz-group { padding: 0 14px 8px; }
+.viz-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin-bottom: 4px; }
+.viz-group .viz-types { grid-template-columns: repeat(5, 1fr); padding: 0; border: none; gap: 4px; }
+.viz-group .viz-type { padding: 4px 0; min-height: 34px; justify-content: center; }
+.viz-group .viz-type span { font-size: 18px; }
+.viz-tabs { display: flex; border-bottom: 1px solid var(--border); margin-top: 6px; padding: 0 14px; gap: 4px; }
+.viz-tabs button { border: none; border-radius: 0; background: none; padding: 8px 10px; font-size: 12px; color: var(--muted); border-bottom: 2px solid transparent; }
+.viz-tabs button.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.viz-selected { padding: 8px 14px 0; font-size: 12px; font-weight: 600; }
+.fmt-body { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.fmt-body label { display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.fmt-body label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+.fmt-body select, .fmt-body input[type="text"] { font-size: 12px; color: var(--text); }
+.fmt-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fmt-color input { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 4px; background: none; cursor: pointer; }

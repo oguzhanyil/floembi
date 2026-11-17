@@ -11,7 +11,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-VisualType = Literal["table", "column", "card"]
+VisualType = Literal[
+    "table",                                    # veri ızgarası (Data Grid)
+    "card", "multicard", "kpi",                 # kartlar
+    "column", "bar", "stackedcolumn", "stackedbar", "line", "area",
+    "pie", "donut",
+    "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
+]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
 
@@ -59,10 +65,13 @@ class Visual(_B):
     w: float = Field(default=420, gt=0)
     h: float = Field(default=280, gt=0)
     title: str | None = None
-    group: list[FieldRef] = Field(default_factory=list)     # Tablo: Sütunlar · Sütun grafiği: X ekseni
+    group: list[FieldRef] = Field(default_factory=list)     # Tablo: Sütunlar · Grafik: X ekseni · Dilimleyici: Alan
+    legend: list[FieldRef] = Field(default_factory=list)    # Grafik: Gösterge (seriyi böler)
     values: list[ValueRef] = Field(default_factory=list)    # Tablo: Değerler · Grafik: Y ekseni · Kart: Alan
+    target: list[ValueRef] = Field(default_factory=list)    # KPI: Hedef
     filters: list[FilterRef] = Field(default_factory=list)  # görsel düzeyi filtreler
-    format: dict[str, Any] = Field(default_factory=dict)     # başlık, etiket gösterimi vb. (serbest)
+    format: dict[str, Any] = Field(default_factory=dict)     # Biçim bölmesi: başlık, renkler, etiketler, eksenler
+    state: dict[str, Any] = Field(default_factory=dict)      # dilimleyici seçimi, sıralama gibi etkileşim durumu
 
 
 class Page(_B):
@@ -95,7 +104,7 @@ def empty_report() -> dict:
 def _refs(report: dict):
     for page in report.get("pages", []):
         for v in page.get("visuals", []):
-            for key in ("group", "values", "filters"):
+            for key in ("group", "legend", "values", "target", "filters"):
                 for ref in v.get(key, []):
                     yield ref
 

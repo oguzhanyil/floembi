@@ -1,7 +1,7 @@
-import type { ReportDefinition } from "@floem/client";
+import type { ReportDefinition, VisualState } from "@floem/client";
 import { useLayoutEffect, useRef, useState } from "react";
 import { VisualBody, crossFiltersFor, toggleCross, visualTitle, type CrossFilter } from "./VisualBody";
-import type { QueryFn } from "./useVisualData";
+import { slicerFilters, type QueryFn } from "./useVisualData";
 
 /**
  * Salt okunur ama etkileşimli rapor görüntüleyici (floembi.app): sayfa sekmeleri,
@@ -19,6 +19,8 @@ export function ReportViewer({
 }) {
   const [pageId, setPageId] = useState(initialPage ?? report.pages[0]?.id);
   const [cross, setCross] = useState<CrossFilter | null>(null);
+  // İzleyicinin dilimleyici seçimleri ve sıralamaları yalnızca bu ekranda yaşar (raporu değiştirmez)
+  const [states, setStates] = useState<Record<string, VisualState>>({});
   const outer = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
 
@@ -55,11 +57,13 @@ export function ReportViewer({
                 <div className="visual-content">
                   <VisualBody
                     v={v}
-                    extra={crossFiltersFor(v, cross)}
+                    extra={[...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
                     dataRev={dataRev}
                     cross={cross}
                     onCross={(value) => setCross(toggleCross(v, cross, value))}
                     run={run}
+                    state={states[v.id] ?? v.state}
+                    onState={(s) => setStates((x) => ({ ...x, [v.id]: s }))}
                   />
                 </div>
               </div>

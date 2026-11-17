@@ -117,7 +117,7 @@ def test_invalid_report_rejected(sap):
     r = sap.put("/document/report", headers=H, json=bad)
     assert r.status_code == 400 and r.json()["error"]["code"] == "report_invalid"
     r = sap.put("/document/report", headers=H, json={"version": 1, "pages": [{"id": "p1", "name": "A", "visuals": [
-        {"id": "v1", "type": "pie"}]}]})
+        {"id": "v1", "type": "radar"}]}]})
     assert r.status_code == 400
 
 

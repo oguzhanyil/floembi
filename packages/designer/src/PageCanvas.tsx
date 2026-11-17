@@ -1,5 +1,5 @@
 import type { ModelColumn, ReportPage, Visual } from "@floem/client";
-import { VisualBody, crossFiltersFor, snap, toggleCross, visualTitle, type CrossFilter, type QueryFn } from "@floem/report";
+import { VisualBody, crossFiltersFor, slicerFilters, snap, toggleCross, visualTitle, type CrossFilter, type QueryFn } from "@floem/report";
 import { useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as RPointerEvent } from "react";
 
 export const FIELD_MIME = "application/x-floem-field";
@@ -41,8 +41,12 @@ export function PageCanvas({
   function start(e: RPointerEvent, v: Visual, mode: Drag["mode"]) {
     if (e.button !== 0) return;
     e.stopPropagation();
-    (e.target as Element).setPointerCapture(e.pointerId);
     onSelect(v.id);
+    try {
+      (e.target as Element).setPointerCapture(e.pointerId);
+    } catch {
+      /* işaretçi yakalanamazsa (dokunmatik/test olayları) sürükleme yine de çalışır */
+    }
     setDrag({ id: v.id, mode, sx: e.clientX, sy: e.clientY, orig: v, moved: false });
   }
 
@@ -149,11 +153,14 @@ export function PageCanvas({
               <div className="visual-content">
                 <VisualBody
                   v={v}
-                  extra={crossFiltersFor(v, cross)}
+                  extra={[...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, {}, v.id)]}
                   dataRev={dataRev}
                   cross={cross}
                   onCross={(value) => setCross(toggleCross(v, cross, value))}
                   run={run}
+                  state={v.state}
+                  onState={(state) => onChange({ ...v, state })}
+                  fieldType={v.group[0] ? columnOf(v.group[0].table, v.group[0].column)?.tip : undefined}
                 />
               </div>
               {selected && (
