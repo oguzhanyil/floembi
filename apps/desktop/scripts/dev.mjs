@@ -24,3 +24,13 @@ child.on("exit", async (code) => {
   await server.close();
   process.exit(code ?? 0);
 });
+
+// Terminal durdurulursa (Ctrl+C) pencere de kapanır; arkada yetim Electron kalmaz
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => {
+    if (!child.killed) child.kill();
+  });
+}
+process.on("exit", () => {
+  if (!child.killed) child.kill();
+});

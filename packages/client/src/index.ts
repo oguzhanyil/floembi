@@ -100,6 +100,8 @@ export interface SourceClient {
 export interface HttpConfig {
   baseUrl: string;
   headers: Record<string, string>;
+  /** Ağ hatasında (sunucu kapalı, bağlantı yok) gösterilecek açıklama */
+  unreachableMessage?: string;
 }
 
 export class HttpClient {
@@ -116,7 +118,7 @@ export class HttpClient {
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch (e) {
-      throw new FloemApiError(0, "service_unreachable", "Floem servisine ulaşılamadı", String(e));
+      throw new FloemApiError(0, "service_unreachable", this.config.unreachableMessage ?? "Sunucuya ulaşılamadı", String(e));
     }
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
@@ -130,12 +132,15 @@ export class HttpClient {
   }
 }
 
+const DESKTOP_UNREACHABLE =
+  "Floem BI arka plan servisine ulaşılamadı. Floem BI'ı kapatıp yeniden açın; sorun sürerse 'npm run desktop' terminalini kontrol edin.";
+
 /** Desktop yerel servisine bağlanan implementasyon. */
 export class DesktopSourceClient implements SourceClient {
   private http: HttpClient;
 
   constructor(baseUrl: string, token: string) {
-    this.http = new HttpClient({ baseUrl, headers: { "X-Floem-Token": token } });
+    this.http = new HttpClient({ baseUrl, headers: { "X-Floem-Token": token }, unreachableMessage: DESKTOP_UNREACHABLE });
   }
 
   listConnections() {
@@ -473,7 +478,7 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
 
   constructor(baseUrl: string, token: string) {
     super(baseUrl, token);
-    this.doc = new HttpClient({ baseUrl, headers: { "X-Floem-Token": token } });
+    this.doc = new HttpClient({ baseUrl, headers: { "X-Floem-Token": token }, unreachableMessage: DESKTOP_UNREACHABLE });
   }
 
   getDocument() {
@@ -607,7 +612,11 @@ export class WebClient {
   private http: HttpClient;
 
   constructor(baseUrl: string, token: string | null) {
-    this.http = new HttpClient({ baseUrl, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    this.http = new HttpClient({
+      baseUrl,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      unreachableMessage: "floembi.app sunucusuna ulaşılamadı. İnternet bağlantınızı kontrol edip sayfayı yenileyin.",
+    });
   }
 
   login(email: string, password: string) {

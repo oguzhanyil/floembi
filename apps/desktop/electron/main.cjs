@@ -47,7 +47,10 @@ function startService() {
     const { cmd, args, cwd } = serviceCommand();
     const child = spawn(cmd, args, {
       cwd,
-      env: { ...process.env, FLOEM_TOKEN: token, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+      env: {
+        ...process.env, FLOEM_TOKEN: token, FLOEM_PARENT_PID: String(process.pid),
+        PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1",
+      },
       windowsHide: true,
     });
     let buf = "";
