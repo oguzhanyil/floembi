@@ -1,0 +1,32 @@
+# Floem BI Desktop Windows yükleyicisi (electron-builder, MIT)
+#   npm run desktop:package   (depo kökünden; önce PyInstaller servisi derler)
+appId: app.floembi.desktop
+productName: Floem BI Desktop
+copyright: Floemdata
+electronVersion: 45.3.3
+directories:
+  output: release
+  buildResources: build-resources
+# Arayüz Vite ile tek pakete derleniyor; node_modules yükleyiciye girmez.
+files:
+  - electron/**
+  - dist/**
+  - package.json
+  - "!node_modules/**"
+# PyInstaller çıktısı asar dışında: exe olarak çalıştırılabilmesi için.
+extraResources:
+  - from: ../../build/pyinstaller/dist/floem-service
+    to: floem-service
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: FloemBI-Desktop-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false          # yönetici izni istemeden kullanıcı profiline kurulur
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Floem BI Desktop

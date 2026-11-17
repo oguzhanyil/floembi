@@ -1,0 +1,57 @@
+/* Rapor görselleri ve sayfa (Desktop + floembi.app ortak). Renk tokenları uygulamanın :root'unda tanımlıdır. */
+.page { position: relative; background: var(--surface); box-shadow: 0 1px 4px #0002; }
+.page-hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 24px; line-height: 1.6; pointer-events: none; }
+.visual { position: absolute; display: flex; flex-direction: column; background: var(--surface); border: 1px solid transparent; border-radius: 4px; }
+.visual.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.visual-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px 0 10px; cursor: move; flex: none; touch-action: none; }
+.visual-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visual-content { flex: 1; min-height: 0; position: relative; padding: 0 8px 8px; }
+.visual .error-box { margin: 4px 0; font-size: 12px; }
+.v-body { height: 100%; transition: opacity 0.15s; }
+.v-body.loading { opacity: 0.6; }
+.v-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 4px; color: var(--muted); font-size: 28px; }
+.v-empty span { font-size: 12px; }
+.v-note { position: absolute; right: 10px; bottom: 2px; font-size: 10px; color: var(--muted); }
+.v-table-wrap { height: 100%; overflow: auto; }
+.v-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.v-table th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.v-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.v-table .num { text-align: right; }
+.v-table tbody tr { cursor: pointer; }
+.v-table tbody tr:hover { background: var(--surface-2); }
+.v-table tr.dim td { color: #a19f9d; }
+.v-table tr.sel { background: var(--accent-soft); }
+.v-table tfoot td { position: sticky; bottom: 0; background: var(--surface); font-weight: 700; border-top: 1px solid var(--border-strong); }
+.v-card { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; }
+.v-card-value { font-weight: 600; line-height: 1.1; white-space: nowrap; color: var(--text); }
+.v-card-label { font-size: 12px; color: var(--muted); text-align: center; }
+.v-chart { position: relative; height: 100%; display: flex; flex-direction: column; }
+.v-chart svg { display: block; overflow: visible; }
+.v-grid { stroke: #edebe9; stroke-width: 1; }
+.v-axis { stroke: #c8c6c4; stroke-width: 1; }
+.v-tick { font-size: 10px; fill: var(--muted); }
+.v-axis-title { font-size: 11px; fill: var(--muted); }
+.v-hit { fill: transparent; }
+.v-cat { cursor: pointer; }
+.v-cat:hover .v-hit { fill: #0000000a; }
+.v-cat.dim path { opacity: 0.3; }
+.v-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); padding: 2px 0 0 4px; height: 22px; overflow: hidden; }
+.v-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.v-legend i, .v-tooltip i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
+.v-tooltip { position: absolute; z-index: 5; pointer-events: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 4px; box-shadow: 0 4px 12px #0002; padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+.v-tooltip strong { display: block; margin-bottom: 2px; }
+.page-tabs { display: flex; align-items: stretch; gap: 2px; padding: 0 8px; background: var(--surface); border-top: 1px solid var(--border); height: 34px; overflow-x: auto; }
+.page-tab { border: none; border-radius: 0; background: none; padding: 0 14px; font-size: 12px; color: var(--muted); border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.page-tab.active { color: var(--text); font-weight: 600; border-bottom-color: #f2c811; }
+
+/* hata ve görüntüleyici */
+.v-error { margin: 4px 0; padding: 8px 10px; border: 1px solid #f1bbbc; background: var(--danger-soft, #fde7e9); border-radius: 4px; font-size: 12px; color: var(--danger, #a4262c); overflow: auto; max-height: 100%; }
+.v-error strong { display: block; }
+.v-error-more { border: none; background: none; padding: 2px 0; color: var(--accent); font-size: 11px; cursor: pointer; }
+.v-error pre { white-space: pre-wrap; font-size: 10px; color: var(--text); margin: 4px 0 0; }
+.v-loading { font-size: 12px; }
+.viewer { display: grid; grid-template-rows: 1fr auto; height: 100%; min-height: 0; background: #e9e8e6; }
+.viewer-stage { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; }
+.viewer-empty { padding: 24px; color: var(--muted); }
+.visual.readonly .visual-head { cursor: default; }
+.visual.readonly:hover { border-color: var(--border); }

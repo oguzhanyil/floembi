@@ -1,0 +1,117 @@
+# Floem BI örnek semantik modeli: SAP Business One satış analizi
+# Kaynak: Gold katmanı (demo için `python -m floem_bi.demo.sapb1` ile üretilir)
+
+model:
+  ad: SAP B1 Satış
+  surum: 1
+  kultur: tr-TR
+  varsayilan_mod: import
+
+tablolar:
+  - ad: Satis                       # olgu tablosu: OINV+INV1, eksi ORIN+RIN1
+    kaynak: { katman: gold, tablo: fact_satis }
+    sutunlar:
+      - { ad: BelgeNo,      kaynak: DocEntry,  tip: int64,   gizli: true }
+      - { ad: SatirNo,      kaynak: LineNum,   tip: int64,   gizli: true }
+      - { ad: BelgeTuru,    kaynak: DocType,   tip: string }
+      - { ad: Tarih,        kaynak: DocDate,   tip: date,    gizli: true }
+      - { ad: MusteriKodu,  kaynak: CardCode,  tip: string,  gizli: true }
+      - { ad: UrunKodu,     kaynak: ItemCode,  tip: string,  gizli: true }
+      - { ad: TemsilciKodu, kaynak: SlpCode,   tip: int32,   gizli: true }
+      - { ad: Miktar,       kaynak: Quantity,  tip: decimal, ozet: sum, bicim: "#,##0.##" }
+      - { ad: Tutar,        kaynak: LineTotal, tip: decimal, ozet: sum, bicim: "#,##0.00 ₺" }
+      - ad: BirimFiyat              # hesaplanmış sütun (satır bağlamı)
+        ifade: "DIVIDE(Satis[Tutar], Satis[Miktar])"
+        tip: double
+    olculer:
+      - ad: Toplam Satış
+        ifade: "SUM(Satis[Tutar])"
+        bicim: "#,##0 ₺"
+        klasor: Satış
+      - ad: Geçen Yıl Satış
+        ifade: "CALCULATE([Toplam Satış], SAMEPERIODLASTYEAR(Tarih[Tarih]))"
+        bicim: "#,##0 ₺"
+        klasor: Zaman Karşılaştırma
+      - ad: Kategori Payı
+        ifade: "DIVIDE([Toplam Satış], CALCULATE([Toplam Satış], ALL(Urun[Kategori])))"
+        bicim: "0.0%"
+        klasor: Oranlar
+      - ad: Yıllık Büyüme
+        ifade: |
+          VAR bu = [Toplam Satış]
+          VAR onceki = [Geçen Yıl Satış]
+          RETURN DIVIDE(bu - onceki, onceki)
+        bicim: "0.0%"
+        klasor: Zaman Karşılaştırma
+      - ad: Yılbaşından Bugüne Satış
+        ifade: "TOTALYTD([Toplam Satış], Tarih[Tarih])"
+        bicim: "#,##0 ₺"
+        klasor: Zaman Karşılaştırma
+      - ad: Fatura Sayısı
+        ifade: "CALCULATE(DISTINCTCOUNT(Satis[BelgeNo]), Satis[BelgeTuru] = \"Fatura\")"
+        klasor: Satış
+      - ad: Ortalama Birim Fiyat
+        ifade: "AVERAGEX(Satis, Satis[BirimFiyat])"
+        bicim: "#,##0.00 ₺"
+        klasor: Satış
+      - ad: Bayi Satışı
+        ifade: "CALCULATE([Toplam Satış], Musteri[Grup] = \"Bayi\")"
+        klasor: Satış
+
+  - ad: Musteri                     # OCRD + OCRG
+    kaynak: { katman: gold, tablo: dim_musteri }
+    sutunlar:
+      - { ad: MusteriKodu, kaynak: CardCode,  tip: string, anahtar: true }
+      - { ad: MusteriAdi,  kaynak: CardName,  tip: string }
+      - { ad: Grup,        kaynak: GroupName, tip: string }
+      - { ad: Sehir,       kaynak: City,      tip: string, veri_kategorisi: city }
+    olculer:
+      - ad: Müşteri Sayısı
+        ifade: "COUNTROWS(Musteri)"
+
+  - ad: Urun                        # OITM + OITB
+    kaynak: { katman: gold, tablo: dim_urun }
+    sutunlar:
+      - { ad: UrunKodu, kaynak: ItemCode,   tip: string, anahtar: true }
+      - { ad: UrunAdi,  kaynak: ItemName,   tip: string }
+      - { ad: Kategori, kaynak: ItmsGrpNam, tip: string }
+      - { ad: Marka,    kaynak: FirmName,   tip: string }
+    hiyerarsiler:
+      - ad: Ürün Hiyerarşisi
+        seviyeler: [Kategori, Marka, UrunAdi]
+
+  - ad: Temsilci                    # OSLP
+    kaynak: { katman: gold, tablo: dim_temsilci }
+    sutunlar:
+      - { ad: TemsilciKodu, kaynak: SlpCode, tip: int32,  anahtar: true }
+      - { ad: TemsilciAdi,  kaynak: SlpName, tip: string }
+      - { ad: Eposta,       kaynak: Email,   tip: string, gizli: true }
+
+  - ad: Tarih
+    kaynak: { katman: gold, tablo: dim_tarih }
+    tarih_tablosu: { anahtar_sutun: Tarih }
+    sutunlar:
+      - { ad: Tarih,  tip: date,   anahtar: true }
+      - { ad: Yil,    tip: int32 }
+      - { ad: Ceyrek, tip: string }
+      - { ad: AyNo,   tip: int32,  gizli: true }
+      - { ad: Ay,     tip: string, siralama_sutunu: AyNo }
+    hiyerarsiler:
+      - ad: Takvim
+        seviyeler: [Yil, Ceyrek, Ay, Tarih]
+
+iliskiler:
+  - { kimden: "Satis[Tarih]",        kime: "Tarih[Tarih]" }
+  - { kimden: "Satis[MusteriKodu]",  kime: "Musteri[MusteriKodu]" }
+  - { kimden: "Satis[UrunKodu]",     kime: "Urun[UrunKodu]" }
+  - { kimden: "Satis[TemsilciKodu]", kime: "Temsilci[TemsilciKodu]" }
+
+roller:
+  - ad: Satış Temsilcisi
+    tablo_izinleri:
+      - tablo: Temsilci
+        filtre: "Temsilci[Eposta] = USERPRINCIPALNAME()"
+  - ad: Bölge Müdürü
+    tablo_izinleri:
+      - tablo: Musteri
+        filtre: "Musteri[Sehir] IN USERATTRIBUTE(\"sehirler\")"

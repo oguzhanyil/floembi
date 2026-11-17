@@ -1,0 +1,45 @@
+/* ---- H2: belge, işler ve ortak öğeler ---- */
+.titlebar .dirty { color: #ffb900; }
+.titlebar .doc-path { margin-left: auto; font-size: 11px; opacity: 0.55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.floating-error { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: min(720px, 92%); z-index: 20; box-shadow: 0 6px 24px #0002; border-radius: var(--radius); }
+.floating-error .error-box { margin: 0; }
+textarea { font: inherit; border: 1px solid var(--border-strong); border-radius: 4px; padding: 6px 8px; resize: vertical; background: var(--surface); }
+.small { font-size: 11px; }
+.hint.warn { color: #8a5300; background: #fff4ce; padding: 6px 8px; border-radius: 4px; }
+.ok { color: #107c10; }
+button.danger { color: var(--danger); border-color: #f1bbbc; }
+.warnings { margin: 6px 0 0; padding-left: 18px; color: #8a5300; font-size: 12px; }
+.toolbar input[type="text"] { min-width: 140px; color: var(--text); font-size: 13px; }
+
+/* İçe aktarım / yenileme penceresi */
+.job-dialog { width: min(620px, 94vw); }
+.job-table { width: 100%; border-collapse: collapse; }
+.job-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.job-icon { width: 22px; font-weight: 700; color: var(--muted); text-align: center; }
+.job-done .job-icon { color: #107c10; }
+.job-failed .job-icon, .job-failed .job-rows { color: var(--danger); }
+.job-running .job-icon { color: var(--accent); animation: job-spin 1.2s linear infinite; display: inline-block; }
+.job-rows { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.job-summary p { margin: 10px 0 0; }
+@keyframes job-spin { to { transform: rotate(360deg); } }
+
+/* liste tablosu (İlişkileri yönet) */
+.list-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.list-table th, .list-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.list-table th { color: var(--muted); font-weight: 600; background: var(--surface-2); }
+.list-table tbody tr { cursor: pointer; }
+.list-table tbody tr:hover { background: var(--surface-2); }
+.list-table tr.picked { background: var(--accent-soft); }
+
+/* Yayımla penceresi */
+.publish-dialog { width: min(560px, 94vw); }
+.ws-list { display: flex; flex-direction: column; gap: 6px; }
+.ws-item { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.ws-item:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.ws-item.disabled { opacity: 0.6; cursor: default; }
+.publish-done { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.ok-big { color: #107c10; font-size: 18px; font-weight: 600; margin: 0; }
+a.button { display: inline-block; padding: 7px 14px; border-radius: var(--radius); text-decoration: none; }
+a.button.primary { background: var(--accent); color: var(--accent-text); }
+.inline-link { padding: 0; font-size: inherit; }
+code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 0 3px; border-radius: 3px; }

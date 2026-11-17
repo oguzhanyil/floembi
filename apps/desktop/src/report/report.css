@@ -1,0 +1,42 @@
+/* ---- Rapor görünümü ---- */
+.report-view { display: grid; grid-template-columns: minmax(0, 1fr) 260px 240px; height: 100%; min-height: 0; }
+.report-main { display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; background: #e9e8e6; }
+.page-outer { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; }
+
+.visual:hover { border-color: var(--border-strong); }
+.visual.drop { border-color: var(--accent); background: var(--accent-soft); }
+.visual-del { visibility: hidden; border: none; background: none; padding: 0 4px; color: var(--muted); font-size: 11px; }
+.visual:hover .visual-del, .visual.selected .visual-del { visibility: visible; }
+.visual-resize { position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px; background: var(--surface); border: 2px solid var(--accent); border-radius: 2px; cursor: nwse-resize; touch-action: none; }
+.visual-broken { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 4px 8px; font-size: 11px; color: #8a5300; background: #fff4ce; border-radius: 4px; }
+
+
+/* tablo görseli */
+
+/* kart */
+
+/* sütun grafiği */
+
+/* sayfa sekmeleri */
+.page-tab.add { font-size: 16px; }
+.page-tab-x { font-size: 10px; color: var(--muted); padding: 2px; }
+.page-tab-edit { width: 140px; margin: 4px 0; font-size: 12px; }
+
+/* Görselleştirmeler bölmesi */
+.viz-pane { background: var(--surface); border-left: 1px solid var(--border); overflow: auto; min-height: 0; }
+.viz-pane h3 { font-size: 14px; font-weight: 600; margin: 0; padding: 12px 14px 8px; }
+.viz-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 14px 12px; border-bottom: 1px solid var(--border); }
+.viz-type { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 10px; line-height: 1.2; text-align: center; }
+.viz-type span { font-size: 20px; color: var(--accent); }
+.viz-type.active { border-color: var(--accent); background: var(--accent-soft); }
+.well { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.well.over { background: var(--accent-soft); }
+.well-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.well-empty { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 8px; font-size: 12px; color: var(--muted); text-align: center; }
+.well-item { display: flex; align-items: center; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px 3px 8px; margin-bottom: 4px; font-size: 12px; }
+.well-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.well-item select { font-size: 11px; padding: 1px 2px; max-width: 96px; }
+.well-x { border: none; background: none; padding: 0 4px; font-size: 10px; color: var(--muted); }
+.well input[type="text"] { width: 100%; }
+.dp-col.field { cursor: grab; }
+.dp-col.field input { margin: 0 2px 0 0; }

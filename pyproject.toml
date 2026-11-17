@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "floem-bi"
+version = "0.1.0"
+description = "Floem BI MVP çekirdeği: semantik model, Floem DAX → SQL derleyicisi, DuckDB sorgu servisi"
+requires-python = ">=3.12"
+# Lisans politikası: yalnızca MIT / Apache-2.0 / BSD bağımlılıklar (bkz. research/notes/99-floem-bi-sentez.md §5)
+dependencies = [
+  "sqlglot",      # MIT
+  "duckdb",       # MIT
+  "pydantic>=2",  # MIT
+  "pyyaml",       # MIT
+  "fastapi",      # MIT
+  "uvicorn",      # BSD-3
+  "pyodbc",       # MIT-0 (SQL Server; makinede Microsoft ODBC Driver 17/18 gerekir)
+  "keyring",      # MIT (Windows Kimlik Bilgisi Yöneticisi)
+  "pyarrow",      # Apache-2.0 (içe aktarımda kaynak → DuckDB veri taşıma)
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]  # MIT, BSD-3
+# Paketleme aracı: PyInstaller GPLv2 + bootloader istisnası. Ürüne bağımlılık olarak girmez;
+# istisna, üretilen kapalı kaynak uygulamanın dağıtımına izin verir (kullanıcı onayı 17.11.2026).
+package = ["pyinstaller>=6.22"]
+# floembi.app sunucusu (yerel MVP: SQLite; ileride Postgres)
+server = [
+  "sqlalchemy>=2.1",       # MIT
+  "argon2-cffi>=25.1",     # MIT (şifre özeti)
+  "pyjwt>=2.15",           # MIT (oturum)
+  "python-multipart",      # Apache-2.0 (dosya yükleme)
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]

@@ -1,0 +1,13 @@
+research/repos/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+build/
+dist/
+apps/desktop/release/
+# Kullanıcı rapor dosyaları gerçek şirket verisi içerebilir
+*.floem
+node_modules/
+*.egg-info/

@@ -1,0 +1,24 @@
+{
+  "name": "floem-bi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Floem BI monorepo (Desktop, Web, ortak paketler)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
+    "desktop": "npm run dev -w @floem/desktop",
+    "desktop:build": "npm run build -w @floem/desktop",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "service:build": "node packaging/build-service.mjs",
+    "desktop:package": "npm run service:build && npm run build -w @floem/desktop && npm run package -w @floem/desktop",
+    "web": "npm run dev -w @floem/web",
+    "web:build": "npm run build -w @floem/web",
+    "server": "node packaging/run-server.mjs"
+  }
+}
