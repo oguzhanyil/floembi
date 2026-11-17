@@ -15,15 +15,23 @@ function readField(e: DragEvent) {
 }
 
 /** Kutudaki öğeler: gruplama kutuları alan, değer kutuları ölçü/toplama tutar. */
-function wellItems(v: Visual, key: WellKey): (FieldRef | ValueRef)[] {
-  if (key === "group") return v.group;
-  if (key === "legend") return v.legend ?? [];
-  if (key === "target") return v.target ?? [];
+function wellItems(v: Visual, def: WellDef): (FieldRef | ValueRef)[] {
+  if (def.key === "group") return v.group;
+  if (def.key === "legend") return v.legend ?? [];
+  if (def.key === "target") return v.target ?? [];
+  // Yuvalı değer kutusu (dağılım X/Y/boyut, gösterge değer/en büyük): yalnızca o sıradaki değer
+  if (def.slot !== undefined) return v.values[def.slot] ? [v.values[def.slot]] : [];
   return v.values;
 }
 
-function setWell(v: Visual, key: WellKey, items: (FieldRef | ValueRef)[]): Visual {
-  return { ...v, [key]: items } as Visual;
+function setWell(v: Visual, def: WellDef, items: (FieldRef | ValueRef)[]): Visual {
+  if (def.key === "values" && def.slot !== undefined) {
+    const values = [...v.values];
+    if (items.length) values[def.slot] = items[0] as ValueRef;
+    else values.splice(def.slot, 1);
+    return { ...v, values };
+  }
+  return { ...v, [def.key]: items } as Visual;
 }
 
 const isValueWell = (k: WellKey) => k === "values" || k === "target";
@@ -33,14 +41,14 @@ function Well({
 }: {
   def: WellDef;
   visual: Visual;
-  onDrop: (well: WellKey, table: string, column: string) => void;
+  onDrop: (well: WellDef, table: string, column: string) => void;
   onChange: (v: Visual) => void;
 }) {
   const [over, setOver] = useState(false);
-  const items = wellItems(visual, def.key);
-  const remove = (i: number) => onChange(setWell(visual, def.key, items.filter((_, j) => j !== i)));
+  const items = wellItems(visual, def);
+  const remove = (i: number) => onChange(setWell(visual, def, items.filter((_, j) => j !== i)));
   const setAgg = (i: number, agg: Agg) =>
-    onChange(setWell(visual, def.key, items.map((x, j) => (j === i && "agg" in x ? { ...x, agg } : x))));
+    onChange(setWell(visual, def, items.map((x, j) => (j === i && "agg" in x ? { ...x, agg } : x))));
 
   return (
     <div
@@ -56,11 +64,14 @@ function Well({
         const f = readField(e);
         if (f) {
           e.preventDefault();
-          onDrop(def.key, f.table, f.column);
+          onDrop(def, f.table, f.column);
         }
       }}
     >
-      <div className="well-label">{def.label}</div>
+      <div className="well-label">
+        {def.label}
+        {def.optional && <span className="well-opt"> (isteğe bağlı)</span>}
+      </div>
       {items.length === 0 && <div className="well-empty">Veri alanlarını buraya ekleyin</div>}
       {items.map((it, i) => (
         <div key={i} className="well-item">
@@ -100,7 +111,7 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
   const def = VISUAL_DEFS[visual.type];
   const set = (patch: Partial<VisualFormat>) => onChange({ ...visual, format: { ...f, ...patch } });
   const isPie = visual.type === "pie" || visual.type === "donut";
-  const isChart = !!def.category || isPie;
+  const isChart = !!def.category || isPie || ["scatter", "treemap", "waterfall"].includes(visual.type);
   const colors = Array.isArray(f.colors) ? (f.colors as string[]) : [];
   const swatches = isPie || visual.legend?.length ? 8 : Math.max(1, Math.min(8, visual.values.length));
 
@@ -176,8 +187,8 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
           </div>
         </Section>
       )}
-      {visual.type === "table" && (
-        <Section title="Tablo">
+      {(visual.type === "table" || visual.type === "matrix") && (
+        <Section title={visual.type === "matrix" ? "Matris" : "Tablo"}>
           <label className="inline">
             <input type="checkbox" checked={f.banded !== false} onChange={(e) => set({ banded: e.target.checked })} />
             Satırları dönüşümlü renklendir
@@ -230,7 +241,7 @@ export function VisualizationsPane({
   visual: Visual | null;
   onPickType: (t: VisualType) => void;
   onChange: (v: Visual) => void;
-  onDropToWell: (well: WellKey, table: string, column: string) => void;
+  onDropToWell: (well: WellDef, table: string, column: string) => void;
 }) {
   const [tab, setTab] = useState<"fields" | "format">("fields");
   return (
@@ -269,7 +280,7 @@ export function VisualizationsPane({
           <div className="viz-selected">{VISUAL_DEFS[visual.type].label}</div>
           {tab === "fields" ? (
             VISUAL_DEFS[visual.type].wells.map((w) => (
-              <Well key={w.key} def={w} visual={visual} onDrop={onDropToWell} onChange={onChange} />
+              <Well key={`${w.key}-${w.slot ?? ""}`} def={w} visual={visual} onDrop={onDropToWell} onChange={onChange} />
             ))
           ) : (
             <FormatPanel visual={visual} onChange={onChange} />

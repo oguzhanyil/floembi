@@ -1,9 +1,10 @@
-import type { FilterRef, Visual, VisualQuery, VisualResult, VisualState } from "@floem/client";
-import { VISUAL_DEFS } from "./reportUtils";
+import type { FieldRef, FilterRef, Visual, VisualQuery, VisualResult, VisualState } from "@floem/client";
 import { FloemApiError } from "@floem/client";
 import { useEffect, useMemo, useState } from "react";
+import { VISUAL_DEFS } from "./reportUtils";
 
 export const CHART_CATEGORY_LIMIT = 50;
+export const MATRIX_ROW_LIMIT = 5000;
 
 /** Görseli çalıştıran taraf: Desktop'ta yerel servis, web'de floembi.app. */
 export type QueryFn = (q: VisualQuery) => Promise<VisualResult>;
@@ -13,20 +14,44 @@ export interface VisualError {
   detail?: string;
 }
 
+// ------------------------------------------------------------------ drill-down
+/** Drill-down destekleyen görseller: eksende birden fazla alan varsa hiyerarşi olur. */
+export const supportsDrill = (v: Visual) => !!VISUAL_DEFS[v.type].category || v.type === "pie" || v.type === "donut" || v.type === "treemap";
+
+export function drillOf(v: Visual): { level: number; path: (string | number | boolean | null)[] } {
+  const d = v.state?.drill;
+  if (!d || !supportsDrill(v)) return { level: 0, path: [] };
+  const level = Math.max(0, Math.min(d.level, v.group.length - 1));
+  return { level, path: d.path.slice(0, level) };
+}
+
+/** Görselin o an gösterdiği eksen alanı (drill düzeyine göre). */
+export function currentAxis(v: Visual): FieldRef | undefined {
+  return v.group[drillOf(v).level];
+}
+
+/** Üst düzeylerde seçilen değerler → filtre (Yıl=2026 içindeki aylar gibi). */
+function drillFilters(v: Visual): FilterRef[] {
+  const { path } = drillOf(v);
+  return path.map((val, i) => ({ table: v.group[i].table, column: v.group[i].column, op: "in" as const, values: [val] }));
+}
+
+// ------------------------------------------------------------------ sorgular
 /** Görsel türüne göre sorgu. Dönen sütun sırası: gruplama alanları, sonra değerler. */
 export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
-  const filters = [...v.filters, ...extra];
+  const filters = [...v.filters, ...extra, ...(supportsDrill(v) ? drillFilters(v) : [])];
   const def = VISUAL_DEFS[v.type];
+  const axis = currentAxis(v);
   if (def.category) {
-    if (!v.group.length || !v.values.length) return null;
+    if (!axis || !v.values.length) return null;
     const legend = v.legend ?? [];
     if (legend.length) {
       // Eksen × gösterge: tek değer, istemcide seriye çevrilir
-      return { group: [v.group[0], legend[0]], values: v.values.slice(0, 1), filters, limit: 5000 };
+      return { group: [axis, legend[0]], values: v.values.slice(0, 1), filters, limit: 5000 };
     }
     const byValue = !def.category.line;          // çubuklar değere göre, çizgiler eksen sırasıyla
     return {
-      group: v.group.slice(0, 1), values: v.values, filters,
+      group: [axis], values: v.values, filters,
       order_by: byValue ? [{ index: 1, desc: true }] : [],
       limit: byValue ? CHART_CATEGORY_LIMIT : 2000,
     };
@@ -39,8 +64,22 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     }
     case "pie":
     case "donut":
+    case "treemap":
+      if (!axis || !v.values.length) return null;
+      return { group: [axis], values: v.values.slice(0, 1), filters, order_by: [{ index: 1, desc: true }], limit: 300 };
+    case "waterfall":
       if (!v.group.length || !v.values.length) return null;
-      return { group: v.group.slice(0, 1), values: v.values.slice(0, 1), filters, order_by: [{ index: 1, desc: true }], limit: 200 };
+      return { group: v.group.slice(0, 1), values: v.values.slice(0, 1), filters, limit: 60 };
+    case "scatter": {
+      if (!v.group.length || v.values.length < 2) return null;
+      const legend = (v.legend ?? []).slice(0, 1);
+      return { group: [v.group[0], ...legend], values: v.values.slice(0, 3), filters, limit: 3000 };
+    }
+    case "heatmap": {
+      const x = (v.legend ?? [])[0];
+      if (!v.group.length || !x || !v.values.length) return null;
+      return { group: [v.group[0], x], values: v.values.slice(0, 1), filters, limit: 5000 };
+    }
     case "card":
       if (!v.values.length) return null;
       return { group: [], values: v.values.slice(0, 1), filters, limit: 1 };
@@ -48,8 +87,12 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
       if (!v.values.length) return null;
       return { group: v.group.slice(0, 1), values: v.values, filters, limit: 200 };
     case "kpi":
+    case "progress":
       if (!v.values.length) return null;
       return { group: [], values: [...v.values.slice(0, 1), ...(v.target ?? []).slice(0, 1)], filters, limit: 1 };
+    case "gauge":
+      if (!v.values.length) return null;
+      return { group: [], values: [...v.values.slice(0, 2), ...(v.target ?? []).slice(0, 1)], filters, limit: 1 };
     case "slicer": {
       const f = v.group[0];
       if (!f) return null;
@@ -63,6 +106,27 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     }
   }
   return null;
+}
+
+/**
+ * Matris: her (satır düzeyi, sütun düzeyi) birleşimi için ayrı sorgu. Alt toplamlar
+ * toplanarak değil, o düzeyde yeniden hesaplanır; "farklı say", "ortalama" gibi
+ * toplanamayan değerler de doğru çıkar (DAX'taki gibi).
+ */
+export function matrixQueries(v: Visual, extra: FilterRef[]): { r: number; c: number; q: VisualQuery }[] | null {
+  if (!v.values.length) return null;
+  const rows = v.group;
+  const cols = v.legend ?? [];
+  const filters = [...v.filters, ...extra];
+  const out: { r: number; c: number; q: VisualQuery }[] = [];
+  // Sütunlarda yalnızca yaprak düzey ve genel toplam (ara sütun toplamları sonraki sürümde)
+  const colLevels = cols.length ? [0, cols.length] : [0];
+  for (let r = 0; r <= rows.length; r++) {
+    for (const c of colLevels) {
+      out.push({ r, c, q: { group: [...rows.slice(0, r), ...cols.slice(0, c)], values: v.values, filters, limit: MATRIX_ROW_LIMIT } });
+    }
+  }
+  return out;
 }
 
 /** Sayfadaki dilimleyicilerin seçimleri → diğer görseller için filtreler. */
@@ -84,6 +148,7 @@ export function slicerFilters(visuals: Visual[], states: Record<string, VisualSt
   return out;
 }
 
+// ------------------------------------------------------------------ veri kancaları
 export type VisualData =
   | { state: "empty" }
   | { state: "loading"; previous?: VisualResult }
@@ -96,8 +161,8 @@ function toError(e: unknown): VisualError {
 }
 
 /** Görselin verisini getirir; aynı sorgu tekrar istenmez, eski yanıt yenisinin üstüne yazılmaz. */
-export function useVisualData(v: Visual, extra: FilterRef[], revision: string, run: QueryFn): VisualData {
-  const query = useMemo(() => buildQuery(v, extra), [v, extra]);
+export function useVisualData(v: Visual, extra: FilterRef[], revision: string, run: QueryFn, enabled = true): VisualData {
+  const query = useMemo(() => (enabled ? buildQuery(v, extra) : null), [v, extra, enabled]);
   const key = query ? JSON.stringify(query) + "#" + revision : "";
   const [data, setData] = useState<VisualData>({ state: "empty" });
 
@@ -110,6 +175,43 @@ export function useVisualData(v: Visual, extra: FilterRef[], revision: string, r
     setData((d) => ({ state: "loading", previous: d.state === "ready" ? d.result : d.state === "loading" ? d.previous : undefined }));
     run(query)
       .then((result) => alive && setData({ state: "ready", result }))
+      .catch((e) => alive && setData({ state: "error", error: toError(e) }));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, run]);
+
+  return data;
+}
+
+export interface MatrixPart {
+  r: number;
+  c: number;
+  result: VisualResult;
+}
+
+export type MatrixData =
+  | { state: "empty" }
+  | { state: "loading"; previous?: MatrixPart[] }
+  | { state: "ready"; parts: MatrixPart[] }
+  | { state: "error"; error: VisualError };
+
+/** Matrisin tüm düzey sorgularını birlikte çalıştırır. */
+export function useMatrixData(v: Visual, extra: FilterRef[], revision: string, run: QueryFn, enabled = true): MatrixData {
+  const queries = useMemo(() => (enabled ? matrixQueries(v, extra) : null), [v, extra, enabled]);
+  const key = queries ? JSON.stringify(queries) + "#" + revision : "";
+  const [data, setData] = useState<MatrixData>({ state: "empty" });
+
+  useEffect(() => {
+    if (!queries) {
+      setData({ state: "empty" });
+      return;
+    }
+    let alive = true;
+    setData((d) => ({ state: "loading", previous: d.state === "ready" ? d.parts : d.state === "loading" ? d.previous : undefined }));
+    Promise.all(queries.map(({ r, c, q }) => run(q).then((result) => ({ r, c, result }))))
+      .then((parts) => alive && setData({ state: "ready", parts }))
       .catch((e) => alive && setData({ state: "error", error: toError(e) }));
     return () => {
       alive = false;

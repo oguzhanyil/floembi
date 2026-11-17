@@ -255,6 +255,8 @@ export type VisualType =
   | "card" | "multicard" | "kpi"
   | "column" | "bar" | "stackedcolumn" | "stackedbar" | "line" | "area"
   | "pie" | "donut"
+  | "matrix"
+  | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
@@ -312,6 +314,10 @@ export interface VisualState {
   range?: [string | number | null, string | number | null];
   /** Tablo: sıralama (sonuç sütun sırası) */
   sort?: { index: number; desc: boolean };
+  /** Drill-down: hangi eksen düzeyinde, hangi üst değerlerin içindeyiz */
+  drill?: { level: number; path: (string | number | boolean | null)[] };
+  /** Matris: açık satır düğümleri (yol anahtarları) */
+  expanded?: string[];
   [k: string]: unknown;
 }
 

@@ -16,6 +16,8 @@ VisualType = Literal[
     "card", "multicard", "kpi",                 # kartlar
     "column", "bar", "stackedcolumn", "stackedbar", "line", "area",
     "pie", "donut",
+    "matrix",                                   # pivot / ağaç tablo (satır + sütun grupları, alt toplamlar)
+    "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]

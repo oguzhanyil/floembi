@@ -112,7 +112,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   /** Alanı görsele ekler: kutu verilmezse alanın türüne göre (sayı → değer, diğerleri → gruplama). */
-  function addField(v: Visual, table: string, column: string, well?: WellKey): Visual {
+  function addField(v: Visual, table: string, column: string, well?: WellKey, slot?: number): Visual {
     const c = columnOf(table, column);
     if (!c) return v;
     const wells = VISUAL_DEFS[v.type].wells;
@@ -130,6 +130,13 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       return def.key === "group" ? { ...v, group: next } : { ...v, legend: next };
     }
     const value: ValueRef = { table, column, agg: defaultAgg(c) };
+    if (def.key === "values" && slot !== undefined) {
+      // Yuvalı kutu: o sıradaki değeri değiştir, sıra boşsa sona ekle
+      const values = [...v.values];
+      if (slot < values.length) values[slot] = value;
+      else values.push(value);
+      return { ...v, values };
+    }
     const cur = def.key === "values" ? v.values : v.target ?? [];
     const next = def.max && cur.length >= def.max ? [value] : [...cur, value];
     return def.key === "values" ? { ...v, values: next } : { ...v, target: next };
@@ -316,7 +323,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         visual={selected}
         onPickType={pickType}
         onChange={updateVisual}
-        onDropToWell={(well, t, c) => selected && updateVisual(addField(selected, t, c, well))}
+        onDropToWell={(well, t, c) => selected && updateVisual(addField(selected, t, c, well.key, well.slot))}
       />
       <FieldsPane tables={tables} visual={selected} onToggle={toggleField} />
     </div>

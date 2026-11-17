@@ -6,14 +6,17 @@
  * her grafikte araç ipucu, soluk ızgara.
  */
 import type { VisualFormat, VisualResult, VisualResultColumn } from "@floem/client";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
-import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { BarChart, GaugeChart, HeatmapChart, LineChart, PieChart, ScatterChart, TreemapChart } from "echarts/charts";
+import { GridComponent, LegendComponent, TooltipComponent, VisualMapComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { SERIES, formatCompact, formatValue, type VisualDef } from "./reportUtils";
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([
+  BarChart, LineChart, PieChart, ScatterChart, TreemapChart, HeatmapChart, GaugeChart,
+  GridComponent, LegendComponent, TooltipComponent, VisualMapComponent, CanvasRenderer,
+]);
 
 type Raw = string | number | boolean | null;
 export type CrossSelect = (value: Raw) => void;
@@ -24,7 +27,7 @@ const GRIDLINE = "#edebe9";
 const AXISLINE = "#c8c6c4";
 
 /** ECharts örneğini React yaşam döngüsüne bağlar; boyut değişince yeniden çizer. */
-function EChart({ option, onClick }: { option: echarts.EChartsCoreOption; onClick?: (p: { dataIndex: number; seriesIndex?: number; name: string }) => void }) {
+export function EChart({ option, onClick }: { option: echarts.EChartsCoreOption; onClick?: (p: { dataIndex: number; seriesIndex?: number; name: string }) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const click = useRef(onClick);
@@ -51,14 +54,14 @@ function EChart({ option, onClick }: { option: echarts.EChartsCoreOption; onClic
   return <div ref={ref} className="v-echart" />;
 }
 
-function palette(format: VisualFormat): string[] {
+export function palette(format: VisualFormat): string[] {
   const custom = Array.isArray(format.colors) ? (format.colors as string[]) : [];
   return SERIES.map((c, i) => custom[i] || c);
 }
 
 const label = (v: Raw, c: VisualResultColumn) => formatValue(v, c.type, c.format) || "(Boş)";
 
-function tooltipBox(title: string, rows: { color?: string; name: string; value: string }[]) {
+export function tooltipBox(title: string, rows: { color?: string; name: string; value: string }[]) {
   const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
   return (
     `<div class="v-tip"><strong>${esc(title)}</strong>` +

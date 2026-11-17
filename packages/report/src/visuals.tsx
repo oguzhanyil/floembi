@@ -3,8 +3,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { formatCompact, formatValue, isNumericType } from "./reportUtils";
 
+import type { CrossSelect } from "./charts";
+
 type Raw = string | number | boolean | null;
-export type CrossSelect = (value: Raw) => void;
 
 function useSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);

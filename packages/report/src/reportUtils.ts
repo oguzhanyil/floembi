@@ -8,6 +8,9 @@ export interface WellDef {
   key: WellKey;
   label: string;
   max?: number;
+  /** Değer listesinde sabit yuva (dağılım: 0 = X, 1 = Y, 2 = boyut) */
+  slot?: number;
+  optional?: boolean;
 }
 
 export interface VisualDef {
@@ -21,7 +24,8 @@ export interface VisualDef {
   category?: { horizontal?: boolean; stacked?: boolean; line?: boolean; area?: boolean };
 }
 
-const AXIS: WellDef = { key: "group", label: "X ekseni", max: 1 };
+// Eksen birden fazla alan alabilir: Yıl → Ay → Gün gibi drill-down hiyerarşisi
+const AXIS: WellDef = { key: "group", label: "X ekseni" };
 const LEGEND: WellDef = { key: "legend", label: "Gösterge", max: 1 };
 const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
 
@@ -40,11 +44,11 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   },
   bar: {
     label: "Kümelenmiş çubuk grafiği", icon: "▬", group: "Grafik", size: [520, 320], category: { horizontal: true },
-    wells: [{ key: "group", label: "Y ekseni", max: 1 }, { key: "values", label: "X ekseni" }, LEGEND],
+    wells: [{ key: "group", label: "Y ekseni" }, { key: "values", label: "X ekseni" }, LEGEND],
   },
   stackedbar: {
     label: "Yığılmış çubuk grafiği", icon: "▭", group: "Grafik", size: [520, 320], category: { horizontal: true, stacked: true },
-    wells: [{ key: "group", label: "Y ekseni", max: 1 }, { key: "values", label: "X ekseni" }, LEGEND],
+    wells: [{ key: "group", label: "Y ekseni" }, { key: "values", label: "X ekseni" }, LEGEND],
   },
   line: {
     label: "Çizgi grafiği", icon: "⟋", group: "Grafik", size: [560, 300], category: { line: true },
@@ -56,11 +60,57 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   },
   pie: {
     label: "Pasta grafiği", icon: "◔", group: "Grafik", size: [360, 300],
-    wells: [{ key: "group", label: "Gösterge", max: 1 }, { key: "values", label: "Değerler", max: 1 }],
+    wells: [{ key: "group", label: "Gösterge" }, { key: "values", label: "Değerler", max: 1 }],
   },
   donut: {
     label: "Halka grafiği", icon: "◎", group: "Grafik", size: [360, 300],
-    wells: [{ key: "group", label: "Gösterge", max: 1 }, { key: "values", label: "Değerler", max: 1 }],
+    wells: [{ key: "group", label: "Gösterge" }, { key: "values", label: "Değerler", max: 1 }],
+  },
+  scatter: {
+    label: "Dağılım grafiği", icon: "⁘", group: "Grafik", size: [480, 320],
+    wells: [
+      { key: "group", label: "Ayrıntılar", max: 1 },
+      { key: "values", label: "X ekseni", slot: 0, max: 1 },
+      { key: "values", label: "Y ekseni", slot: 1, max: 1 },
+      { key: "values", label: "Boyut", slot: 2, max: 1, optional: true },
+      { key: "legend", label: "Gösterge", max: 1 },
+    ],
+  },
+  treemap: {
+    label: "Ağaç haritası", icon: "▚", group: "Grafik", size: [480, 320],
+    wells: [{ key: "group", label: "Kategori" }, { key: "values", label: "Değerler", max: 1 }],
+  },
+  heatmap: {
+    label: "Isı haritası", icon: "▦", group: "Grafik", size: [520, 320],
+    wells: [
+      { key: "group", label: "Y ekseni", max: 1 },
+      { key: "legend", label: "X ekseni", max: 1 },
+      { key: "values", label: "Değer", max: 1 },
+    ],
+  },
+  waterfall: {
+    label: "Şelale grafiği", icon: "⫶", group: "Grafik", size: [520, 320],
+    wells: [{ key: "group", label: "Kategori", max: 1 }, { key: "values", label: "Y ekseni", max: 1 }],
+  },
+  gauge: {
+    label: "Gösterge (gauge)", icon: "◠", group: "Kart", size: [300, 220],
+    wells: [
+      { key: "values", label: "Değer", slot: 0, max: 1 },
+      { key: "values", label: "En büyük değer", slot: 1, max: 1, optional: true },
+      { key: "target", label: "Hedef", max: 1 },
+    ],
+  },
+  progress: {
+    label: "İlerleme çubuğu", icon: "▰", group: "Kart", size: [320, 110],
+    wells: [{ key: "values", label: "Değer", max: 1 }, { key: "target", label: "Hedef", max: 1 }],
+  },
+  matrix: {
+    label: "Matris (pivot)", icon: "⊞", group: "Veri", size: [560, 340],
+    wells: [
+      { key: "group", label: "Satırlar" },
+      { key: "legend", label: "Sütunlar" },
+      { key: "values", label: "Değerler" },
+    ],
   },
   card: {
     label: "Kart", icon: "▢", group: "Kart", size: [240, 140],
