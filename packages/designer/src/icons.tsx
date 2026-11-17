@@ -1,3 +1,5 @@
+import type { ModelColumn } from "@floem/client";
+
 /** Model görünümü simgeleri (Power BI'daki tablo kartı simgelerine benzer, satır içi SVG). */
 const base = { width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": true } as const;
 
@@ -70,3 +72,14 @@ export const DateTableIcon = () => (
     <circle cx="11" cy="9.5" r="1" fill="currentColor" />
   </svg>
 );
+
+const isNumeric = (t: ModelColumn["tip"]) => t === "int32" || t === "int64" || t === "decimal" || t === "double";
+
+/** Sütun tipi simgesi: Σ toplanabilen sayı, # özetlenmeyen sayı, takvim tarih, T metin. */
+export function ColumnTypeIcon({ c }: { c: ModelColumn }) {
+  if (isNumeric(c.tip) && (c.ozet ?? "sum") !== "none") return <SigmaIcon />;
+  if (isNumeric(c.tip)) return <NumberIcon />;
+  if (c.tip === "date" || c.tip === "datetime") return <CalendarIcon />;
+  if (c.tip === "bool") return <BoolIcon />;
+  return <TextIcon />;
+}

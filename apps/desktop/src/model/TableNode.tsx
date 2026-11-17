@@ -1,22 +1,12 @@
-import type { ModelColumn, ModelTable } from "@floem/client";
+import type { ModelTable } from "@floem/client";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useState, type DragEvent } from "react";
 import { DRAG_MIME, useModelView, type ColumnPick } from "./ModelContext";
-import {
-  BoolIcon, CalcIcon, CalendarIcon, DateTableIcon, HiddenIcon, KeyIcon, NumberIcon, SigmaIcon, TableIcon, TextIcon,
-} from "./icons";
-import { HEADER_H, MAX_ROWS, NODE_WIDTH, ROW_H, TYPE_LABEL, isDate, isNumeric, isSummarized, nf } from "./modelUtils";
+import { CalcIcon, ColumnTypeIcon, DateTableIcon, HiddenIcon, KeyIcon, TableIcon } from "@floem/designer";
+import { HEADER_H, MAX_ROWS, NODE_WIDTH, ROW_H, TYPE_LABEL, nf } from "./modelUtils";
 
 export type TableNodeData = { table: ModelTable; rows: number | null; collapsed: boolean };
 export type TableNodeT = Node<TableNodeData, "table">;
-
-export function ColumnTypeIcon({ c }: { c: ModelColumn }) {
-  if (isSummarized(c)) return <SigmaIcon />;
-  if (isNumeric(c.tip)) return <NumberIcon />;
-  if (isDate(c.tip)) return <CalendarIcon />;
-  if (c.tip === "bool") return <BoolIcon />;
-  return <TextIcon />;
-}
 
 const handleStyle = {
   opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 0, pointerEvents: "none",

@@ -22,6 +22,7 @@
   "include": [
     "src",
     "../../packages/client/src",
-    "../../packages/report/src"
+    "../../packages/report/src",
+    "../../packages/designer/src"
   ]
 }

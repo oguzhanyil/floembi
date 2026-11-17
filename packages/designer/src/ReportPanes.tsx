@@ -1,7 +1,6 @@
 import type { Agg, ModelTable, ValueRef, Visual, VisualType } from "@floem/client";
 import { useState, type DragEvent } from "react";
-import { ColumnTypeIcon } from "../model/TableNode";
-import { DateTableIcon, TableIcon } from "../model/icons";
+import { ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 import { FIELD_MIME } from "./PageCanvas";
 import { AGG_LABEL, VISUAL_DEFS, usesColumn, valueLabel, type WellDef } from "@floem/report";
 

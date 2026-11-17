@@ -1,0 +1,16 @@
+{
+  "name": "@floem/designer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Rapor tasarımcısı (Desktop ve ileride floembi.app'te düzenleme ortak)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@floem/client": "*",
+    "@floem/report": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1"
+  }
+}

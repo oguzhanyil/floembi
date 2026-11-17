@@ -1,7 +1,6 @@
-import type { ModelColumn, ReportPage, Visual, VisualQuery } from "@floem/client";
-import { VisualBody, crossFiltersFor, snap, toggleCross, visualTitle, type CrossFilter } from "@floem/report";
-import { useCallback, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as RPointerEvent } from "react";
-import { useClient } from "../api";
+import type { ModelColumn, ReportPage, Visual } from "@floem/client";
+import { VisualBody, crossFiltersFor, snap, toggleCross, visualTitle, type CrossFilter, type QueryFn } from "@floem/report";
+import { useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as RPointerEvent } from "react";
 
 export const FIELD_MIME = "application/x-floem-field";
 
@@ -9,7 +8,7 @@ type Drag = { id: string; mode: "move" | "resize"; sx: number; sy: number; orig:
 
 /** Sabit boyutlu rapor sayfası (Power BI'daki 16:9 tuval); görseller taşınır ve boyutlandırılır. */
 export function PageCanvas({
-  page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf,
+  page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
 }: {
   page: ReportPage;
   selectedId: string | null;
@@ -22,6 +21,7 @@ export function PageCanvas({
   cross: CrossFilter | null;
   setCross: (c: CrossFilter | null) => void;
   columnOf: (table: string, column: string) => ModelColumn | undefined;
+  run: QueryFn;
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -76,8 +76,6 @@ export function PageCanvas({
     }
   }
 
-  const client = useClient();
-  const run = useCallback((q: VisualQuery) => client.query(q), [client]);
 
   return (
     <div className="page-outer" ref={outer} onPointerDown={() => { onSelect(null); setCross(null); }}>

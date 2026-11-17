@@ -1,8 +1,7 @@
 import type { ModelTable } from "@floem/client";
 import { useState } from "react";
-import { DateTableIcon, HiddenIcon, TableIcon } from "./icons";
+import { ColumnTypeIcon, DateTableIcon, HiddenIcon, TableIcon } from "@floem/designer";
 import type { Selection } from "./modelUtils";
-import { ColumnTypeIcon } from "./TableNode";
 
 /** Power BI'daki "Veri" bölmesi: tablolar ve alanlar ağacı, arama. */
 export function DataPane({
