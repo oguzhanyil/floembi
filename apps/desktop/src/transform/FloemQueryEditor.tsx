@@ -23,11 +23,11 @@ interface Menu {
 }
 
 /**
- * Power Query düzenleyicisi ("Verileri dönüştür"): içe aktarılan tablolara Uygulanan adımlar
+ * Floem Query düzenleyicisi (Power Query karşılığı, "Verileri dönüştür"): içe aktarılan tablolara Uygulanan adımlar
  * ekler. Adımlar "Kapat ve uygula"ya kadar yalnızca bu pencerede tutulur; önizleme her
  * değişiklikte yerel serviste (DuckDB) hesaplanır. Yenilemede adımlar ham veriye yeniden uygulanır.
  */
-export function PowerQueryEditor({ initialTable, onClose }: { initialTable?: string; onClose: () => void }) {
+export function FloemQueryEditor({ initialTable, onClose }: { initialTable?: string; onClose: () => void }) {
   const client = useClient();
   const { doc, setDoc } = useDocument();
   const tables = useMemo(() => (doc?.model.tablolar ?? []).filter((t) => t.sorgu), [doc]);
@@ -185,10 +185,10 @@ export function PowerQueryEditor({ initialTable, onClose }: { initialTable?: str
   );
 
   return (
-    <div className="pq" role="dialog" aria-label="Power Query düzenleyicisi" onKeyDown={(e) => e.key === "Escape" && !dialog && cancel()}>
+    <div className="pq" role="dialog" aria-label="Floem Query düzenleyicisi" onKeyDown={(e) => e.key === "Escape" && !dialog && cancel()}>
       <header className="pq-title">
         <strong>Verileri dönüştür</strong>
-        <span className="muted">Power Query düzenleyicisi</span>
+        <span className="muted">Floem Query düzenleyicisi</span>
         <span className="pq-title-actions">
           <button onClick={cancel} disabled={applying}>
             İptal

@@ -247,7 +247,7 @@ export function PropertiesPane({
           <button onClick={() => onNewMeasure(t.ad)}>Yeni ölçü</button>
           {src && <button onClick={() => onRefresh(t.ad)}>Yenile</button>}
           {src && (
-            <button onClick={() => onTransform(t.ad)} title="Power Query düzenleyicisi">
+            <button onClick={() => onTransform(t.ad)} title="Floem Query düzenleyicisi">
               Verileri dönüştür{t.sorgu?.adimlar?.length ? ` (${t.sorgu.adimlar.length} adım)` : ""}
             </button>
           )}

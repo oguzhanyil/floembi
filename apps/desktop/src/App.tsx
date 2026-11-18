@@ -12,7 +12,7 @@ import { SqlView } from "./components/SqlView";
 import { DocumentProvider, useDocument } from "./document";
 import { ModelView } from "./model/ModelView";
 import { ReportView } from "./report/ReportView";
-import { PowerQueryEditor } from "./transform/PowerQueryEditor";
+import { FloemQueryEditor } from "./transform/FloemQueryEditor";
 
 type View = "rapor" | "veri" | "model" | "sql";
 
@@ -136,7 +136,7 @@ function Shell() {
             className="ribbon-btn"
             onClick={() => setTransform({})}
             disabled={busy || !doc?.model.tablolar.some((t) => t.sorgu)}
-            title="Power Query düzenleyicisi: sütun böl, filtrele, birleştir…"
+            title="Floem Query düzenleyicisi: sütun böl, filtrele, birleştir…"
           >
             <span className="ribbon-ico">⚙</span>Verileri dönüştür
           </button>
@@ -276,7 +276,7 @@ function Shell() {
       {navigator && <Navigator connection={navigator} onClose={() => setNavigator(null)} onLoad={loadFromNavigator} />}
       {job && <JobDialog onShowModel={() => setView("model")} />}
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
-      {transform && <PowerQueryEditor initialTable={transform.table} onClose={() => setTransform(null)} />}
+      {transform && <FloemQueryEditor initialTable={transform.table} onClose={() => setTransform(null)} />}
       {dateDialog && (
         <DateTableDialog
           onClose={() => setDateDialog(false)}
