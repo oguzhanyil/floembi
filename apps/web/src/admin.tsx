@@ -45,8 +45,6 @@ const PRESETS: { label: string; host: string; port: number; security: MailConfig
     note: "Hesap şifresi değil, Google “Uygulama şifresi” kullanılır." },
   { label: "Titan", host: "smtp.titan.email", port: 465, security: "ssl",
     note: "Kullanıcı adı ve gönderen adresi Titan e-posta adresinizin tamamı, şifre posta kutusu şifresidir." },
-  { label: "Brevo", host: "smtp-relay.brevo.com", port: 587, security: "starttls",
-    note: "Kullanıcı adı Brevo'daki SMTP girişi (…@smtp-brevo.com), şifre SMTP anahtarıdır. Gönderen adresi Brevo'da doğrulanmış olmalı." },
   { label: "Mailpit (geliştirme)", host: "127.0.0.1", port: 1025, security: "none",
     note: "E-postalar http://127.0.0.1:8025 adresinde okunur; kimseye gerçekten gitmez." },
 ];
