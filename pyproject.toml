@@ -31,6 +31,7 @@ server = [
   "argon2-cffi>=25.1",     # MIT (şifre özeti)
   "pyjwt>=2.15",           # MIT (oturum)
   "python-multipart",      # Apache-2.0 (dosya yükleme)
+  "cryptography>=44",      # Apache-2.0 OR BSD-3-Clause (SMTP şifresinin şifreli saklanması)
 ]
 
 [tool.setuptools.packages.find]

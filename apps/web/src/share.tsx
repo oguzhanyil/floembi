@@ -4,9 +4,9 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { navigate, useSession } from "./session";
 
-/** E-postadaki rapor bağlantısı (aynı sunucudaysa uygulama içinde açılır) */
+/** E-postadaki floembi.app bağlantısı: rapor, çalışma alanı ya da davet (aynı sunucudaysa uygulama içinde açılır) */
 function reportPath(html: string | null, text: string): string | null {
-  const m = /https?:\/\/[^\s"'<>]+\/reports\/\d+/.exec(html ?? text);
+  const m = /https?:\/\/[^\s"'<>]+\/(?:reports\/\d+|workspaces\/\d+|invite\/[A-Za-z0-9_-]+)/.exec(html ?? text);
   if (!m) return null;
   try {
     const u = new URL(m[0].replace(/&amp;/g, "&"));
@@ -28,10 +28,13 @@ const STATUS_TEXT: Record<ShareResult["status"], string> = {
   shared: "Erişim verildi",
   already: "Zaten paylaşılmış",
   member: "Çalışma alanı üyesi",
+  invited: "floembi.app hesabı yok, davet gönderildi",
   unknown: "Kullanıcı bulunamadı",
   invalid: "Geçersiz adres",
   self: "Siz",
 };
+
+const OK: ShareResult["status"][] = ["shared", "already", "member", "invited"];
 
 const MAIL_TEXT: Record<ShareResult["mail"], string> = {
   sent: "e-posta gönderildi",
@@ -68,7 +71,7 @@ export function ShareDialog({ report, onClose }: { report: PublishedReport; onCl
     try {
       const r = await guard(client.share(report.id, list, message.trim() || null, notify));
       setResults(r.results);
-      if (r.results.every((x) => ["shared", "already", "member"].includes(x.status) && x.mail !== "failed")) setEmails("");
+      if (r.results.every((x) => OK.includes(x.status) && x.mail !== "failed")) setEmails("");
       loadAccess();
     } catch (err) {
       setError(errText(err));
@@ -77,9 +80,9 @@ export function ShareDialog({ report, onClose }: { report: PublishedReport; onCl
     }
   }
 
-  async function remove(uid: number) {
+  async function remove(uid: number, pending = false) {
     try {
-      await guard(client.unshare(report.id, uid));
+      await guard(pending ? client.cancelPendingShare(report.id, uid) : client.unshare(report.id, uid));
       loadAccess();
     } catch (err) {
       setError(errText(err));
@@ -123,19 +126,20 @@ export function ShareDialog({ report, onClose }: { report: PublishedReport; onCl
           )}
           <p className="hint">
             Alıcılar raporu ve verisini salt okunur görür; raporu düzenleyemez, yayımlayamaz, yenileyemez.
+            floembi.app hesabı olmayan adreslere davet gider; hesabını açınca raporu görür.
           </p>
           {error && <div className="error-box">{error}</div>}
           {results && (
             <ul className="share-results">
               {results.map((r) => {
-                const ok = ["shared", "already", "member"].includes(r.status) && r.mail !== "failed";
+                const ok = OK.includes(r.status) && r.mail !== "failed";
                 return (
                   <li key={r.email} className={ok ? "ok" : "bad"}>
                     <span aria-hidden>{ok ? "✓" : "⚠"}</span>
                     <span>
                       <strong>{r.email}</strong>: {STATUS_TEXT[r.status]}
                       {MAIL_TEXT[r.mail] && `, ${MAIL_TEXT[r.mail]}`}
-                      {!ok && r.status !== "shared" && r.message && <span className="muted"> ({r.message})</span>}
+                      {!ok && !OK.includes(r.status) && r.message && <span className="muted"> ({r.message})</span>}
                       {r.mail_error && <span className="muted"> ({r.mail_error})</span>}
                     </span>
                   </li>
@@ -165,6 +169,20 @@ export function ShareDialog({ report, onClose }: { report: PublishedReport; onCl
                     <td>
                       <button type="button" className="link danger" onClick={() => void remove(s.id)}>
                         Erişimi kaldır
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {(access.pending ?? []).map((p) => (
+                  <tr key={`p${p.id}`} className="static">
+                    <td>{p.email}<div className="muted small">Hesap açılmadı</div></td>
+                    <td>
+                      Davet gönderildi · {p.shared_by}
+                      <div className="muted small">{when(p.shared_at)}</div>
+                    </td>
+                    <td>
+                      <button type="button" className="link danger" onClick={() => void remove(p.id, true)}>
+                        Geri al
                       </button>
                     </td>
                   </tr>
@@ -248,7 +266,8 @@ export function InboxPage() {
               </div>
               {reportPath(open.html, open.text) && (
                 <button className="primary mail-open" onClick={() => navigate(reportPath(open.html, open.text)!)}>
-                  Raporu aç
+                  {reportPath(open.html, open.text)!.startsWith("/invite/") ? "Daveti aç"
+                    : reportPath(open.html, open.text)!.startsWith("/workspaces/") ? "Çalışma alanını aç" : "Raporu aç"}
                 </button>
               )}
               <button className="link close" onClick={() => setOpen(null)} aria-label="Kapat">

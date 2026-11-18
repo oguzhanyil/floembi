@@ -218,7 +218,8 @@ def test_share_by_email_outbox(server, floem_file):
     assert r.status_code == 200, r.text
     res = {x["email"]: x for x in r.json()["results"]}
     assert res["izleyici@floembi.test"]["status"] == "shared" and res["izleyici@floembi.test"]["mail"] == "outbox"
-    assert res["yok@floembi.test"]["status"] == "unknown" and res["yok@floembi.test"]["mail"] == "skipped"
+    # hesabı olmayan adres: davet gider, paylaşım bekletilir
+    assert res["yok@floembi.test"]["status"] == "invited" and res["yok@floembi.test"]["mail"] == "outbox"
     assert res["bozuk"]["status"] == "invalid" and res["yonetici@floembi.test"]["status"] == "self"
     assert r.json()["mail_mode"] == "outbox"
     # izleyici artık raporu görüyor ve e-postayı gelen kutusunda okuyabiliyor
@@ -282,3 +283,156 @@ def test_smtp_send_uses_starttls_and_login(monkeypatch, tmp_path):
                                           url="http://x/reports/1", message=None), tmp_path)
     assert status == "sent" and path is None
     assert calls == [("connect", "smtp.sirket.local", 587), ("starttls",), ("login", "bi"), ("send", "a@b.c", "Ayşe sizinle 'R' raporunu paylaştı")]
+
+
+# ------------------------------------------------------------------ yönetim: e-posta sunucusu ve yetkilendirme
+class FakeSMTP:
+    calls: list = []
+
+    def __init__(self, host, port, timeout):
+        FakeSMTP.calls.append(("connect", host, port))
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+    def starttls(self, context):
+        FakeSMTP.calls.append(("starttls",))
+    def login(self, u, p):
+        FakeSMTP.calls.append(("login", u, p))
+    def send_message(self, msg):
+        FakeSMTP.calls.append(("send", msg["To"], msg["From"]))
+
+
+SMTP_CFG = {"enabled": True, "host": "smtp.sirket.local", "port": 587, "security": "starttls",
+            "username": "bi@sirket.local", "password": "Gizli.Sifre-1", "from_address": "bi@sirket.local",
+            "from_name": "Şirket BI"}
+
+
+def test_admin_mail_config(server, monkeypatch):
+    from floem_bi.server import mail as m
+    hy, hi = login(server, YON), login(server, IZL)
+    assert server.get("/api/me", headers=hy).json()["is_admin"] is True
+    assert server.get("/api/me", headers=hi).json()["is_admin"] is False
+    assert server.get("/api/admin/mail", headers=hi).status_code == 403
+    assert server.get("/api/admin/mail", headers=hy).json()["source"] == "outbox"
+    # eksik alan okunur hata verir
+    r = server.put("/api/admin/mail", headers=hy, json={**SMTP_CFG, "host": ""})
+    assert r.status_code == 400 and "SMTP sunucusu" in r.json()["error"]["message"]
+    r = server.put("/api/admin/mail", headers=hy, json=SMTP_CFG)
+    assert r.status_code == 200, r.text
+    view = r.json()
+    assert view["source"] == "screen" and view["config"]["has_password"] and "password" not in view["config"]
+    assert "Gizli.Sifre-1" not in r.text
+    # şifre veritabanında açık metin değil
+    with server.app_.state.db.connect() as c:
+        enc = c.execute(db.mail_config.select()).first().password_enc
+    assert enc and "Gizli" not in enc
+    # şifre alanı boş gönderilince kayıtlı şifre korunur; test e-postası onu kullanır
+    FakeSMTP.calls = []
+    monkeypatch.setattr(m.smtplib, "SMTP", FakeSMTP)
+    r = server.post("/api/admin/mail/test", headers=hy, json={**SMTP_CFG, "password": None}).json()
+    assert r["status"] == "sent" and r["to"] == "yonetici@floembi.test"
+    assert ("login", "bi@sirket.local", "Gizli.Sifre-1") in FakeSMTP.calls
+    assert server.get("/api/me", headers=hy).json()["mail_mode"] == "smtp"
+    # SMTP'ye ulaşılamazsa test sonucu okunur
+    monkeypatch.undo()
+    r = server.post("/api/admin/mail/test", headers=hy, json={**SMTP_CFG, "host": "127.0.0.1", "port": 1,
+                                                              "security": "none"}).json()
+    assert r["status"] == "failed" and "127.0.0.1:1" in r["error"]
+    # kapatınca giden kutusuna döner, kayıtlı şifre silinmez
+    view = server.put("/api/admin/mail", headers=hy, json={**SMTP_CFG, "enabled": False, "password": None}).json()
+    assert view["source"] == "outbox" and view["config"]["has_password"]
+
+
+def _invite_token(server, headers, email):
+    import re
+    items = [i for i in server.get("/api/mail/inbox", headers=headers).json()["items"] if i["to"] == email]
+    html = server.get(f"/api/mail/inbox/{items[0]['id']}", headers=headers).json()["html"]
+    return re.search(r"/invite/([A-Za-z0-9_\-]+)", html).group(1)
+
+
+def test_grant_and_invite_flow(server, floem_file):
+    hy, hi = login(server, YON), login(server, IZL)
+    assert server.get("/api/admin/users", headers=hi).status_code == 403
+    r = server.post("/api/admin/users/grant", headers=hy, json={
+        "emails": ["Yeni.Kisi@sirket.com", "izleyici@floembi.test", "bozuk"], "workspace_id": 1, "role": "member"})
+    assert r.status_code == 200, r.text
+    res = {x["email"]: x for x in r.json()["results"]}
+    assert res["yeni.kisi@sirket.com"]["status"] == "invited" and res["yeni.kisi@sirket.com"]["mail"] == "outbox"
+    assert res["izleyici@floembi.test"]["status"] == "granted" and res["izleyici@floembi.test"]["mail"] == "outbox"
+    assert res["bozuk"]["status"] == "invalid"
+    # izleyici artık çalışma alanı Üyesi ve "erişim verildi" e-postası aldı
+    assert server.get("/api/me", headers=hi).json()["workspaces"][0]["role"] == "member"
+    assert "erişim verdi" in server.get("/api/mail/inbox", headers=hi).json()["items"][0]["subject"]
+    users = server.get("/api/admin/users", headers=hy).json()
+    assert users["invitations"][0]["email"] == "yeni.kisi@sirket.com"
+    assert users["invitations"][0]["grants"] == ["Satış Ekibi çalışma alanı: Üye"]
+    # ayrıca bir rapor paylaşılır: davet tek, yetkiler birikir
+    rid = publish(server, hy, floem_file.path).json()["report_id"]
+    old = _invite_token(server, hy, "yeni.kisi@sirket.com")
+    server.post(f"/api/reports/{rid}/share", headers=hy, json={"emails": ["yeni.kisi@sirket.com"]})
+    token = _invite_token(server, hy, "yeni.kisi@sirket.com")
+    assert token != old and server.get(f"/api/invitations/{old}").status_code == 404   # yenisi eskisini geçersiz kılar
+    inv = server.get(f"/api/invitations/{token}").json()
+    assert inv["email"] == "yeni.kisi@sirket.com" and inv["inviter"] == "Yönetici Kullanıcı" and len(inv["grants"]) == 2
+    # kısa şifre reddedilir; kabul edince hesap açılır, oturum döner
+    assert server.post(f"/api/invitations/{token}/accept", json={"name": "Yeni", "password": "kisa"}).status_code == 422
+    r = server.post(f"/api/invitations/{token}/accept", json={"name": "Yeni Kişi", "password": "Uzun.Sifre1"})
+    assert r.status_code == 200, r.text
+    hn = {"Authorization": f"Bearer {r.json()['token']}"}
+    me = server.get("/api/me", headers=hn).json()
+    assert me["name"] == "Yeni Kişi" and me["workspaces"][0]["role"] == "member" and me["is_admin"] is False
+    assert server.get(f"/api/reports/{rid}", headers=hn).status_code == 200
+    # bağlantı ikinci kez kullanılamaz; artık şifresiyle giriş yapar
+    assert server.post(f"/api/invitations/{token}/accept", json={"name": "X", "password": "Uzun.Sifre1"}).status_code == 404
+    assert server.post("/api/auth/login", json={"email": "yeni.kisi@sirket.com", "password": "Uzun.Sifre1"}).status_code == 200
+    assert server.get("/api/admin/users", headers=hy).json()["invitations"] == []
+
+
+def test_admin_guards(server):
+    hy = login(server, YON)
+    # son Yönetici çıkarılamaz / rolü düşürülemez; kendi sistem yöneticiliğini kaldıramaz
+    r = server.delete("/api/admin/users/1/workspaces/1", headers=hy)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "last_admin"
+    assert server.put("/api/admin/users/1/workspaces/1", headers=hy, json={"role": "viewer"}).status_code == 400
+    assert server.put("/api/admin/users/1/admin", headers=hy, json={"is_admin": False}).status_code == 400
+    # iptal edilen davet ve bekleyen yetkiler silinir
+    server.post("/api/admin/users/grant", headers=hy, json={"emails": ["a@b.co"], "workspace_id": 1})
+    inv = server.get("/api/admin/users", headers=hy).json()["invitations"][0]
+    token = _invite_token(server, hy, "a@b.co")
+    assert server.delete(f"/api/admin/invitations/{inv['id']}", headers=hy).status_code == 200
+    assert server.get(f"/api/invitations/{token}").status_code == 404
+    with server.app_.state.db.connect() as c:
+        assert c.execute(db.pending_grants.select()).all() == []
+    # süresi dolmuş davet geçersiz
+    server.post("/api/admin/users/grant", headers=hy, json={"emails": ["c@d.co"], "workspace_id": 1})
+    token = _invite_token(server, hy, "c@d.co")
+    from datetime import timedelta
+    with server.app_.state.db.begin() as c:
+        c.execute(db.invitations.update().values(expires_at=db.now() - timedelta(minutes=1)))
+    r = server.get(f"/api/invitations/{token}")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "invite_invalid"
+
+
+def test_old_database_gets_admin_column(tmp_path):
+    """is_admin sütunu olmayan eski metadata veritabanı açılınca taşınır; çalışma alanı Yöneticileri yönetici olur."""
+    import sqlite3
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY, email VARCHAR(254) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
+                            password_hash VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL);
+        CREATE TABLE workspaces (id INTEGER PRIMARY KEY, name VARCHAR(120) NOT NULL UNIQUE, created_at DATETIME NOT NULL);
+        CREATE TABLE members (workspace_id INTEGER, user_id INTEGER, role VARCHAR(16) NOT NULL,
+                              PRIMARY KEY (workspace_id, user_id));
+        INSERT INTO users VALUES (1, 'a@x.co', 'A', 'h', '2026-01-01'), (2, 'b@x.co', 'B', 'h', '2026-01-01');
+        INSERT INTO workspaces VALUES (1, 'W', '2026-01-01');
+        INSERT INTO members VALUES (1, 1, 'admin'), (1, 2, 'viewer');
+    """)
+    con.commit()
+    con.close()
+    eng = db.make_engine(f"sqlite:///{path.as_posix()}")
+    with eng.connect() as c:
+        assert [tuple(r) for r in c.execute(db.users.select().with_only_columns(db.users.c.id, db.users.c.is_admin)
+                                             .order_by(db.users.c.id))] == [(1, True), (2, False)]
+    eng.dispose()

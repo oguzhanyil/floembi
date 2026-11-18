@@ -2,6 +2,7 @@ import {
   FloemApiError, type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
 } from "@floem/client";
 import { InboxPage, ShareDialog } from "./share";
+import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
 import { ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, SessionProvider, navigate, usePath, useSession } from "./session";
@@ -46,14 +47,18 @@ function ErrorPanel({ error }: { error: UiError }) {
 }
 
 function Router() {
-  const { user } = useSession();
+  const { user, isAdmin } = useSession();
   const path = usePath();
+  const invite = /^\/invite\/([A-Za-z0-9_-]+)$/.exec(path);
+  if (invite) return <InvitePage token={invite[1]} key={invite[1]} />;   // oturumsuz açılır
   if (!user) return <Login />;
   let page = <Home />;
   let m: RegExpExecArray | null;
   if ((m = /^\/reports\/(\d+)/.exec(path))) page = <ReportPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
   else if (path === "/inbox") page = <InboxPage />;
+  else if (path === "/admin/mail" && isAdmin) page = <MailSettingsPage />;
+  else if (path === "/admin/users" && isAdmin) page = <UsersPage />;
   return <Shell>{page}</Shell>;
 }
 
@@ -114,7 +119,7 @@ function Login() {
 
 // ------------------------------------------------------------------ kabuk
 function Shell({ children }: { children: React.ReactNode }) {
-  const { user, workspaces, logout, mailMode } = useSession();
+  const { user, workspaces, logout, mailMode, isAdmin } = useSession();
   const path = usePath();
   return (
     <div className="shell">
@@ -136,6 +141,13 @@ function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
         {workspaces.length === 0 && <span className="muted pad">Üye olduğunuz çalışma alanı yok</span>}
+        {isAdmin && (
+          <>
+            <div className="nav-section">Yönetim</div>
+            <Link to="/admin/users" className={path === "/admin/users" ? "active" : ""}>👥 Kullanıcılar</Link>
+            <Link to="/admin/mail" className={path === "/admin/mail" ? "active" : ""}>⚙ E-posta sunucusu</Link>
+          </>
+        )}
       </nav>
       <main className="content">{children}</main>
     </div>

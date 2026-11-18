@@ -676,6 +676,8 @@ export interface WebUser {
   id: number;
   email: string;
   name: string;
+  /** Sistem yöneticisi (Power BI'daki Fabric yöneticisi): e-posta sunucusu ve kullanıcı yetkilendirme */
+  is_admin?: boolean;
 }
 
 export interface WorkspaceInfo {
@@ -727,18 +729,99 @@ export type MailMode = "smtp" | "outbox";
 export interface ReportAccess {
   members: { id: number; email: string; name: string; role: string; role_label: string }[];
   shares: { id: number; email: string; name: string; shared_by: string; shared_at: string }[];
+  /** Hesabı henüz açılmamış alıcılar (davet gönderildi) */
+  pending: { id: number; email: string; shared_by: string; shared_at: string }[];
   mail_mode: MailMode;
 }
 
 export interface ShareResult {
   email: string;
   name?: string;
-  /** shared: erişim verildi · already: zaten paylaşılmış · member: çalışma alanı üyesi · unknown · invalid · self */
-  status: "shared" | "already" | "member" | "unknown" | "invalid" | "self";
+  /** shared: erişim verildi · already: zaten paylaşılmış · member: çalışma alanı üyesi ·
+   *  invited: hesabı yok, davet gönderildi · unknown · invalid · self */
+  status: "shared" | "already" | "member" | "invited" | "unknown" | "invalid" | "self";
   /** sent: gönderildi · outbox: giden kutusuna yazıldı · failed · skipped */
   mail: "sent" | "outbox" | "failed" | "skipped";
   message: string;
   mail_error?: string;
+}
+
+/** Yönetim → E-posta sunucusu */
+export interface MailConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: "starttls" | "ssl" | "none";
+  username: string;
+  has_password: boolean;
+  from_address: string;
+  from_name: string;
+  updated_at: string | null;
+  updated_by?: string;
+}
+
+export interface MailConfigView {
+  /** screen: bu ekrandaki ayar · env: ortam değişkenleri · outbox: ayar yok (giden kutusu) */
+  source: "screen" | "env" | "outbox";
+  config: MailConfig;
+  env: { host: string; port: number; security: string; username: string; sender: string } | null;
+  public_url: string;
+}
+
+/** Kaydederken: password null → kayıtlı şifre korunur, "" → silinir */
+export type MailConfigInput = Omit<MailConfig, "has_password" | "updated_at" | "updated_by"> & { password: string | null };
+
+export interface MailSendResult {
+  status: "sent" | "outbox" | "failed";
+  error: string | null;
+  detail: string | null;
+  to?: string;
+}
+
+export type WorkspaceRole = "admin" | "member" | "contributor" | "viewer";
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string;
+  is_admin: boolean;
+  created_at: string;
+  workspaces: { workspace_id: number; workspace: string; role: WorkspaceRole; role_label: string }[];
+}
+
+export interface AdminInvitation {
+  id: number;
+  email: string;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+  invited_by: string;
+  grants: string[];
+}
+
+export interface AdminUsers {
+  users: AdminUser[];
+  invitations: AdminInvitation[];
+  workspaces: { id: number; name: string }[];
+  roles: { value: WorkspaceRole; label: string }[];
+  mail_mode: MailMode;
+}
+
+export interface GrantResult {
+  email: string;
+  name?: string;
+  /** granted: eklendi · updated: rol değişti · unchanged · invited: davet gönderildi · invalid · last_admin */
+  status: "granted" | "updated" | "unchanged" | "invited" | "invalid" | "last_admin";
+  mail: "sent" | "outbox" | "failed" | "skipped";
+  message: string;
+  mail_error?: string;
+}
+
+export interface InvitationInfo {
+  email: string;
+  inviter: string;
+  grants: string[];
+  expires_at: string;
 }
 
 export interface MailItem {
@@ -779,7 +862,8 @@ export class WebClient {
     return this.http.request<{ token: string; user: WebUser }>("POST", "/api/auth/login", { email, password });
   }
   me() {
-    return this.http.request<WebUser & { workspaces: WorkspaceInfo[]; mail_mode: MailMode }>("GET", "/api/me");
+    return this.http.request<WebUser & { is_admin: boolean; workspaces: WorkspaceInfo[]; mail_mode: MailMode }>(
+      "GET", "/api/me");
   }
   content(workspaceId: number) {
     return this.http.request<WorkspaceContent>("GET", `/api/workspaces/${workspaceId}/content`);
@@ -809,5 +893,49 @@ export class WebClient {
   }
   mailMessage(id: number) {
     return this.http.request<MailMessage>("GET", `/api/mail/inbox/${id}`);
+  }
+  cancelPendingShare(reportId: number, grantId: number) {
+    return this.http.request<{ ok: boolean }>("DELETE", `/api/reports/${reportId}/pending/${grantId}`);
+  }
+  // ---- yönetim (sistem yöneticisi)
+  mailConfig() {
+    return this.http.request<MailConfigView>("GET", "/api/admin/mail");
+  }
+  saveMailConfig(cfg: MailConfigInput) {
+    return this.http.request<MailConfigView>("PUT", "/api/admin/mail", cfg);
+  }
+  testMailConfig(cfg: MailConfigInput, to: string | null) {
+    return this.http.request<MailSendResult>("POST", "/api/admin/mail/test", { ...cfg, to });
+  }
+  adminUsers() {
+    return this.http.request<AdminUsers>("GET", "/api/admin/users");
+  }
+  grant(emails: string[], workspaceId: number, role: WorkspaceRole, message: string | null, notify: boolean) {
+    return this.http.request<{ results: GrantResult[]; mail_mode: MailMode }>("POST", "/api/admin/users/grant", {
+      emails, workspace_id: workspaceId, role, message, notify,
+    });
+  }
+  setMemberRole(userId: number, workspaceId: number, role: WorkspaceRole) {
+    return this.http.request<{ ok: boolean }>("PUT", `/api/admin/users/${userId}/workspaces/${workspaceId}`, { role });
+  }
+  removeMember(userId: number, workspaceId: number) {
+    return this.http.request<{ ok: boolean }>("DELETE", `/api/admin/users/${userId}/workspaces/${workspaceId}`);
+  }
+  setSystemAdmin(userId: number, isAdmin: boolean) {
+    return this.http.request<{ ok: boolean }>("PUT", `/api/admin/users/${userId}/admin`, { is_admin: isAdmin });
+  }
+  resendInvitation(id: number) {
+    return this.http.request<MailSendResult>("POST", `/api/admin/invitations/${id}/resend`);
+  }
+  revokeInvitation(id: number) {
+    return this.http.request<{ ok: boolean }>("DELETE", `/api/admin/invitations/${id}`);
+  }
+  // ---- davet (oturumsuz)
+  invitation(token: string) {
+    return this.http.request<InvitationInfo>("GET", `/api/invitations/${encodeURIComponent(token)}`);
+  }
+  acceptInvitation(token: string, name: string, password: string) {
+    return this.http.request<{ token: string; user: WebUser }>(
+      "POST", `/api/invitations/${encodeURIComponent(token)}/accept`, { name, password });
   }
 }

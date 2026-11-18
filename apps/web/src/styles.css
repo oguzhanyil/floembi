@@ -85,6 +85,7 @@ h2 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; }
 }
 
 /* pencereler (paylaş, e-posta) */
+.admin select { font: inherit; color: inherit; border: 1px solid var(--border-strong); border-radius: 4px; padding: 7px 8px; background: var(--surface); width: 100%; }
 textarea { font: inherit; color: inherit; border: 1px solid var(--border-strong); border-radius: 4px; padding: 8px 10px; background: var(--surface); width: 100%; resize: vertical; }
 .small { font-size: 11px; }
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
@@ -111,3 +112,33 @@ button.link.danger { color: var(--danger); }
 .mail-view { width: min(760px, 100%); height: 86vh; }
 .mail-frame { flex: 1; border: none; width: 100%; background: #f3f2f1; border-radius: 0 0 8px 8px; }
 .mail-text { padding: 16px; white-space: pre-wrap; margin: 0; overflow: auto; }
+
+/* Yönetim: e-posta sunucusu ve kullanıcılar */
+.admin h2 { font-size: 15px; margin: 24px 0 8px; }
+.form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin: 16px 0; display: flex; flex-direction: column; gap: 12px; }
+.form-card h2 { margin: 0; }
+.form-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.form-card label.inline, .form-card .inline { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+.form-card label.inline input, .form-card .inline input { width: auto; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: none; padding: 0; margin: 0; min-width: 0; }
+.grid2 .span2 { grid-column: span 2; }
+.grid2:disabled { opacity: 0.55; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } .grid2 .span2 { grid-column: auto; } }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { border-radius: 14px; padding: 3px 12px; font-size: 12px; }
+.form-actions { display: flex; align-items: center; gap: 12px; }
+.form-card .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.form-card .row input { flex: 1; min-width: 200px; }
+.ok-text { color: #107c10; font-size: 13px; }
+.status-banner { padding: 10px 14px; border-radius: 6px; font-size: 13px; border: 1px solid var(--border); background: var(--surface); }
+.status-banner .small { margin-top: 4px; }
+.status-banner.screen, .status-banner.env { background: #dff6dd; border-color: #9fd89f; }
+.status-banner.outbox { background: #fff4ce; border-color: #f2d27a; }
+.member-role { display: flex; align-items: center; gap: 8px; padding: 2px 0; flex-wrap: wrap; }
+.member-role > span { min-width: 110px; }
+.member-role select { width: auto; padding: 2px 6px; }
+td.actions { white-space: nowrap; }
+td.actions .link { margin-right: 8px; }
+.grant-list { margin: 0; padding-left: 18px; font-size: 13px; }
+.admin td label.inline { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
+.admin td input[type="checkbox"] { width: auto; margin: 0; }

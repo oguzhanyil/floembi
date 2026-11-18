@@ -31,8 +31,14 @@ interface SessionApi {
   workspaces: WorkspaceInfo[];
   /** outbox: e-postalar sunucunun giden kutusunda (geliştirme) */
   mailMode: MailMode | null;
+  /** Sistem yöneticisi: Yönetim menüsü */
+  isAdmin: boolean;
   client: WebClient;
   login(email: string, password: string): Promise<void>;
+  /** Davet kabulünden dönen oturumu kullan */
+  adopt(token: string, user: WebUser): void;
+  /** Çalışma alanı listesini ve rolleri yeniden oku */
+  reload(): void;
   logout(): void;
   /** 401 gelirse oturumu kapatır; diğer hataları olduğu gibi fırlatır */
   guard<T>(p: Promise<T>): Promise<T>;
@@ -50,12 +56,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [stored, setStored] = useState<Stored | null>(readStored);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [mailMode, setMailMode] = useState<MailMode | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [rev, setRev] = useState(0);
   const client = useMemo(() => new WebClient(window.location.origin, stored?.token ?? null), [stored]);
 
   const logout = useCallback(() => {
     writeStored(null);
     setStored(null);
     setWorkspaces([]);
+    setIsAdmin(false);
   }, []);
 
   const guard = useCallback(
@@ -76,9 +85,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((me) => {
         setWorkspaces(me.workspaces);
         setMailMode(me.mail_mode);
+        setIsAdmin(Boolean(me.is_admin));
       })
       .catch(() => undefined);
-  }, [stored, client, guard]);
+  }, [stored, client, guard, rev]);
+
+  const adopt = useCallback((token: string, user: WebUser) => {
+    const s = { token, user };
+    writeStored(s);
+    setStored(s);
+  }, []);
+  const reload = useCallback(() => setRev((x) => x + 1), []);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await new WebClient(window.location.origin, null).login(email, password);
@@ -88,7 +105,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user: stored?.user ?? null, workspaces, mailMode, client, login, logout, guard }}>
+    <Ctx.Provider
+      value={{ user: stored?.user ?? null, workspaces, mailMode, isAdmin, client, login, logout, adopt, reload, guard }}
+    >
       {children}
     </Ctx.Provider>
   );

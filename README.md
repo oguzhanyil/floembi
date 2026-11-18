@@ -118,10 +118,30 @@ etkileşimlidir (çapraz filtre, sayfalar). Yetkisiz işlemler 403 alır ve ekra
 
 **E-postayla paylaşım (H6):** Web'de rapor → *Paylaş* (yalnızca çalışma alanı Yöneticisi ve
 Üyesi). Alıcıya rapora salt okunur erişim verilir, istenirse "Raporu aç" bağlantılı e-posta gider.
-Erişim aynı pencerenin "Erişimi olanlar" listesinden kaldırılır. Alıcının floembi.app'te kullanıcısı
-olmalıdır (davet etme sonraki aşamada).
+Erişim aynı pencerenin "Erişimi olanlar" listesinden kaldırılır. floembi.app hesabı olmayan
+adrese davet e-postası gider; kişi hesabını açınca rapor paylaşılmış olur.
 
-E-posta sunucusu ortam değişkenleriyle ayarlanır; şifre yalnızca ortam değişkeninde durur:
+**Yönetim (sistem yöneticisi):** web'de sol menüdeki *Yönetim* bölümü yalnızca sistem
+yöneticilerine görünür (sahte kullanıcılardan `yonetici@floembi.test`). Mevcut bir metadata
+veritabanı açılınca çalışma alanı Yöneticileri otomatik olarak sistem yöneticisi yapılır.
+
+- **E-posta sunucusu:** SMTP sunucusu, port, güvenlik, kullanıcı, şifre ve gönderen bu ekrandan
+  tanımlanır. Microsoft 365, Gmail ve Mailpit için hazır ayarlar var. "Test e-postası gönder"
+  kaydetmeden dener. Şifre metadata DB'de şifreli saklanır (Fernet; anahtar
+  `FLOEM_SERVER_SECRET`'tan türetilir) ve ekrana geri gönderilmez. Gizli anahtar değişirse
+  şifre ekrandan yeniden girilir. Öncelik: bu ekrandaki ayar, yoksa aşağıdaki ortam
+  değişkenleri, o da yoksa giden kutusu.
+- **Kullanıcılar:** e-posta adreslerine çalışma alanı rolü verilir ve kişiye otomatik e-posta
+  gider.
+  - Hesabı olana "erişim verildi" e-postası gider.
+  - Hesabı olmayana davet gider. Bağlantı 7 gün geçerli ve tek kullanımlıktır; veritabanında
+    yalnızca SHA-256 özeti tutulur. Kişi adını ve şifresini belirler, hesabı açılınca
+    yetkileri geçerli olur.
+  - Rol değiştirme, çalışma alanından çıkarma ve davetleri yeniden gönderme/iptal etme de bu
+    ekrandadır.
+  - Son Yönetici çıkarılamaz; kişi kendi sistem yöneticiliğini kaldıramaz.
+
+E-posta sunucusu ortam değişkenleriyle de ayarlanabilir (ekranda ayar yoksa kullanılır):
 
 | Değişken | Örnek | Açıklama |
 |---|---|---|

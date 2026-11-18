@@ -9,7 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, DateTime, ForeignKey, Integer, MetaData, String, Table, Text, UniqueConstraint, create_engine, event,
+    Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table, Text, UniqueConstraint, create_engine,
+    event, inspect, text,
 )
 from sqlalchemy.engine import Engine
 
@@ -26,6 +27,8 @@ users = Table(
     Column("email", String(254), nullable=False, unique=True),
     Column("name", String(120), nullable=False),
     Column("password_hash", String(255), nullable=False),
+    # Sistem yöneticisi (Power BI'daki Fabric yöneticisi): e-posta sunucusu ve kullanıcı yetkilendirme
+    Column("is_admin", Boolean, nullable=False, default=False),
     Column("created_at", DateTime(timezone=True), nullable=False, default=now),
 )
 
@@ -86,7 +89,7 @@ shares = Table(
 mail_log = Table(
     "mail_log", metadata,
     Column("id", Integer, primary_key=True),
-    Column("kind", String(32), nullable=False),                  # share
+    Column("kind", String(32), nullable=False),                  # share | invite | access | test
     Column("to_email", String(254), nullable=False),
     Column("subject", String(300), nullable=False),
     Column("status", String(16), nullable=False),                # sent | outbox | failed
@@ -96,6 +99,57 @@ mail_log = Table(
     Column("created_by", Integer, ForeignKey("users.id"), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, default=now),
 )
+
+
+# E-posta sunucusu ayarı (Yönetim ekranı; tek satır, id=1). Şifre şifreli saklanır, ekrana dönmez.
+mail_config = Table(
+    "mail_config", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("enabled", Boolean, nullable=False, default=False),   # False: giden kutusu (geliştirme)
+    Column("host", String(255), nullable=False, default=""),
+    Column("port", Integer, nullable=False, default=587),
+    Column("security", String(16), nullable=False, default="starttls"),
+    Column("username", String(254)),
+    Column("password_enc", Text),
+    Column("from_address", String(254), nullable=False, default=""),
+    Column("from_name", String(120), nullable=False, default="floembi.app"),
+    Column("updated_by", Integer, ForeignKey("users.id", ondelete="SET NULL")),
+    Column("updated_at", DateTime(timezone=True)),
+)
+
+# Davet: floembi.app'te hesabı olmayan adres yetkilendirilince. Token yalnızca e-postada; burada özeti durur.
+invitations = Table(
+    "invitations", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("email", String(254), nullable=False, unique=True),
+    Column("name", String(120)),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("invited_by", Integer, ForeignKey("users.id", ondelete="SET NULL")),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+
+# Henüz hesabı olmayan adrese verilen yetkiler; hesap açılınca üyeliğe/paylaşıma dönüşür
+pending_grants = Table(
+    "pending_grants", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("email", String(254), nullable=False, index=True),
+    Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="CASCADE")),
+    Column("role", String(16)),                                   # çalışma alanı rolü
+    Column("report_id", Integer, ForeignKey("reports.id", ondelete="CASCADE")),  # ya da tek rapor paylaşımı
+    Column("granted_by", Integer, ForeignKey("users.id", ondelete="SET NULL")),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+)
+
+
+def _migrate(engine: Engine) -> None:
+    """Eski metadata veritabanlarına yeni sütunları ekler (create_all var olan tabloyu değiştirmez)."""
+    cols = {c["name"] for c in inspect(engine).get_columns("users")}
+    if "is_admin" not in cols:
+        with engine.begin() as c:
+            c.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+            # Mevcut kurulum: herhangi bir çalışma alanının Yöneticisi olanlar sistem yöneticisi olur
+            c.execute(text("UPDATE users SET is_admin = 1 WHERE id IN (SELECT user_id FROM members WHERE role = 'admin')"))
 
 
 def make_engine(url: str) -> Engine:
@@ -108,4 +162,5 @@ def make_engine(url: str) -> Engine:
             cur.execute("PRAGMA journal_mode = WAL")
             cur.close()
     metadata.create_all(engine)
+    _migrate(engine)
     return engine

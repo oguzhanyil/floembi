@@ -13,11 +13,16 @@ Uç noktalar (hepsi /api altında, yanıt hataları {"error": {code, message, de
   GET  /api/reports/{id}                     rapor tanımı
   POST /api/reports/{id}/query               görsel sorgusu
   GET  /api/datasets/{id}                    model özeti
+  POST /api/reports/{id}/share               e-postayla paylaş (hesabı olmayana davet)
+  GET|PUT /api/admin/mail, POST /api/admin/mail/test        e-posta sunucusu (sistem yöneticisi)
+  GET  /api/admin/users, POST /api/admin/users/grant        kullanıcı yetkilendirme + otomatik e-posta
+  GET  /api/invitations/{token}, POST …/accept              davet kabulü (oturumsuz)
 Web arayüzü (apps/web/dist) varsa kökten sunulur.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from email import policy as email_policy
@@ -28,7 +33,7 @@ import tempfile
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import timezone
+from datetime import timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -46,8 +51,11 @@ from ..model import ModelError, SemanticModel
 from ..model.schema import ModelTanimi
 from ..report import QueryError, Report, VisualQuery, run_visual_query
 from . import db
-from .mail import MailError, MailSettings, load_mail_settings, send, sender_display, share_mail
-from .auth import CAN_PUBLISH, ROLE_LABEL, hash_password, issue_token, read_token, verify_password
+from .mail import (
+    SECURITY, Mail, MailError, MailSettings, SecretBox, SmtpSettings, access_mail, invite_mail, load_mail_settings,
+    send, sender_display, settings_from_row, share_mail, test_mail,
+)
+from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
 KEEP_VERSIONS = 2
@@ -77,7 +85,8 @@ class ServerSettings:
     web_dist: Path | None = None
     seed_users: bool = True
     seed_passwords: dict[str, str] = field(default_factory=dict)
-    mail: MailSettings = field(default_factory=MailSettings)
+    mail: MailSettings = field(default_factory=MailSettings)   # ortam değişkenlerinden; ekran ayarı önceliklidir
+    invite_days: int = 7
 
 
 # Geliştirme için iki sahte kullanıcı (gerçek kullanıcı yönetimi/SSO sonraki aşamada)
@@ -116,9 +125,9 @@ def seed(engine: Engine, settings: ServerSettings) -> None:
         ids = {}
         for email, name, env, default in SEED_USERS:
             pw = settings.seed_passwords.get(env, default)
-            ids[email] = c.execute(
-                db.users.insert().values(email=email, name=name, password_hash=hash_password(pw))
-            ).inserted_primary_key[0]
+            ids[email] = c.execute(db.users.insert().values(
+                email=email, name=name, password_hash=hash_password(pw), is_admin=email.startswith("yonetici@"),
+            )).inserted_primary_key[0]
         wid = c.execute(db.workspaces.insert().values(name=SEED_WORKSPACE)).inserted_primary_key[0]
         c.execute(db.members.insert().values(workspace_id=wid, user_id=ids["yonetici@floembi.test"], role="admin"))
 
@@ -128,6 +137,42 @@ class ShareIn(BaseModel):
     emails: list[str] = Field(min_length=1, max_length=50)
     message: str | None = Field(default=None, max_length=2000)
     notify: bool = True
+
+
+class MailConfigIn(BaseModel):
+    enabled: bool = False
+    host: str = Field(default="", max_length=255)
+    port: int = Field(default=587, ge=1, le=65535)
+    security: str = "starttls"
+    username: str | None = Field(default=None, max_length=254)
+    password: str | None = Field(default=None, max_length=500)   # None: kayıtlı şifre korunur, "": silinir
+    from_address: str = Field(default="", max_length=254)
+    from_name: str = Field(default="floembi.app", max_length=120)
+
+
+class MailTestIn(MailConfigIn):
+    to: str | None = Field(default=None, max_length=254)
+
+
+class GrantIn(BaseModel):
+    emails: list[str] = Field(min_length=1, max_length=50)
+    workspace_id: int
+    role: str = "viewer"
+    message: str | None = Field(default=None, max_length=2000)
+    notify: bool = True
+
+
+class RoleIn(BaseModel):
+    role: str
+
+
+class AdminFlagIn(BaseModel):
+    is_admin: bool
+
+
+class AcceptIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
 
 
 class LoginIn(BaseModel):
@@ -191,6 +236,90 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     async def _api_error(_: Request, e: ApiError):
         return JSONResponse(status_code=e.status, content={"error": {"code": e.code, "message": e.message, "detail": e.detail}})
 
+    # -------------------------------------------------------------- e-posta altyapısı
+    box = SecretBox(settings.secret)
+    outbox = settings.data_dir / "outbox"
+
+    def mail_row():
+        with engine.connect() as c:
+            return c.execute(select(db.mail_config).where(db.mail_config.c.id == 1)).first()
+
+    def mail_settings() -> MailSettings:
+        """Öncelik: Yönetim ekranındaki ayar (etkinse) → ortam değişkenleri → giden kutusu."""
+        row = mail_row()
+        if row is not None and row.enabled:
+            return settings_from_row(row, box)          # şifre çözülemezse MailError
+        return settings.mail
+
+    def mail_mode() -> str:
+        row = mail_row()
+        return "smtp" if (row is not None and row.enabled) else settings.mail.mode
+
+    def deliver(kind: str, mail: Mail, user: dict, *, report_id: int | None = None,
+                ms: MailSettings | None = None) -> tuple[str, str | None, str | None]:
+        """E-postayı gönderir ve kaydeder. Dönüş: (sent|outbox|failed, okunur hata, ham hata ayrıntısı)."""
+        status, path, error, shown, detail = "failed", None, None, None, None
+        try:
+            ms = ms or mail_settings()
+            sender = MailSettings(sender=sender_display(user["name"], ms), smtp=ms.smtp, source=ms.source)
+            status, path = send(sender, mail, outbox)
+        except MailError as e:
+            error = f"{e.message}: {e.detail}" if e.detail else e.message
+            shown, detail = e.message, e.detail or None
+        with engine.begin() as c:
+            c.execute(db.mail_log.insert().values(
+                kind=kind, to_email=mail.to, subject=mail.subject, status=status, error=error,
+                eml_path=path, report_id=report_id, created_by=user["id"],
+            ))
+        return status, shown, detail
+
+    def deliver_result(item: dict, res: tuple[str, str | None, str | None]) -> None:
+        item["mail"] = res[0]
+        if res[1]:
+            item["mail_error"] = res[1]
+
+    def token_hash(token: str) -> str:
+        return hashlib.sha256(token.encode("ascii", "ignore")).hexdigest()
+
+    def grant_texts(c, email: str) -> list[str]:
+        """Davet e-postası ve kabul ekranı için bekleyen yetkilerin okunur listesi."""
+        out = []
+        for g in c.execute(select(db.pending_grants).where(db.pending_grants.c.email == email)
+                           .order_by(db.pending_grants.c.id)).all():
+            if g.workspace_id:
+                ws = c.execute(select(db.workspaces.c.name).where(db.workspaces.c.id == g.workspace_id)).scalar()
+                out.append(f"{ws} çalışma alanı: {ROLE_LABEL.get(g.role or 'viewer', g.role)}")
+            elif g.report_id:
+                rn = c.execute(select(db.reports.c.name).where(db.reports.c.id == g.report_id)).scalar()
+                out.append(f"'{rn}' raporu (görüntüleme)")
+        return out
+
+    def send_invite(email: str, inviter: dict, message: str | None = None) -> tuple[str, str | None, str | None]:
+        """Daveti oluşturur ya da yeniler (yeni bağlantı, eskisi geçersiz) ve e-postayı gönderir."""
+        token = secrets.token_urlsafe(32)
+        expires = db.now() + timedelta(days=settings.invite_days)
+        with engine.begin() as c:
+            inv = c.execute(select(db.invitations.c.id).where(db.invitations.c.email == email)).first()
+            values = dict(token_hash=token_hash(token), invited_by=inviter["id"], created_at=db.now(), expires_at=expires)
+            if inv:
+                c.execute(db.invitations.update().where(db.invitations.c.id == inv.id).values(**values))
+            else:
+                c.execute(db.invitations.insert().values(email=email, **values))
+            grants = grant_texts(c, email)
+        mail = invite_mail(to=email, inviter=inviter["name"], grants=grants, url=f"{settings.public_url}/invite/{token}",
+                           days=settings.invite_days, message=message)
+        return deliver("invite", mail, inviter)
+
+    def drop_orphan_invitation(c, email: str) -> None:
+        """Bekleyen yetkisi kalmayan davet geçersiz olur."""
+        if not c.execute(select(db.pending_grants.c.id).where(db.pending_grants.c.email == email)).first():
+            c.execute(db.invitations.delete().where(db.invitations.c.email == email))
+
+    def valid_email(e: str) -> bool:
+        local, _, domain = e.partition("@")
+        return bool(local) and "." in domain and len(e) <= 254 and not any(ch.isspace() for ch in e)
+
+
     # -------------------------------------------------------------- kimlik
     def current_user(authorization: str = Header(default="")) -> dict:
         token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
@@ -198,10 +327,16 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         if uid is None:
             raise ApiError(401, "unauthorized", "Oturumunuz sona erdi; lütfen yeniden giriş yapın")
         with engine.connect() as c:
-            row = c.execute(select(db.users.c.id, db.users.c.email, db.users.c.name).where(db.users.c.id == uid)).first()
+            row = c.execute(select(db.users.c.id, db.users.c.email, db.users.c.name, db.users.c.is_admin)
+                            .where(db.users.c.id == uid)).first()
         if row is None:
             raise ApiError(401, "unauthorized", "Kullanıcı bulunamadı")
-        return dict(row._mapping)
+        return {**row._mapping, "is_admin": bool(row.is_admin)}
+
+    def admin_user(user: dict = Depends(current_user)) -> dict:
+        if not user["is_admin"]:
+            raise FORBIDDEN("Bu ekran yalnızca sistem yöneticilerine açık")
+        return user
 
     def role_in(c, user_id: int, workspace_id: int) -> str | None:
         r = c.execute(select(db.members.c.role).where(
@@ -228,7 +363,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             raise ApiError(401, "login_failed", "E-posta adresi ya da şifre hatalı")
         return {
             "token": issue_token(row.id, settings.secret),
-            "user": {"id": row.id, "email": row.email, "name": row.name},
+            "user": {"id": row.id, "email": row.email, "name": row.name, "is_admin": bool(row.is_admin)},
         }
 
     @app.get("/api/me")
@@ -240,7 +375,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 .where(db.members.c.user_id == user["id"])
             ).all()
         return {
-            **user, "mail_mode": settings.mail.mode,
+            **user, "mail_mode": mail_mode(),
             "workspaces": [{"id": r.id, "name": r.name, "role": r.role, "role_label": ROLE_LABEL[r.role]} for r in rows],
         }
 
@@ -433,18 +568,21 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 .join(db.shares, db.shares.c.user_id == db.users.c.id)
                 .where(db.shares.c.report_id == rid)
             ).all()
+            pending = c.execute(select(db.pending_grants).where(db.pending_grants.c.report_id == rid)).all()
             return {
                 "members": [{"id": m.id, "email": m.email, "name": m.name, "role": m.role, "role_label": ROLE_LABEL[m.role]}
                             for m in members],
                 "shares": [{"id": s.id, "email": s.email, "name": s.name, "shared_by": user_name(c, s.shared_by),
                             "shared_at": iso(s.created_at)} for s in shared],
-                "mail_mode": settings.mail.mode,
+                "pending": [{"id": g.id, "email": g.email, "shared_by": user_name(c, g.granted_by) if g.granted_by else "",
+                             "shared_at": iso(g.created_at)} for g in pending],
+                "mail_mode": mail_mode(),
             }
 
     @app.post("/api/reports/{rid}/share")
     def share_report(rid: int, body: ShareIn, user: dict = Depends(current_user)):
         """Power BI "Paylaş": alıcıya rapor erişimi verir, istenirse bağlantılı e-posta gönderir."""
-        results = []
+        results, invites = [], []
         with engine.begin() as c:
             rp, _ = load_report(c, rid, user)
             if not can_share(c, user["id"], rp):
@@ -458,8 +596,13 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                     continue
                 target = c.execute(select(db.users.c.id, db.users.c.name).where(db.users.c.email == raw)).first()
                 if target is None:
-                    item.update(status="unknown", message="floembi.app'te bu e-postayla bir kullanıcı yok "
-                                                         "(kullanıcı davet etme sonraki aşamada)")
+                    # Hesabı yok: yetki bekletilir, davet e-postası gider; hesap açılınca rapor paylaşılmış olur
+                    if not c.execute(select(db.pending_grants.c.id).where(and_(
+                            db.pending_grants.c.email == raw, db.pending_grants.c.report_id == rid))).first():
+                        c.execute(db.pending_grants.insert().values(email=raw, report_id=rid, granted_by=user["id"]))
+                    invites.append(raw)
+                    item.update(status="invited", message="floembi.app hesabı yok; davet gönderilir, hesabını "
+                                                         "açınca raporu görür")
                     continue
                 if target.id == user["id"]:
                     item.update(status="self", message="Rapor zaten sizin")
@@ -474,27 +617,15 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                     item.update(status="shared", message="Erişim verildi")
                 item["name"] = target.name
         # E-postalar transaction dışında: SMTP yavaşsa ya da hata verirse paylaşım geri alınmaz
-        if body.notify:
-            url = f"{settings.public_url}/reports/{rid}"
-            sender = MailSettings(sender=sender_display(user["name"], settings.mail), smtp=settings.mail.smtp)
-            for item in results:
-                if item["status"] not in ("shared", "already", "member"):
-                    continue
+        url = f"{settings.public_url}/reports/{rid}"
+        for item in results:
+            if item["status"] == "invited":             # davet bildirim seçeneğinden bağımsız gider (tek giriş yolu)
+                deliver_result(item, send_invite(item["email"], user, body.message))
+            elif body.notify and item["status"] in ("shared", "already", "member"):
                 mail = share_mail(to=item["email"], sender_name=user["name"], report_name=rp.name, workspace=ws,
                                   url=url, message=body.message)
-                status, path, error = "failed", None, None
-                try:
-                    status, path = send(sender, mail, settings.data_dir / "outbox")
-                except MailError as e:
-                    error = f"{e.message}: {e.detail}" if e.detail else e.message
-                    item["mail_error"] = e.message
-                item["mail"] = status
-                with engine.begin() as c:
-                    c.execute(db.mail_log.insert().values(
-                        kind="share", to_email=item["email"], subject=mail.subject, status=status, error=error,
-                        eml_path=path, report_id=rid, created_by=user["id"],
-                    ))
-        return {"results": results, "mail_mode": settings.mail.mode}
+                deliver_result(item, deliver("share", mail, user, report_id=rid))
+        return {"results": results, "mail_mode": mail_mode()}
 
     @app.delete("/api/reports/{rid}/share/{uid}")
     def unshare_report(rid: int, uid: int, user: dict = Depends(current_user)):
@@ -503,6 +634,21 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             if not can_share(c, user["id"], rp):
                 raise FORBIDDEN("Erişimi yalnızca çalışma alanı Yöneticisi ve Üyeleri kaldırabilir")
             c.execute(db.shares.delete().where(and_(db.shares.c.report_id == rid, db.shares.c.user_id == uid)))
+        return {"ok": True}
+
+    @app.delete("/api/reports/{rid}/pending/{gid}")
+    def cancel_pending_share(rid: int, gid: int, user: dict = Depends(current_user)):
+        """Hesabı henüz açılmamış alıcıya bekleyen paylaşımı geri alır."""
+        with engine.begin() as c:
+            rp, _ = load_report(c, rid, user)
+            if not can_share(c, user["id"], rp):
+                raise FORBIDDEN("Erişimi yalnızca çalışma alanı Yöneticisi ve Üyeleri kaldırabilir")
+            g = c.execute(select(db.pending_grants).where(
+                and_(db.pending_grants.c.id == gid, db.pending_grants.c.report_id == rid))).first()
+            if g is None:
+                raise NOT_FOUND("Bekleyen paylaşım")
+            c.execute(db.pending_grants.delete().where(db.pending_grants.c.id == gid))
+            drop_orphan_invitation(c, g.email)
         return {"ok": True}
 
     # -------------------------------------------------------------- geliştirme: gelen e-postalar
@@ -516,7 +662,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 ).order_by(db.mail_log.c.id.desc()).limit(200)
             ).all()
             return {
-                "mail_mode": settings.mail.mode,
+                "mail_mode": mail_mode(),
                 "items": [{
                     "id": r.id, "to": r.to_email, "subject": r.subject, "status": r.status, "error": r.error,
                     "from": user_name(c, r.created_by), "incoming": r.to_email == user["email"],
@@ -540,6 +686,278 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             "created_at": iso(r.created_at),
             "html": html.get_content() if html else None, "text": text.get_content() if text else "",
         }
+
+    # -------------------------------------------------------------- yönetim: e-posta sunucusu
+    def mail_config_view() -> dict:
+        row = mail_row()
+        env = settings.mail
+        source = "screen" if (row is not None and row.enabled) else ("env" if env.smtp else "outbox")
+        cfg = {
+            "enabled": bool(row.enabled) if row else False,
+            "host": row.host if row else "", "port": row.port if row else 587,
+            "security": row.security if row else "starttls", "username": (row.username if row else None) or "",
+            "has_password": bool(row and row.password_enc),
+            "from_address": row.from_address if row else "", "from_name": row.from_name if row else "floembi.app",
+            "updated_at": iso(row.updated_at) if row and row.updated_at else None,
+        }
+        if row and row.updated_by:
+            with engine.connect() as c:
+                cfg["updated_by"] = user_name(c, row.updated_by)
+        return {
+            "source": source, "config": cfg, "public_url": settings.public_url,
+            "env": ({"host": env.smtp.host, "port": env.smtp.port, "security": env.smtp.security,
+                     "username": env.smtp.user or "", "sender": env.sender} if env.smtp else None),
+        }
+
+    def check_mail_config(body: MailConfigIn) -> None:
+        if body.security not in SECURITY:
+            raise ApiError(400, "invalid", "Güvenlik türü starttls, ssl ya da none olmalı")
+        if body.enabled:
+            if not body.host.strip():
+                raise ApiError(400, "invalid", "SMTP sunucusu adresini yazın")
+            if not valid_email(body.from_address.strip()):
+                raise ApiError(400, "invalid", "Gönderen adresi geçerli bir e-posta adresi olmalı")
+
+    def sealed_password(body: MailConfigIn, row) -> str | None:
+        if body.password is None:                      # alan boş bırakıldı: kayıtlı şifre korunur
+            return row.password_enc if row else None
+        return box.seal(body.password) if body.password else None
+
+    @app.get("/api/admin/mail")
+    def get_mail_config(user: dict = Depends(admin_user)):
+        return mail_config_view()
+
+    @app.put("/api/admin/mail")
+    def put_mail_config(body: MailConfigIn, user: dict = Depends(admin_user)):
+        check_mail_config(body)
+        row = mail_row()
+        values = dict(
+            enabled=body.enabled, host=body.host.strip(), port=body.port, security=body.security,
+            username=(body.username or "").strip() or None, password_enc=sealed_password(body, row),
+            from_address=body.from_address.strip(), from_name=body.from_name.strip() or "floembi.app",
+            updated_by=user["id"], updated_at=db.now(),
+        )
+        with engine.begin() as c:
+            if row is None:
+                c.execute(db.mail_config.insert().values(id=1, **values))
+            else:
+                c.execute(db.mail_config.update().where(db.mail_config.c.id == 1).values(**values))
+        return mail_config_view()
+
+    @app.post("/api/admin/mail/test")
+    def test_mail_config(body: MailTestIn, user: dict = Depends(admin_user)):
+        """Ekrandaki (henüz kaydedilmemiş olabilir) ayarla test e-postası gönderir."""
+        check_mail_config(body)
+        to = (body.to or user["email"]).strip().lower()
+        if not valid_email(to):
+            raise ApiError(400, "invalid", "Test alıcısı geçerli bir e-posta adresi olmalı")
+        try:
+            if body.enabled:
+                row = mail_row()
+                sealed = sealed_password(body, row)
+                ms = MailSettings(
+                    sender=f"{body.from_name or 'floembi.app'} <{body.from_address.strip()}>", source="screen",
+                    smtp=SmtpSettings(host=body.host.strip(), port=body.port, security=body.security,
+                                      user=(body.username or "").strip() or None,
+                                      password=box.open(sealed) if sealed else None),
+                )
+                server_txt = f"{body.host.strip()}:{body.port}"
+            else:
+                ms, server_txt = MailSettings(), "giden kutusu"
+        except MailError as e:
+            raise ApiError(400, "mail_error", e.message, e.detail) from e
+        status, error, detail = deliver("test", test_mail(to=to, by=user["name"], url=settings.public_url,
+                                                          server=server_txt), user, ms=ms)
+        return {"to": to, "status": status, "error": error, "detail": detail}
+
+    # -------------------------------------------------------------- yönetim: kullanıcılar ve yetkilendirme
+    def aware(dt):
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+    def admins_left(c, wid: int, without_uid: int) -> int:
+        return len(c.execute(select(db.members.c.user_id).where(and_(
+            db.members.c.workspace_id == wid, db.members.c.role == "admin", db.members.c.user_id != without_uid))).all())
+
+    def check_role(role: str) -> None:
+        if role not in ROLES:
+            raise ApiError(400, "invalid", "Rol admin, member, contributor ya da viewer olmalı")
+
+    @app.get("/api/admin/users")
+    def admin_users(user: dict = Depends(admin_user)):
+        with engine.connect() as c:
+            wss = {w.id: w.name for w in c.execute(select(db.workspaces).order_by(db.workspaces.c.name)).all()}
+            mem: dict[int, list] = {}
+            for m in c.execute(select(db.members)).all():
+                mem.setdefault(m.user_id, []).append({
+                    "workspace_id": m.workspace_id, "workspace": wss.get(m.workspace_id, ""),
+                    "role": m.role, "role_label": ROLE_LABEL[m.role]})
+            users = c.execute(select(db.users).order_by(db.users.c.name)).all()
+            invs = c.execute(select(db.invitations).order_by(db.invitations.c.created_at.desc())).all()
+            now = db.now()
+            return {
+                "users": [{"id": u.id, "email": u.email, "name": u.name, "is_admin": bool(u.is_admin),
+                           "created_at": iso(u.created_at), "workspaces": mem.get(u.id, [])} for u in users],
+                "invitations": [{"id": i.id, "email": i.email, "created_at": iso(i.created_at),
+                                 "expires_at": iso(i.expires_at), "expired": aware(i.expires_at) < now,
+                                 "invited_by": user_name(c, i.invited_by) if i.invited_by else "",
+                                 "grants": grant_texts(c, i.email)} for i in invs],
+                "workspaces": [{"id": k, "name": v} for k, v in wss.items()],
+                "roles": [{"value": r, "label": ROLE_LABEL[r]} for r in reversed(ROLES)],
+                "mail_mode": mail_mode(),
+            }
+
+    @app.post("/api/admin/users/grant")
+    def admin_grant(body: GrantIn, user: dict = Depends(admin_user)):
+        """Adreslere çalışma alanı yetkisi verir ve otomatik e-posta gönderir.
+        Hesabı olan: üyelik eklenir/güncellenir, "erişim verildi" e-postası gider (notify ise).
+        Hesabı olmayan: yetki bekletilir, davet e-postası gider; hesabını açınca üye olur."""
+        check_role(body.role)
+        results, invites = [], []
+        with engine.begin() as c:
+            ws = c.execute(select(db.workspaces).where(db.workspaces.c.id == body.workspace_id)).first()
+            if ws is None:
+                raise NOT_FOUND("Çalışma alanı")
+            for raw in dict.fromkeys(e.strip().lower() for e in body.emails if e.strip()):
+                item = {"email": raw, "status": "", "mail": "skipped", "message": ""}
+                results.append(item)
+                if not valid_email(raw):
+                    item.update(status="invalid", message="Geçerli bir e-posta adresi değil")
+                    continue
+                target = c.execute(select(db.users.c.id, db.users.c.name).where(db.users.c.email == raw)).first()
+                if target is None:
+                    g = c.execute(select(db.pending_grants.c.id).where(and_(
+                        db.pending_grants.c.email == raw, db.pending_grants.c.workspace_id == ws.id))).first()
+                    if g:
+                        c.execute(db.pending_grants.update().where(db.pending_grants.c.id == g.id).values(role=body.role))
+                    else:
+                        c.execute(db.pending_grants.insert().values(
+                            email=raw, workspace_id=ws.id, role=body.role, granted_by=user["id"]))
+                    item.update(status="invited", message="Hesabı yok; davet gönderilir")
+                    continue
+                item["name"] = target.name
+                current = role_in(c, target.id, ws.id)
+                if current == body.role:
+                    item.update(status="unchanged", message=f"Zaten {ROLE_LABEL[current]}")
+                elif current:
+                    if current == "admin" and admins_left(c, ws.id, target.id) == 0:
+                        item.update(status="last_admin", message="Çalışma alanının son Yöneticisi; rolü düşürülemez")
+                        continue
+                    c.execute(db.members.update().where(and_(
+                        db.members.c.workspace_id == ws.id, db.members.c.user_id == target.id)).values(role=body.role))
+                    item.update(status="updated", message=f"Rol değişti: {ROLE_LABEL[current]} → {ROLE_LABEL[body.role]}")
+                else:
+                    c.execute(db.members.insert().values(workspace_id=ws.id, user_id=target.id, role=body.role))
+                    item.update(status="granted", message=f"{ROLE_LABEL[body.role]} olarak eklendi")
+        url = f"{settings.public_url}/workspaces/{ws.id}"
+        for item in results:
+            if item["status"] == "invited":
+                deliver_result(item, send_invite(item["email"], user, body.message))
+            elif body.notify and item["status"] in ("granted", "updated"):
+                mail = access_mail(to=item["email"], granter=user["name"], workspace=ws.name,
+                                   role_label=ROLE_LABEL[body.role], url=url)
+                deliver_result(item, deliver("access", mail, user))
+        return {"results": results, "mail_mode": mail_mode()}
+
+    @app.put("/api/admin/users/{uid}/workspaces/{wid}")
+    def admin_set_role(uid: int, wid: int, body: RoleIn, user: dict = Depends(admin_user)):
+        check_role(body.role)
+        with engine.begin() as c:
+            current = role_in(c, uid, wid)
+            if current is None:
+                raise NOT_FOUND("Üyelik")
+            if current == "admin" and body.role != "admin" and admins_left(c, wid, uid) == 0:
+                raise ApiError(400, "last_admin", "Çalışma alanının son Yöneticisinin rolü düşürülemez",
+                               "Önce başka birini Yönetici yapın")
+            c.execute(db.members.update().where(and_(db.members.c.workspace_id == wid, db.members.c.user_id == uid))
+                      .values(role=body.role))
+        return {"ok": True}
+
+    @app.delete("/api/admin/users/{uid}/workspaces/{wid}")
+    def admin_remove_member(uid: int, wid: int, user: dict = Depends(admin_user)):
+        with engine.begin() as c:
+            current = role_in(c, uid, wid)
+            if current is None:
+                raise NOT_FOUND("Üyelik")
+            if current == "admin" and admins_left(c, wid, uid) == 0:
+                raise ApiError(400, "last_admin", "Çalışma alanının son Yöneticisi çıkarılamaz",
+                               "Önce başka birini Yönetici yapın")
+            c.execute(db.members.delete().where(and_(db.members.c.workspace_id == wid, db.members.c.user_id == uid)))
+        return {"ok": True}
+
+    @app.put("/api/admin/users/{uid}/admin")
+    def admin_set_flag(uid: int, body: AdminFlagIn, user: dict = Depends(admin_user)):
+        if uid == user["id"] and not body.is_admin:
+            raise ApiError(400, "invalid", "Kendi sistem yöneticisi yetkinizi kaldıramazsınız")
+        with engine.begin() as c:
+            if c.execute(db.users.update().where(db.users.c.id == uid).values(is_admin=body.is_admin)).rowcount == 0:
+                raise NOT_FOUND("Kullanıcı")
+        return {"ok": True}
+
+    @app.post("/api/admin/invitations/{iid}/resend")
+    def admin_resend(iid: int, user: dict = Depends(admin_user)):
+        with engine.connect() as c:
+            inv = c.execute(select(db.invitations).where(db.invitations.c.id == iid)).first()
+        if inv is None:
+            raise NOT_FOUND("Davet")
+        status, error, detail = send_invite(inv.email, user)
+        return {"status": status, "error": error, "detail": detail}
+
+    @app.delete("/api/admin/invitations/{iid}")
+    def admin_revoke(iid: int, user: dict = Depends(admin_user)):
+        with engine.begin() as c:
+            inv = c.execute(select(db.invitations).where(db.invitations.c.id == iid)).first()
+            if inv is None:
+                raise NOT_FOUND("Davet")
+            c.execute(db.pending_grants.delete().where(db.pending_grants.c.email == inv.email))
+            c.execute(db.invitations.delete().where(db.invitations.c.id == iid))
+        return {"ok": True}
+
+    # -------------------------------------------------------------- davet kabulü (oturumsuz)
+    INVITE_INVALID = lambda: ApiError(  # noqa: E731
+        404, "invite_invalid", "Davet bağlantısı geçersiz ya da süresi dolmuş",
+        "Bağlantı yalnızca bir kez kullanılabilir. Sizi davet eden kişiden yeni bir davet isteyin.")
+
+    def find_invitation(c, token: str):
+        inv = c.execute(select(db.invitations).where(db.invitations.c.token_hash == token_hash(token))).first()
+        if inv is None or aware(inv.expires_at) < db.now():
+            raise INVITE_INVALID()
+        return inv
+
+    @app.get("/api/invitations/{token}")
+    def get_invitation(token: str):
+        with engine.connect() as c:
+            inv = find_invitation(c, token)
+            return {
+                "email": inv.email, "inviter": user_name(c, inv.invited_by) if inv.invited_by else "",
+                "grants": grant_texts(c, inv.email), "expires_at": iso(inv.expires_at),
+            }
+
+    @app.post("/api/invitations/{token}/accept")
+    def accept_invitation(token: str, body: AcceptIn):
+        with engine.begin() as c:
+            inv = find_invitation(c, token)
+            if c.execute(select(db.users.c.id).where(db.users.c.email == inv.email)).first():
+                raise ApiError(409, "exists", "Bu e-posta adresiyle zaten bir hesap var; oturum açın")
+            uid = c.execute(db.users.insert().values(
+                email=inv.email, name=body.name.strip(), password_hash=hash_password(body.password), is_admin=False,
+            )).inserted_primary_key[0]
+            for g in c.execute(select(db.pending_grants).where(db.pending_grants.c.email == inv.email)).all():
+                if g.workspace_id:
+                    if role_in(c, uid, g.workspace_id) is None:
+                        c.execute(db.members.insert().values(workspace_id=g.workspace_id, user_id=uid,
+                                                             role=g.role or "viewer"))
+                elif g.report_id:
+                    rp = c.execute(select(db.reports).where(db.reports.c.id == g.report_id)).first()
+                    if rp and report_access(c, uid, rp) is None:
+                        c.execute(db.shares.insert().values(report_id=rp.id, user_id=uid,
+                                                            shared_by=g.granted_by or uid))
+            c.execute(db.pending_grants.delete().where(db.pending_grants.c.email == inv.email))
+            c.execute(db.invitations.delete().where(db.invitations.c.id == inv.id))
+        return {
+            "token": issue_token(uid, settings.secret),
+            "user": {"id": uid, "email": inv.email, "name": body.name.strip(), "is_admin": False},
+        }
+
 
     @app.get("/api/datasets/{dsid}")
     def get_dataset(dsid: int, user: dict = Depends(current_user)):

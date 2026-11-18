@@ -1,13 +1,16 @@
 """floembi.app e-posta gönderimi.
 
-SMTP ayarı verilirse (FLOEM_SMTP_HOST …) e-posta gerçekten gönderilir: şirket SMTP'si ya da
-geliştirmede Mailpit. Ayar yoksa e-postalar sunucunun giden kutusuna (.eml) yazılır ve web'deki
-"Gelen e-postalar (geliştirme)" sayfasından okunur; sahte @floembi.test adresleriyle test böyle yapılır.
-SMTP şifresi yalnızca ortam değişkeninden okunur, hiçbir yere yazılmaz.
+E-posta sunucusu iki yerden tanımlanır (öncelik sırasıyla):
+  1. Web'deki Yönetim → E-posta sunucusu ekranı (metadata DB'de; şifre şifreli saklanır)
+  2. Ortam değişkenleri (FLOEM_SMTP_HOST …)
+İkisi de yoksa e-postalar sunucunun giden kutusuna (.eml) yazılır ve web'deki
+"Gelen e-postalar" sayfasından okunur; sahte @floembi.test adresleriyle test böyle yapılır.
+Gönderim standart kütüphanedeki smtplib ile; şifre saklama cryptography (Fernet) ile.
 """
 
 from __future__ import annotations
 
+import base64
 import os
 import smtplib
 import ssl
@@ -17,6 +20,10 @@ from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from html import escape
 from pathlib import Path
+
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
 @dataclass
@@ -29,10 +36,14 @@ class SmtpSettings:
     timeout: float = 15.0
 
 
+SECURITY = ("starttls", "ssl", "none")
+
+
 @dataclass
 class MailSettings:
     sender: str = "floembi.app <no-reply@floembi.app>"
     smtp: SmtpSettings | None = None      # None: giden kutusu (geliştirme)
+    source: str = "env"                   # screen | env (smtp None ise giden kutusu)
 
     @property
     def mode(self) -> str:
@@ -49,6 +60,36 @@ def load_mail_settings() -> MailSettings:
     return MailSettings(sender=sender, smtp=SmtpSettings(
         host=host, port=port, security=security,
         user=os.environ.get("FLOEM_SMTP_USER") or None, password=os.environ.get("FLOEM_SMTP_PASSWORD") or None,
+    ))
+
+
+# ------------------------------------------------------------------ ayarın saklanması
+class SecretBox:
+    """SMTP şifresini metadata DB'de şifreli tutar. Anahtar sunucu gizli anahtarından (FLOEM_SERVER_SECRET)
+    HKDF ile türetilir; gizli anahtar değişirse kayıtlı şifre çözülemez ve ekrandan yeniden girilir."""
+
+    def __init__(self, server_secret: str):
+        key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=b"floem-mail-config").derive(
+            server_secret.encode("utf-8"))
+        self._f = Fernet(base64.urlsafe_b64encode(key))
+
+    def seal(self, plain: str) -> str:
+        return self._f.encrypt(plain.encode("utf-8")).decode("ascii")
+
+    def open(self, sealed: str) -> str:
+        try:
+            return self._f.decrypt(sealed.encode("ascii")).decode("utf-8")
+        except (InvalidToken, ValueError) as e:
+            raise MailError("Kayıtlı SMTP şifresi çözülemedi; Yönetim → E-posta sunucusu ekranında şifreyi yeniden girin",
+                            "Sunucu gizli anahtarı (FLOEM_SERVER_SECRET) değişmiş olabilir") from e
+
+
+def settings_from_row(row, box: SecretBox) -> MailSettings:
+    """Yönetim ekranında kaydedilen ayar (mail_config satırı) → gönderim ayarı."""
+    sender = formataddr((row.from_name or "floembi.app", row.from_address))
+    password = box.open(row.password_enc) if row.password_enc else None
+    return MailSettings(sender=sender, source="screen", smtp=SmtpSettings(
+        host=row.host, port=row.port, security=row.security, user=row.username or None, password=password,
     ))
 
 
@@ -107,6 +148,29 @@ def send(settings: MailSettings, mail: Mail, outbox: Path) -> tuple[str, str | N
 
 
 # ------------------------------------------------------------------ şablonlar
+def _layout(*, intro: str, title: str, subtitle: str, quote: str | None, button: str, url: str, footer: str) -> str:
+    """Tüm floembi.app e-postalarının ortak HTML çerçevesi (metinler çağıran tarafta kaçışlanmış olmalı)."""
+    q = (
+        f'<blockquote style="margin:16px 0;padding:10px 14px;border-left:3px solid #f2c811;background:#faf9f8;'
+        f'white-space:pre-wrap">{quote}</blockquote>' if quote else ""
+    )
+    sub = f'<p style="margin:4px 0 0;color:#605e5c">{subtitle}</p>' if subtitle else ""
+    return f"""<!doctype html><html lang="tr"><body style="margin:0;background:#f3f2f1;font-family:Segoe UI,Arial,sans-serif;color:#201f1e">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px">
+<tr><td style="padding:18px 24px;border-bottom:1px solid #edebe9;font-weight:700">floembi.app</td></tr>
+<tr><td style="padding:24px">
+<p style="margin:0 0 8px;font-size:16px">{intro}</p>
+<p style="margin:0;font-size:20px;font-weight:600">{title}</p>
+{sub}
+{q}
+<p style="margin:20px 0"><a href="{escape(url)}" style="display:inline-block;background:#1f6feb;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">{button}</a></p>
+<p style="margin:0;color:#605e5c;font-size:12px">Düğme çalışmazsa bu adresi tarayıcınıza yapıştırın:<br>{escape(url)}</p>
+</td></tr>
+<tr><td style="padding:14px 24px;border-top:1px solid #edebe9;color:#605e5c;font-size:12px">{footer}</td></tr>
+</table></td></tr></table></body></html>"""
+
+
 def share_mail(*, to: str, sender_name: str, report_name: str, workspace: str, url: str, message: str | None) -> Mail:
     subject = f"{sender_name} sizinle '{report_name}' raporunu paylaştı"
     note = (message or "").strip()
@@ -116,24 +180,59 @@ def share_mail(*, to: str, sender_name: str, report_name: str, workspace: str, u
         + f"Raporu açın: {url}\n\n"
         "Bu e-postayı floembi.app gönderdi. Rapora erişmek için floembi.app hesabınızla oturum açmanız gerekir."
     )
-    quote = (
-        f'<blockquote style="margin:16px 0;padding:10px 14px;border-left:3px solid #f2c811;background:#faf9f8;'
-        f'white-space:pre-wrap">{escape(note)}</blockquote>' if note else ""
+    html = _layout(
+        intro=f"<strong>{escape(sender_name)}</strong> sizinle bir rapor paylaştı", title=escape(report_name),
+        subtitle=f"Çalışma alanı: {escape(workspace)}", quote=escape(note) if note else None,
+        button="Raporu aç", url=url, footer="Rapora erişmek için floembi.app hesabınızla oturum açmanız gerekir.",
     )
-    html = f"""<!doctype html><html lang="tr"><body style="margin:0;background:#f3f2f1;font-family:Segoe UI,Arial,sans-serif;color:#201f1e">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px">
-<tr><td style="padding:18px 24px;border-bottom:1px solid #edebe9;font-weight:700">floembi.app</td></tr>
-<tr><td style="padding:24px">
-<p style="margin:0 0 8px;font-size:16px"><strong>{escape(sender_name)}</strong> sizinle bir rapor paylaştı</p>
-<p style="margin:0;font-size:20px;font-weight:600">{escape(report_name)}</p>
-<p style="margin:4px 0 0;color:#605e5c">Çalışma alanı: {escape(workspace)}</p>
-{quote}
-<p style="margin:20px 0"><a href="{escape(url)}" style="display:inline-block;background:#1f6feb;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Raporu aç</a></p>
-<p style="margin:0;color:#605e5c;font-size:12px">Düğme çalışmazsa bu adresi tarayıcınıza yapıştırın:<br>{escape(url)}</p>
-</td></tr>
-<tr><td style="padding:14px 24px;border-top:1px solid #edebe9;color:#605e5c;font-size:12px">Rapora erişmek için floembi.app hesabınızla oturum açmanız gerekir.</td></tr>
-</table></td></tr></table></body></html>"""
+    return Mail(to=to, subject=subject, text=text, html=html)
+
+
+def invite_mail(*, to: str, inviter: str, grants: list[str], url: str, days: int, message: str | None = None) -> Mail:
+    """Hesabı olmayan adrese davet: bağlantıdan ad ve şifre belirleyip hesabını açar."""
+    subject = f"{inviter} sizi floembi.app'e davet etti"
+    note = (message or "").strip()
+    lines = "\n".join(f"  - {g}" for g in grants)
+    text = (
+        f"{inviter} sizi floembi.app'e davet etti. Size verilen erişim:\n{lines}\n\n"
+        + (f"Mesaj:\n{note}\n\n" if note else "")
+        + f"Hesabınızı oluşturmak için: {url}\n\n"
+        f"Bağlantı {days} gün geçerlidir ve yalnızca bir kez kullanılabilir. Daveti beklemiyorsanız bu e-postayı yok sayın."
+    )
+    html = _layout(
+        intro=f"<strong>{escape(inviter)}</strong> sizi floembi.app'e davet etti",
+        title="Hesabınızı oluşturun",
+        subtitle="Size verilen erişim:<br>" + "<br>".join(f"• {escape(g)}" for g in grants),
+        quote=escape(note) if note else None, button="Daveti kabul et", url=url,
+        footer=f"Bağlantı {days} gün geçerlidir ve yalnızca bir kez kullanılabilir. "
+               "Daveti beklemiyorsanız bu e-postayı yok sayın.",
+    )
+    return Mail(to=to, subject=subject, text=text, html=html)
+
+
+def access_mail(*, to: str, granter: str, workspace: str, role_label: str, url: str) -> Mail:
+    """Mevcut kullanıcıya çalışma alanı yetkisi verildi."""
+    subject = f"{granter} size '{workspace}' çalışma alanında erişim verdi"
+    text = (
+        f"{granter} size floembi.app'te '{workspace}' çalışma alanında {role_label} rolü verdi.\n\n"
+        f"Çalışma alanını açın: {url}\n"
+    )
+    html = _layout(
+        intro=f"<strong>{escape(granter)}</strong> size bir çalışma alanında erişim verdi", title=escape(workspace),
+        subtitle=f"Rolünüz: {escape(role_label)}", quote=None, button="Çalışma alanını aç", url=url,
+        footer="Erişmek için floembi.app hesabınızla oturum açmanız gerekir.",
+    )
+    return Mail(to=to, subject=subject, text=text, html=html)
+
+
+def test_mail(*, to: str, by: str, url: str, server: str) -> Mail:
+    subject = "floembi.app test e-postası"
+    text = f"Bu e-posta floembi.app e-posta sunucusu ayarını denemek için {by} tarafından gönderildi ({server}).\n{url}\n"
+    html = _layout(
+        intro="E-posta sunucusu ayarı çalışıyor", title="Test e-postası",
+        subtitle=f"Gönderen: {escape(by)} · Sunucu: {escape(server)}", quote=None, button="floembi.app'i aç", url=url,
+        footer="Bu e-posta Yönetim → E-posta sunucusu ekranından gönderildi.",
+    )
     return Mail(to=to, subject=subject, text=text, html=html)
 
 
