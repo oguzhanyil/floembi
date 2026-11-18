@@ -82,6 +82,22 @@ shares = Table(
 )
 
 
+# Gönderilen e-postalar: durum ve hata ekranda okunabilsin (giden kutusu modunda .eml yolu)
+mail_log = Table(
+    "mail_log", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("kind", String(32), nullable=False),                  # share
+    Column("to_email", String(254), nullable=False),
+    Column("subject", String(300), nullable=False),
+    Column("status", String(16), nullable=False),                # sent | outbox | failed
+    Column("error", Text),
+    Column("eml_path", String(500)),
+    Column("report_id", Integer, ForeignKey("reports.id", ondelete="SET NULL")),
+    Column("created_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+)
+
+
 def make_engine(url: str) -> Engine:
     engine = create_engine(url, future=True)
     if url.startswith("sqlite"):

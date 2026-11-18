@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import os
+from email import policy as email_policy
+from email.parser import BytesParser
 import secrets
 import shutil
 import tempfile
@@ -44,6 +46,7 @@ from ..model import ModelError, SemanticModel
 from ..model.schema import ModelTanimi
 from ..report import QueryError, Report, VisualQuery, run_visual_query
 from . import db
+from .mail import MailError, MailSettings, load_mail_settings, send, sender_display, share_mail
 from .auth import CAN_PUBLISH, ROLE_LABEL, hash_password, issue_token, read_token, verify_password
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
@@ -74,6 +77,7 @@ class ServerSettings:
     web_dist: Path | None = None
     seed_users: bool = True
     seed_passwords: dict[str, str] = field(default_factory=dict)
+    mail: MailSettings = field(default_factory=MailSettings)
 
 
 # Geliştirme için iki sahte kullanıcı (gerçek kullanıcı yönetimi/SSO sonraki aşamada)
@@ -101,6 +105,7 @@ def load_settings() -> ServerSettings:
         public_url=os.environ.get("FLOEM_PUBLIC_URL", "http://127.0.0.1:8800").rstrip("/"),
         web_dist=Path(web) if web else (default_web if default_web.exists() else None),
         seed_passwords={env: os.environ.get(env, default) for _, _, env, default in SEED_USERS},
+        mail=load_mail_settings(),
     )
 
 
@@ -119,6 +124,12 @@ def seed(engine: Engine, settings: ServerSettings) -> None:
 
 
 # ------------------------------------------------------------------ istek gövdeleri
+class ShareIn(BaseModel):
+    emails: list[str] = Field(min_length=1, max_length=50)
+    message: str | None = Field(default=None, max_length=2000)
+    notify: bool = True
+
+
 class LoginIn(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=200)
@@ -228,7 +239,10 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 .join(db.members, db.members.c.workspace_id == db.workspaces.c.id)
                 .where(db.members.c.user_id == user["id"])
             ).all()
-        return {**user, "workspaces": [{"id": r.id, "name": r.name, "role": r.role, "role_label": ROLE_LABEL[r.role]} for r in rows]}
+        return {
+            **user, "mail_mode": settings.mail.mode,
+            "workspaces": [{"id": r.id, "name": r.name, "role": r.role, "role_label": ROLE_LABEL[r.role]} for r in rows],
+        }
 
     # -------------------------------------------------------------- çalışma alanları
     @app.get("/api/workspaces")
@@ -378,7 +392,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             by = user_name(c, rp.published_by)
         return {
             "id": rp.id, "name": rp.name, "version": rp.version, "published_at": iso(rp.published_at),
-            "published_by": by, "role": role, "role_label": ROLE_LABEL[role],
+            "published_by": by, "role": role, "role_label": ROLE_LABEL[role], "can_share": role in ("admin", "member"),
             "workspace": {"id": ws.id, "name": ws.name},
             "dataset": {"id": ds.id, "name": ds.name, "version": ds.version},
             "definition": json.loads(rp.definition),
@@ -395,6 +409,137 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 return run_visual_query(model, eng, q)
         except QueryError as e:
             raise ApiError(400, "query_error", "Görsel sorgusu çalıştırılamadı", str(e)) from e
+
+    # -------------------------------------------------------------- paylaşım
+    SHARE_ROLES = {"admin", "member"}
+
+    def can_share(c, user_id: int, rp) -> bool:
+        return role_in(c, user_id, rp.workspace_id) in SHARE_ROLES
+
+    @app.get("/api/reports/{rid}/access")
+    def report_access_list(rid: int, user: dict = Depends(current_user)):
+        """Rapora erişimi olanlar: çalışma alanı üyeleri ve raporun paylaşıldığı kişiler."""
+        with engine.connect() as c:
+            rp, _ = load_report(c, rid, user)
+            if not can_share(c, user["id"], rp):
+                raise FORBIDDEN("Erişimi yalnızca çalışma alanı Yöneticisi ve Üyeleri görebilir")
+            members = c.execute(
+                select(db.users.c.id, db.users.c.email, db.users.c.name, db.members.c.role)
+                .join(db.members, db.members.c.user_id == db.users.c.id)
+                .where(db.members.c.workspace_id == rp.workspace_id)
+            ).all()
+            shared = c.execute(
+                select(db.users.c.id, db.users.c.email, db.users.c.name, db.shares.c.shared_by, db.shares.c.created_at)
+                .join(db.shares, db.shares.c.user_id == db.users.c.id)
+                .where(db.shares.c.report_id == rid)
+            ).all()
+            return {
+                "members": [{"id": m.id, "email": m.email, "name": m.name, "role": m.role, "role_label": ROLE_LABEL[m.role]}
+                            for m in members],
+                "shares": [{"id": s.id, "email": s.email, "name": s.name, "shared_by": user_name(c, s.shared_by),
+                            "shared_at": iso(s.created_at)} for s in shared],
+                "mail_mode": settings.mail.mode,
+            }
+
+    @app.post("/api/reports/{rid}/share")
+    def share_report(rid: int, body: ShareIn, user: dict = Depends(current_user)):
+        """Power BI "Paylaş": alıcıya rapor erişimi verir, istenirse bağlantılı e-posta gönderir."""
+        results = []
+        with engine.begin() as c:
+            rp, _ = load_report(c, rid, user)
+            if not can_share(c, user["id"], rp):
+                raise FORBIDDEN("Raporu yalnızca çalışma alanı Yöneticisi ve Üyeleri paylaşabilir")
+            ws = c.execute(select(db.workspaces.c.name).where(db.workspaces.c.id == rp.workspace_id)).scalar_one()
+            for raw in dict.fromkeys(e.strip().lower() for e in body.emails if e.strip()):
+                item = {"email": raw, "status": "", "mail": "skipped", "message": ""}
+                results.append(item)
+                if "@" not in raw or len(raw) > 254:
+                    item.update(status="invalid", message="Geçerli bir e-posta adresi değil")
+                    continue
+                target = c.execute(select(db.users.c.id, db.users.c.name).where(db.users.c.email == raw)).first()
+                if target is None:
+                    item.update(status="unknown", message="floembi.app'te bu e-postayla bir kullanıcı yok "
+                                                         "(kullanıcı davet etme sonraki aşamada)")
+                    continue
+                if target.id == user["id"]:
+                    item.update(status="self", message="Rapor zaten sizin")
+                    continue
+                if role_in(c, target.id, rp.workspace_id):
+                    item.update(status="member", message="Çalışma alanının üyesi; rapora zaten erişebiliyor")
+                elif c.execute(select(db.shares.c.user_id).where(
+                        and_(db.shares.c.report_id == rid, db.shares.c.user_id == target.id))).first():
+                    item.update(status="already", message="Rapor bu kişiyle zaten paylaşılmış")
+                else:
+                    c.execute(db.shares.insert().values(report_id=rid, user_id=target.id, shared_by=user["id"]))
+                    item.update(status="shared", message="Erişim verildi")
+                item["name"] = target.name
+        # E-postalar transaction dışında: SMTP yavaşsa ya da hata verirse paylaşım geri alınmaz
+        if body.notify:
+            url = f"{settings.public_url}/reports/{rid}"
+            sender = MailSettings(sender=sender_display(user["name"], settings.mail), smtp=settings.mail.smtp)
+            for item in results:
+                if item["status"] not in ("shared", "already", "member"):
+                    continue
+                mail = share_mail(to=item["email"], sender_name=user["name"], report_name=rp.name, workspace=ws,
+                                  url=url, message=body.message)
+                status, path, error = "failed", None, None
+                try:
+                    status, path = send(sender, mail, settings.data_dir / "outbox")
+                except MailError as e:
+                    error = f"{e.message}: {e.detail}" if e.detail else e.message
+                    item["mail_error"] = e.message
+                item["mail"] = status
+                with engine.begin() as c:
+                    c.execute(db.mail_log.insert().values(
+                        kind="share", to_email=item["email"], subject=mail.subject, status=status, error=error,
+                        eml_path=path, report_id=rid, created_by=user["id"],
+                    ))
+        return {"results": results, "mail_mode": settings.mail.mode}
+
+    @app.delete("/api/reports/{rid}/share/{uid}")
+    def unshare_report(rid: int, uid: int, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            rp, _ = load_report(c, rid, user)
+            if not can_share(c, user["id"], rp):
+                raise FORBIDDEN("Erişimi yalnızca çalışma alanı Yöneticisi ve Üyeleri kaldırabilir")
+            c.execute(db.shares.delete().where(and_(db.shares.c.report_id == rid, db.shares.c.user_id == uid)))
+        return {"ok": True}
+
+    # -------------------------------------------------------------- geliştirme: gelen e-postalar
+    @app.get("/api/mail/inbox")
+    def mail_inbox(user: dict = Depends(current_user)):
+        """Giden kutusu modunda: bu kullanıcıya gönderilen (ya da onun gönderdiği) e-postalar."""
+        with engine.connect() as c:
+            rows = c.execute(
+                select(db.mail_log).where(
+                    (db.mail_log.c.to_email == user["email"]) | (db.mail_log.c.created_by == user["id"])
+                ).order_by(db.mail_log.c.id.desc()).limit(200)
+            ).all()
+            return {
+                "mail_mode": settings.mail.mode,
+                "items": [{
+                    "id": r.id, "to": r.to_email, "subject": r.subject, "status": r.status, "error": r.error,
+                    "from": user_name(c, r.created_by), "incoming": r.to_email == user["email"],
+                    "created_at": iso(r.created_at), "readable": bool(r.eml_path),
+                } for r in rows],
+            }
+
+    @app.get("/api/mail/inbox/{mid}")
+    def mail_message(mid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            r = c.execute(select(db.mail_log).where(db.mail_log.c.id == mid)).first()
+        if r is None or (r.to_email != user["email"] and r.created_by != user["id"]):
+            raise NOT_FOUND("E-posta")
+        if not r.eml_path or not Path(r.eml_path).exists():
+            raise ApiError(404, "not_found", "Bu e-postanın içeriği saklanmadı (SMTP ile gönderildi)")
+        msg = BytesParser(policy=email_policy.default).parsebytes(Path(r.eml_path).read_bytes())
+        html = msg.get_body(preferencelist=("html",))
+        text = msg.get_body(preferencelist=("plain",))
+        return {
+            "id": r.id, "subject": msg["Subject"], "from": msg["From"], "to": msg["To"],
+            "created_at": iso(r.created_at),
+            "html": html.get_content() if html else None, "text": text.get_content() if text else "",
+        }
 
     @app.get("/api/datasets/{dsid}")
     def get_dataset(dsid: int, user: dict = Depends(current_user)):

@@ -116,6 +116,27 @@ yayımlanınca üzerine yazılır ve sürüm artar; son iki sürüm tutulur. Web
 etkileşimlidir (çapraz filtre, sayfalar). Yetkisiz işlemler 403 alır ve ekranda okunur mesaj
 çıkar ("Bu rapor sizinle paylaşılmamış").
 
+**E-postayla paylaşım (H6):** Web'de rapor → *Paylaş* (yalnızca çalışma alanı Yöneticisi ve
+Üyesi). Alıcıya rapora salt okunur erişim verilir, istenirse "Raporu aç" bağlantılı e-posta gider.
+Erişim aynı pencerenin "Erişimi olanlar" listesinden kaldırılır. Alıcının floembi.app'te kullanıcısı
+olmalıdır (davet etme sonraki aşamada).
+
+E-posta sunucusu ortam değişkenleriyle ayarlanır; şifre yalnızca ortam değişkeninde durur:
+
+| Değişken | Örnek | Açıklama |
+|---|---|---|
+| `FLOEM_SMTP_HOST` | `smtp.sirket.local` | Boşsa **geliştirme modu**: e-postalar gönderilmez, `data/server/outbox/*.eml` olarak yazılır ve web'de **✉ Gelen e-postalar** sayfasında görünür |
+| `FLOEM_SMTP_PORT` | `587` | `ssl` için varsayılan 465 |
+| `FLOEM_SMTP_SECURITY` | `starttls` | `starttls` · `ssl` · `none` |
+| `FLOEM_SMTP_USER` / `FLOEM_SMTP_PASSWORD` | | Kimlik doğrulama gerekiyorsa |
+| `FLOEM_SMTP_FROM` | `floembi.app <bi@sirket.com>` | Gönderen adresi; görünen ad paylaşan kişinin adı olur |
+| `FLOEM_PUBLIC_URL` | `https://bi.sirket.com` | E-postadaki bağlantının adresi |
+
+Mailpit ile denemek için (isteğe bağlı, Docker): `docker run -d -p 8025:8025 -p 1025:1025 axllent/mailpit`,
+ardından `FLOEM_SMTP_HOST=127.0.0.1`, `FLOEM_SMTP_PORT=1025`, `FLOEM_SMTP_SECURITY=none`;
+e-postalar http://127.0.0.1:8025 adresinde. Gönderim hatası ("E-posta sunucusuna ulaşılamadı…")
+Paylaş penceresinde ve gönderim kaydında okunur; erişim yine verilir.
+
 Geliştirmede web arayüzünü anlık yenilemeyle çalıştırmak için: `npm run server` açıkken
 `npm run web` (http://127.0.0.1:5299, `/api` istekleri 8800'e gider).
 

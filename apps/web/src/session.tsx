@@ -1,4 +1,4 @@
-import { FloemApiError, WebClient, type WebUser, type WorkspaceInfo } from "@floem/client";
+import { FloemApiError, WebClient, type MailMode, type WebUser, type WorkspaceInfo } from "@floem/client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 const KEY = "floem.session";
@@ -29,6 +29,8 @@ function writeStored(s: Stored | null) {
 interface SessionApi {
   user: WebUser | null;
   workspaces: WorkspaceInfo[];
+  /** outbox: e-postalar sunucunun giden kutusunda (geliştirme) */
+  mailMode: MailMode | null;
   client: WebClient;
   login(email: string, password: string): Promise<void>;
   logout(): void;
@@ -47,6 +49,7 @@ export function useSession(): SessionApi {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [stored, setStored] = useState<Stored | null>(readStored);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+  const [mailMode, setMailMode] = useState<MailMode | null>(null);
   const client = useMemo(() => new WebClient(window.location.origin, stored?.token ?? null), [stored]);
 
   const logout = useCallback(() => {
@@ -70,7 +73,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!stored) return;
     guard(client.me())
-      .then((me) => setWorkspaces(me.workspaces))
+      .then((me) => {
+        setWorkspaces(me.workspaces);
+        setMailMode(me.mail_mode);
+      })
       .catch(() => undefined);
   }, [stored, client, guard]);
 
@@ -82,7 +88,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user: stored?.user ?? null, workspaces, client, login, logout, guard }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ user: stored?.user ?? null, workspaces, mailMode, client, login, logout, guard }}>
+      {children}
+    </Ctx.Provider>
   );
 }
 

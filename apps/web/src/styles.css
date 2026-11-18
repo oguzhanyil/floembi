@@ -83,3 +83,31 @@ h2 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; }
   .page-wrap { padding: 16px; }
   .topbar .who { display: none; }
 }
+
+/* pencereler (paylaş, e-posta) */
+textarea { font: inherit; color: inherit; border: 1px solid var(--border-strong); border-radius: 4px; padding: 8px 10px; background: var(--surface); width: 100%; resize: vertical; }
+.small { font-size: 11px; }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
+.modal-backdrop { position: fixed; inset: 0; background: #0006; display: grid; place-items: center; z-index: 20; padding: 16px; }
+.modal { background: var(--surface); border-radius: 8px; box-shadow: 0 12px 40px #0004; width: min(600px, 100%); max-height: 92vh; display: flex; flex-direction: column; }
+.modal-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.modal-head h2 { font-size: 17px; margin: 0; }
+.mail-open { margin-left: auto; white-space: nowrap; }
+.mail-open + .close { margin-left: 0 !important; }
+.modal-head .close { margin-left: auto; font-size: 16px; padding: 2px 6px; }
+.modal-body { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.modal-body > label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.modal-body > label.inline { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+.modal-body > label.inline input { width: auto; }
+.modal-body h3 { font-size: 13px; margin: 8px 0 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
+.items.compact td { padding: 8px 10px; vertical-align: top; }
+button.link.danger { color: var(--danger); }
+.share-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.share-results li { display: flex; gap: 8px; padding: 6px 10px; border-radius: 4px; }
+.share-results li.ok { background: #dff6dd; }
+.share-results li.bad { background: #fff4ce; }
+.bad-text { color: var(--danger); }
+.mail-view { width: min(760px, 100%); height: 86vh; }
+.mail-frame { flex: 1; border: none; width: 100%; background: #f3f2f1; border-radius: 0 0 8px 8px; }
+.mail-text { padding: 16px; white-space: pre-wrap; margin: 0; overflow: auto; }

@@ -1,6 +1,7 @@
 import {
   FloemApiError, type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
 } from "@floem/client";
+import { InboxPage, ShareDialog } from "./share";
 import { ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, SessionProvider, navigate, usePath, useSession } from "./session";
@@ -52,6 +53,7 @@ function Router() {
   let m: RegExpExecArray | null;
   if ((m = /^\/reports\/(\d+)/.exec(path))) page = <ReportPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
+  else if (path === "/inbox") page = <InboxPage />;
   return <Shell>{page}</Shell>;
 }
 
@@ -112,7 +114,7 @@ function Login() {
 
 // ------------------------------------------------------------------ kabuk
 function Shell({ children }: { children: React.ReactNode }) {
-  const { user, workspaces, logout } = useSession();
+  const { user, workspaces, logout, mailMode } = useSession();
   const path = usePath();
   return (
     <div className="shell">
@@ -124,6 +126,9 @@ function Shell({ children }: { children: React.ReactNode }) {
       </header>
       <nav className="sidenav" aria-label="Gezinti">
         <Link to="/" className={path === "/" ? "active" : ""}>⌂ Giriş</Link>
+        {mailMode === "outbox" && (
+          <Link to="/inbox" className={path === "/inbox" ? "active" : ""}>✉ Gelen e-postalar</Link>
+        )}
         <div className="nav-section">Çalışma alanları</div>
         {workspaces.map((w) => (
           <Link key={w.id} to={`/workspaces/${w.id}`} className={path === `/workspaces/${w.id}` ? "active" : ""}>
@@ -244,6 +249,7 @@ function ReportPage({ id }: { id: number }) {
   const [report, setReport] = useState<PublishedReport | null>(null);
   const [error, setError] = useState<UiError | null>(null);
   const [rev, setRev] = useState(0);
+  const [sharing, setSharing] = useState(false);
 
   const load = useCallback(() => {
     guard(client.report(id))
@@ -278,7 +284,13 @@ function ReportPage({ id }: { id: number }) {
         <span className="spacer" />
         <span className="role">{report.role_label}</span>
         <button onClick={load} title="Raporu ve veriyi yeniden yükle">⟳ Yenile</button>
+        {report.can_share && (
+          <button className="primary" onClick={() => setSharing(true)} title="Raporu e-postayla paylaş">
+            ⤴ Paylaş
+          </button>
+        )}
       </div>
+      {sharing && <ShareDialog report={report} onClose={() => setSharing(false)} />}
       <div className="report-body">
         <ReportViewer report={report.definition} run={run} dataRev={`${report.dataset.version}:${rev}`} />
       </div>

@@ -718,6 +718,49 @@ export interface PublishedReport {
   workspace: { id: number; name: string };
   dataset: { id: number; name: string; version: number };
   definition: ReportDefinition;
+  /** Paylaş düğmesi: çalışma alanı Yöneticisi ve Üyesi */
+  can_share?: boolean;
+}
+
+export type MailMode = "smtp" | "outbox";
+
+export interface ReportAccess {
+  members: { id: number; email: string; name: string; role: string; role_label: string }[];
+  shares: { id: number; email: string; name: string; shared_by: string; shared_at: string }[];
+  mail_mode: MailMode;
+}
+
+export interface ShareResult {
+  email: string;
+  name?: string;
+  /** shared: erişim verildi · already: zaten paylaşılmış · member: çalışma alanı üyesi · unknown · invalid · self */
+  status: "shared" | "already" | "member" | "unknown" | "invalid" | "self";
+  /** sent: gönderildi · outbox: giden kutusuna yazıldı · failed · skipped */
+  mail: "sent" | "outbox" | "failed" | "skipped";
+  message: string;
+  mail_error?: string;
+}
+
+export interface MailItem {
+  id: number;
+  to: string;
+  subject: string;
+  status: "sent" | "outbox" | "failed";
+  error: string | null;
+  from: string;
+  incoming: boolean;
+  created_at: string;
+  readable: boolean;
+}
+
+export interface MailMessage {
+  id: number;
+  subject: string;
+  from: string;
+  to: string;
+  created_at: string;
+  html: string | null;
+  text: string;
 }
 
 /** floembi.app sunucusu istemcisi (Bearer oturum belirteci). */
@@ -736,7 +779,7 @@ export class WebClient {
     return this.http.request<{ token: string; user: WebUser }>("POST", "/api/auth/login", { email, password });
   }
   me() {
-    return this.http.request<WebUser & { workspaces: WorkspaceInfo[] }>("GET", "/api/me");
+    return this.http.request<WebUser & { workspaces: WorkspaceInfo[]; mail_mode: MailMode }>("GET", "/api/me");
   }
   content(workspaceId: number) {
     return this.http.request<WorkspaceContent>("GET", `/api/workspaces/${workspaceId}/content`);
@@ -749,5 +792,22 @@ export class WebClient {
   }
   reportQuery(id: number, q: VisualQuery) {
     return this.http.request<VisualResult>("POST", `/api/reports/${id}/query`, q);
+  }
+  reportAccess(id: number) {
+    return this.http.request<ReportAccess>("GET", `/api/reports/${id}/access`);
+  }
+  share(id: number, emails: string[], message: string | null, notify: boolean) {
+    return this.http.request<{ results: ShareResult[]; mail_mode: MailMode }>("POST", `/api/reports/${id}/share`, {
+      emails, message, notify,
+    });
+  }
+  unshare(id: number, userId: number) {
+    return this.http.request<{ ok: boolean }>("DELETE", `/api/reports/${id}/share/${userId}`);
+  }
+  inbox() {
+    return this.http.request<{ mail_mode: MailMode; items: MailItem[] }>("GET", "/api/mail/inbox");
+  }
+  mailMessage(id: number) {
+    return this.http.request<MailMessage>("GET", `/api/mail/inbox/${id}`);
   }
 }

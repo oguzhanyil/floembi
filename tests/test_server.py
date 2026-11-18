@@ -202,3 +202,83 @@ def test_desktop_publish_unreachable(floem_file):
     r = floem_file.post("/publish/login", headers=td.H, json={"server_url": "http://127.0.0.1:1", "email": YON[0], "password": "x"})
     assert r.status_code == 400 and r.json()["error"]["code"] == "publish_unreachable"
     assert floem_file.post("/publish", headers=td.H, json={"workspace_id": 1}).json()["error"]["code"] in ("publish_unauthorized",)
+
+
+# ------------------------------------------------------------------ e-postayla paylaşım (H6)
+def test_share_by_email_outbox(server, floem_file):
+    hy = login(server, YON)
+    rid = publish(server, hy, floem_file.path).json()["report_id"]
+    hi = login(server, IZL)
+    # izleyici paylaşamaz, erişim listesini göremez
+    assert server.post(f"/api/reports/{rid}/share", headers=hi, json={"emails": ["x@y.z"]}).status_code == 403
+    r = server.post(f"/api/reports/{rid}/share", headers=hy, json={
+        "emails": ["Izleyici@floembi.test", "yok@floembi.test", "bozuk", "yonetici@floembi.test"],
+        "message": "Ocak rakamlarına <b>bakar mısın?</b>",
+    })
+    assert r.status_code == 200, r.text
+    res = {x["email"]: x for x in r.json()["results"]}
+    assert res["izleyici@floembi.test"]["status"] == "shared" and res["izleyici@floembi.test"]["mail"] == "outbox"
+    assert res["yok@floembi.test"]["status"] == "unknown" and res["yok@floembi.test"]["mail"] == "skipped"
+    assert res["bozuk"]["status"] == "invalid" and res["yonetici@floembi.test"]["status"] == "self"
+    assert r.json()["mail_mode"] == "outbox"
+    # izleyici artık raporu görüyor ve e-postayı gelen kutusunda okuyabiliyor
+    rep = server.get(f"/api/reports/{rid}", headers=hi).json()
+    assert rep["role"] == "viewer" and rep["can_share"] is False
+    assert server.get("/api/shared-with-me", headers=hi).json()[0]["id"] == rid
+    inbox = server.get("/api/mail/inbox", headers=hi).json()["items"]
+    assert len(inbox) == 1 and inbox[0]["incoming"] and "Satış Raporu" in inbox[0]["subject"]
+    msg = server.get(f"/api/mail/inbox/{inbox[0]['id']}", headers=hi).json()
+    assert f"/reports/{rid}" in msg["html"] and "&lt;b&gt;bakar mısın?&lt;/b&gt;" in msg["html"]   # mesaj kaçışlı
+    assert "Yönetici Kullanıcı (floembi.app)" in msg["from"]
+    # tekrar paylaşım: zaten paylaşılmış, e-posta yine gider; notify=false ile gitmez
+    r = server.post(f"/api/reports/{rid}/share", headers=hy, json={"emails": ["izleyici@floembi.test"], "notify": False})
+    assert r.json()["results"][0]["status"] == "already" and r.json()["results"][0]["mail"] == "skipped"
+    acc = server.get(f"/api/reports/{rid}/access", headers=hy).json()
+    assert [s["email"] for s in acc["shares"]] == ["izleyici@floembi.test"]
+    assert acc["members"][0]["role"] == "admin"
+    assert server.get(f"/api/reports/{rid}/access", headers=hi).status_code == 403
+    # başkası e-postayı okuyamaz; erişim kaldırılınca rapor kapanır
+    assert server.get(f"/api/mail/inbox/{inbox[0]['id']}", headers=login(server, YON)).status_code == 200  # gönderen
+    assert server.delete(f"/api/reports/{rid}/share/2", headers=hy).status_code == 200
+    assert server.get(f"/api/reports/{rid}", headers=hi).status_code == 403
+
+
+def test_share_smtp_failure_is_readable(tmp_path, floem_file, monkeypatch):
+    from floem_bi.server.mail import MailSettings, SmtpSettings
+    settings = ServerSettings(data_dir=tmp_path / "srv2", secret="s" * 48,
+                              mail=MailSettings(smtp=SmtpSettings(host="127.0.0.1", port=1, security="none", timeout=2)))
+    server = TestClient(create_server(settings))
+    hy = login(server, YON)
+    rid = publish(server, hy, floem_file.path).json()["report_id"]
+    r = server.post(f"/api/reports/{rid}/share", headers=hy, json={"emails": ["izleyici@floembi.test"]}).json()
+    item = r["results"][0]
+    assert item["status"] == "shared"                 # erişim verildi, yalnızca e-posta gitmedi
+    assert item["mail"] == "failed" and "127.0.0.1:1" in item["mail_error"]
+    log = server.get("/api/mail/inbox", headers=hy).json()["items"][0]
+    assert log["status"] == "failed" and "ulaşılamadı" in log["error"]
+
+
+def test_smtp_send_uses_starttls_and_login(monkeypatch, tmp_path):
+    from floem_bi.server import mail as m
+    calls = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            calls.append(("connect", host, port))
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def starttls(self, context):
+            calls.append(("starttls",))
+        def login(self, u, p):
+            calls.append(("login", u))
+        def send_message(self, msg):
+            calls.append(("send", msg["To"], msg["Subject"]))
+
+    monkeypatch.setattr(m.smtplib, "SMTP", FakeSMTP)
+    s = m.MailSettings(smtp=m.SmtpSettings(host="smtp.sirket.local", port=587, user="bi", password="gizli"))
+    status, path = m.send(s, m.share_mail(to="a@b.c", sender_name="Ayşe", report_name="R", workspace="W",
+                                          url="http://x/reports/1", message=None), tmp_path)
+    assert status == "sent" and path is None
+    assert calls == [("connect", "smtp.sirket.local", 587), ("starttls",), ("login", "bi"), ("send", "a@b.c", "Ayşe sizinle 'R' raporunu paylaştı")]
