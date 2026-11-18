@@ -43,6 +43,8 @@ const PRESETS: { label: string; host: string; port: number; security: MailConfig
   },
   { label: "Gmail / Google Workspace", host: "smtp.gmail.com", port: 587, security: "starttls",
     note: "Hesap şifresi değil, Google “Uygulama şifresi” kullanılır." },
+  { label: "GoDaddy", host: "smtpout.secureserver.net", port: 465, security: "ssl",
+    note: "GoDaddy e-postası (alan adının MX kaydı secureserver.net). Kullanıcı adı ve gönderen tam e-posta adresi, şifre posta kutusu şifresidir." },
   { label: "Titan", host: "smtp.titan.email", port: 465, security: "ssl",
     note: "Kullanıcı adı ve gönderen adresi Titan e-posta adresinizin tamamı, şifre posta kutusu şifresidir." },
   { label: "Mailpit (geliştirme)", host: "127.0.0.1", port: 1025, security: "none",
@@ -125,7 +127,7 @@ export function MailSettingsPage() {
   const c = view.config;
   const last = view.last_attempt;
   const userHint = form.enabled && form.username && !form.username.includes("@")
-    && /(gmail|office365|outlook|yandex|titan)\./i.test(form.host)
+    && /(gmail|office365|outlook|yandex|titan|secureserver)\./i.test(form.host)
     ? "Bu sağlayıcıda kullanıcı adı tam e-posta adresi olmalı (ör. ad@gmail.com)" : null;
   return (
     <div className="page-wrap admin">

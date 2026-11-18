@@ -209,11 +209,9 @@ Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-soru
 
 ## 8. Açık konular ve bilinen durumlar
 
-- **E-posta sağlayıcısı:** kullanıcı ileride **Titan** (`smtp.titan.email:465`, kendi alan adındaki adres, GoDaddy üzerinden) kullanmaya karar verdi.
-  - Ofis ağından Titan'a TCP bağlantısı açılıyor ama karşılama (220) gelmiyor. Gmail ve Office 365 aynı ağdan anında yanıt veriyor.
-  - Titan'da "Enable Titan on other apps" ayarı her hesapta ayrıca açılmalı.
-  - Testi canlı sunucudan ya da başka bir ağdan yapın; bu ağdan art arda deneme yapmayın.
-  - Ekranda Titan hazır ayarı var.
+- **E-posta sağlayıcısı:** kullanıcının alan adının e-postası **GoDaddy**'de (MX kaydı `secureserver.net`; Titan değil).
+  - SMTP: `smtpout.secureserver.net`, port 465, SSL; kullanıcı adı tam e-posta adresi. 19.11.2026'da bu ayarla test e-postası başarıyla gitti.
+  - Ekranda **GoDaddy** hazır ayarı var. Şifre sohbete değil, Yönetim → E-posta sunucusu ekranına girilir (şifreli saklanır).
 - **Kararsız test:** `test_refresh_fails_cleanly_when_step_breaks`, makine aşırı yavaşken bir kez başarısız oldu; tek başına çalıştırınca geçiyor. Zamanlamaya bağlı görünüyor; incelenebilir.
 - **Kullanıcının yerel değişikliği:** kökteki `package.json` ve `package-lock.json` dosyalarına yanlışlıkla `npm install server` eklenmiş olabilir.
   - Depoda bu değişiklik geri alındı (`f684c6e`), yerel dosyalarda duruyor.
