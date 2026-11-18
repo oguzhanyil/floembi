@@ -475,7 +475,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             gid = c.execute(db.gateways.insert().values(
                 workspace_id=body.workspace_id, name=body.name, created_by=user["id"]
             )).inserted_primary_key[0]
-            token = secrets.token_urlsafe(32)
+            token = "fw_" + secrets.token_urlsafe(32)
             c.execute(db.gateway_tokens.insert().values(
                 gateway_id=gid, token_hash=hashlib.sha256(token.encode()).hexdigest(),
                 expires_at=db.now() + timedelta(minutes=15),

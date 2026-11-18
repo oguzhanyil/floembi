@@ -334,7 +334,7 @@ function GatewayPage({ id }: { id: number }) {
       await load();
     } catch (err) { setError(toUiError(err)); }
   }
-  const command = enrollment && `python -m floem_bi.gateway --server ${window.location.origin} --id ${enrollment.id} --token ${enrollment.registration_token}`;
+  const command = enrollment && `python -m floem_bi.gateway --server ${window.location.origin} --id ${enrollment.id} --token=${enrollment.registration_token}`;
   return <div className="page-wrap">
     <p><Link to={`/workspaces/${id}`}>← Çalışma alanı</Link></p>
     <h1>Floemway</h1>

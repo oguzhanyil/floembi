@@ -17,6 +17,7 @@ from test_server import YON, floem_file, login, publish, server
 def setup_gateway(client, headers, dataset_id):
     registration = client.post("/api/gateways", headers=headers,
                                json={"workspace_id": 1, "name": "Test Gateway"}).json()
+    assert registration["registration_token"].startswith("fw_")
     key = PrivateKey.generate()
     result = client.post("/api/gateways/register", json={
         "token": registration["registration_token"],
