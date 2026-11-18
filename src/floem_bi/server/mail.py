@@ -119,6 +119,39 @@ def build_message(sender: str, mail: Mail) -> EmailMessage:
     return msg
 
 
+def _open(s: SmtpSettings):
+    """SMTP bağlantısını açar. Sunucu adı birden çok adrese çözülüyorsa sırayla dener: bazı sağlayıcılarda
+    (ör. Titan) adreslerden biri bağlantıyı kabul edip hiç karşılama göndermeyebilir; tek adrese takılmayız.
+    Sertifika doğrulaması ve STARTTLS her zaman sunucu adıyla yapılır."""
+    base = smtplib.SMTP_SSL if s.security == "ssl" else smtplib.SMTP
+    kw = {"context": ssl.create_default_context()} if s.security == "ssl" else {}
+    if not hasattr(base, "_get_socket"):           # test sahteleri
+        return base(s.host, s.port, timeout=s.timeout, **kw)
+    ips = list(dict.fromkeys(a[4][0] for a in socket.getaddrinfo(s.host, s.port, type=socket.SOCK_STREAM)))
+
+    class Pinned(base):  # type: ignore[misc, valid-type]
+        def _get_socket(self, host, port, timeout):
+            return super()._get_socket(self.floem_ip, port, timeout)
+
+    per_ip = min(s.timeout, 10.0) if len(ips) > 1 else s.timeout
+    last: Exception | None = None
+    for ip in ips:
+        client = Pinned(timeout=per_ip, **kw)
+        client._host = s.host                     # SNI, sertifika ve STARTTLS için sunucu adı
+        client.floem_ip = ip
+        try:
+            client.connect(s.host, s.port)
+            client.timeout = s.timeout
+            if client.sock is not None:
+                client.sock.settimeout(s.timeout)
+            return client
+        except (smtplib.SMTPServerDisconnected, OSError) as e:
+            last = e
+            client.close()
+    assert last is not None
+    raise last
+
+
 def send(settings: MailSettings, mail: Mail, outbox: Path) -> tuple[str, str | None]:
     """E-postayı gönderir. Dönüş: (durum, giden kutusu dosyası). Durum: sent | outbox."""
     msg = build_message(settings.sender, mail)
@@ -131,10 +164,7 @@ def send(settings: MailSettings, mail: Mail, outbox: Path) -> tuple[str, str | N
     where = f"{s.host}:{s.port}"
     step = "connect"                          # connect | tls | login | send: hata mesajı adıma göre
     try:
-        if s.security == "ssl":
-            client = smtplib.SMTP_SSL(s.host, s.port, timeout=s.timeout, context=ssl.create_default_context())
-        else:
-            client = smtplib.SMTP(s.host, s.port, timeout=s.timeout)
+        client = _open(s)
         with client:
             if s.security == "starttls":
                 step = "tls"
