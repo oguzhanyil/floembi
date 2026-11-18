@@ -225,6 +225,11 @@ ipcMain.on("floem:close-now", (e) => {
   BrowserWindow.fromWebContents(e.sender)?.close();
 });
 
+// Duman testleri (yalnızca geliştirme): ayrı kullanıcı klasörü; açık bir Floem BI ile çakışmaz
+if (process.env.FLOEM_SCREENSHOT && !app.isPackaged) {
+  app.setPath("userData", path.join(app.getPath("temp"), "floem-bi-smoke"));
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

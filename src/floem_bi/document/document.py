@@ -30,6 +30,7 @@ from ..transform import ADIM_ADI, StepError, build, dependencies, parse_steps
 from ..model.schema import (
     Iliski, ModelBilgisi, ModelTanimi, Sutun, Tablo, TabloKaynak, TabloSorgu, VeriKaynagi, parse_column_ref,
 )
+from ..compiler import CompileError, SqlGenerator
 from ..engine.duckdb_engine import DuckDBEngine
 from ..model.semantic import ModelError, SemanticModel, find_ambiguity
 from ..report import Report, VisualQuery, empty_report, run_visual_query
@@ -350,6 +351,81 @@ class Document:
                 "elapsed_ms": 0,
                 "row_count": min(len(rows), limit),
             }
+
+    def _data_columns(self, table: str):
+        """Tablo görünümü sütunları: (Sutun, SQL ifadesi | None, uyarı)."""
+        t = OpContext(self.tanim, {}).table(table)
+        model, _ = self._semantic_engine()
+        gen = SqlGenerator(model, "duckdb")
+        out = []
+        for c in t.sutunlar:
+            try:
+                out.append((c, gen.row_expression(t.ad, c.ad), None))
+            except (CompileError, ModelError) as e:
+                out.append((c, None, f"Hesaplanmış sütun tablo görünümünde gösterilemiyor: {getattr(e, 'message', str(e))}"))
+        return t, out
+
+    def table_rows(self, table: str, offset: int = 0, limit: int = 500, sort: dict | None = None,
+                   filters: list[dict] | None = None) -> dict:
+        """Power BI "Tablo görünümü": satırlar sayfa sayfa, sıralama ve sütun değer filtreleriyle."""
+        with self.lock:
+            t, cols = self._data_columns(table)
+            exprs = {c.ad.lower(): e for c, e, _ in cols}
+            where, params = [], []
+            for f in filters or []:
+                e = exprs.get(str(f.get("column", "")).lower())
+                vals = f.get("values") or []
+                if not e or not vals:
+                    continue
+                non_null = [v for v in vals if v is not None]
+                parts = []
+                if non_null:
+                    parts.append(f"{e} IN ({', '.join('?' for _ in non_null)})")
+                    params += non_null
+                if len(non_null) != len(vals):
+                    parts.append(f"{e} IS NULL")
+                where.append("(" + " OR ".join(parts) + ")")
+            cond = f" WHERE {' AND '.join(where)}" if where else ""
+            order = ""
+            if sort and exprs.get(str(sort.get("column", "")).lower()):
+                order = f" ORDER BY {exprs[sort['column'].lower()]} {'DESC' if sort.get('desc') else 'ASC'} NULLS LAST"
+            select = ", ".join(f"{e} AS {qident(c.ad)}" if e else f"NULL AS {qident(c.ad)}" for c, e, _ in cols)
+            src = f"{phys_table(t)} AS t"
+            cur = self.con.cursor()
+            try:
+                total = cur.execute(f"SELECT count(*) FROM {src}{cond}", params).fetchone()[0]
+                rows = cur.execute(
+                    f"SELECT {select} FROM {src}{cond}{order} LIMIT {int(limit)} OFFSET {int(offset)}", params,
+                ).fetchall() if cols else []
+            except duckdb.Error as e:
+                raise DocumentError("Tablo verisi okunamadı", str(e).split("\n")[0], code="data_view") from e
+            finally:
+                cur.close()
+            return {
+                "columns": [
+                    {"name": c.ad, "type": c.tip, "calculated": c.ifade is not None, "hidden": c.gizli, "warning": w}
+                    for c, _, w in cols
+                ],
+                "rows": [[json_value(v) for v in r] for r in rows],
+                "offset": offset,
+                "total": total,
+            }
+
+    def column_values(self, table: str, column: str, limit: int = 1000) -> dict:
+        """Sütun filtresi listesi için farklı değerler."""
+        with self.lock:
+            t, cols = self._data_columns(table)
+            e = next((e for c, e, _ in cols if c.ad.lower() == column.lower()), None)
+            if e is None:
+                return {"values": [], "truncated": False}
+            cur = self.con.cursor()
+            try:
+                rows = cur.execute(
+                    f"SELECT DISTINCT {e} FROM {phys_table(t)} AS t ORDER BY 1 NULLS FIRST LIMIT {int(limit) + 1}"
+                ).fetchall()
+            finally:
+                cur.close()
+            return {"values": [json_value(r[0]) for r in rows[:limit]], "truncated": len(rows) > limit}
 
     def relationship_profile(self, kimden: str, kime: str) -> dict:
         """İlişki penceresi için: iki sütunun benzersizliği ve eşleşme oranı (Power BI'daki ön kontrol)."""

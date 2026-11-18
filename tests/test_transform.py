@@ -210,3 +210,29 @@ def test_delete_table_drops_raw(client, tmp_path):
     names = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables()").fetchall()}
     con.close()
     assert "OSLP" in names and not any(n.startswith("OCRD") for n in names)
+
+
+# ------------------------------------------------------------------ tablo görünümü
+def rows(client, tbl, **body):
+    r = client.post(f"/document/tables/{tbl}/rows", headers=H, json=body)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_data_view_paging_sort_filter(client):
+    do_import(client, ["OINV"])
+    d = rows(client, "OINV", limit=2)
+    assert d["total"] == 3 and len(d["rows"]) == 2
+    assert [c["name"] for c in d["columns"]][:3] == ["DocEntry", "DocNum", "CardCode"]
+    d = rows(client, "OINV", offset=2, limit=2)
+    assert len(d["rows"]) == 1
+    d = rows(client, "OINV", sort={"column": "DocTotal", "desc": True})
+    assert [r[0] for r in d["rows"]] == [1, 2, 3]
+    d = rows(client, "OINV", filters=[{"column": "CardCode", "values": ["C001"]}])
+    assert d["total"] == 2
+    d = rows(client, "OINV", filters=[{"column": "DocDate", "values": ["2026-01-05", "2026-02-01"]}])
+    assert d["total"] == 2
+    d = rows(client, "OINV", filters=[{"column": "DocTotal", "values": [80]}])
+    assert d["total"] == 1
+    v = client.get("/document/tables/OINV/values", headers=H, params={"column": "CardCode"}).json()
+    assert v["values"] == ["C001", "C002"]

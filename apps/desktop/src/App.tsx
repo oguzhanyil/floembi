@@ -10,6 +10,7 @@ import { PublishDialog } from "./components/PublishDialog";
 import { Navigator, type SelectedObject } from "./components/Navigator";
 import { SqlView } from "./components/SqlView";
 import { DocumentProvider, useDocument } from "./document";
+import { DataView } from "./data/DataView";
 import { ModelView } from "./model/ModelView";
 import { ReportView } from "./report/ReportView";
 import { FloemQueryEditor } from "./transform/FloemQueryEditor";
@@ -18,7 +19,7 @@ type View = "rapor" | "veri" | "model" | "sql";
 
 const VIEWS: { id: View; label: string; icon: string; ready: boolean; note?: string }[] = [
   { id: "rapor", label: "Rapor görünümü", icon: "▤", ready: true },
-  { id: "veri", label: "Tablo görünümü", icon: "▦", ready: false, note: "3. haftada" },
+  { id: "veri", label: "Tablo görünümü", icon: "▦", ready: true },
   { id: "model", label: "Model görünümü", icon: "⛁", ready: true },
   { id: "sql", label: "SQL sorgusu", icon: "⌨", ready: true },
 ];
@@ -254,10 +255,21 @@ function Shell() {
               onImport={(connectionId, database, sql, name) => startImport(connectionId, [{ database, sql, name }])}
             />
           )}
-          {view === "veri" && (
+          {view === "veri" && tableCount > 0 && (
+            <DataView
+              key={doc?.id}
+              onRefreshTable={(t) => void refresh([t])}
+              onTransformTable={(t) => setTransform({ table: t })}
+              onNewMeasure={(table) => setMeasureEdit({ mode: "new", table })}
+            />
+          )}
+          {view === "veri" && tableCount === 0 && (
             <div className="empty-state">
               <h2>Tablo görünümü</h2>
-              <p>Satır satır veri görünümü 3. haftada geliyor. Şimdilik model görünümünde tabloyu seçip "Veriyi önizle"yi kullanın.</p>
+              <p>Modelde henüz tablo yok. Veri al ile tabloları yükleyin.</p>
+              <button className="primary" onClick={() => setGetData(true)}>
+                Veri al
+              </button>
             </div>
           )}
         </main>

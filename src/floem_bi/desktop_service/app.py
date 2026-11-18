@@ -113,6 +113,13 @@ class DaxIn(BaseModel):
     table: str | None = None
 
 
+class RowsIn(BaseModel):
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=500, ge=1, le=5000)
+    sort: dict[str, Any] | None = None                 # {"column": ad, "desc": bool}
+    filters: list[dict[str, Any]] = Field(default_factory=list, max_length=50)   # [{"column", "values"}]
+
+
 class ProfileIn(BaseModel):
     kimden: str
     kime: str
@@ -338,6 +345,14 @@ def create_app(
     @app.get("/document/tables/{table}/preview", dependencies=[Depends(auth)])
     def table_preview(table: str, limit: int = 100):
         return doc().preview(table, max(1, min(limit, 1000)))
+
+    @app.post("/document/tables/{table}/rows", dependencies=[Depends(auth)])
+    def table_rows(table: str, body: RowsIn):
+        return doc().table_rows(table, body.offset, body.limit, body.sort, body.filters)
+
+    @app.get("/document/tables/{table}/values", dependencies=[Depends(auth)])
+    def column_values(table: str, column: str):
+        return doc().column_values(table, column)
 
     def _steps(body: TransformIn) -> list[dict]:
         try:

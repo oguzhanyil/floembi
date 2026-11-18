@@ -125,6 +125,24 @@ class SqlGenerator:
             out.append((table, combined))
         return out
 
+    # ----------------------------------------------------------- tablo görünümü
+    def row_expression(self, table: str, column: str, alias: str = "t") -> str:
+        """Sütunun tek tablo üzerindeki satır SQL'i (tablo görünümü için).
+
+        Hesaplanmış sütun yalnızca kendi tablosunun sütunlarına başvuruyorsa çevrilir;
+        başka tabloya (RELATED vb.) ya da toplamaya başvuruyorsa CompileError."""
+        key, sutun = self.model.column(table, column)
+        if not sutun.ifade:
+            return _col(self._physical(key), alias).sql(dialect=self.dialect)
+        calc = self._calc(key)
+        if any(k.table != key.table for k in self._cols_in(calc)):
+            raise CompileError("başka bir tablonun sütununa başvuruyor")
+
+        def bad(_):
+            raise CompileError("toplama içeriyor")
+
+        return self.render(calc, lambda k: _col(self._physical(k), alias), bad).sql(dialect=self.dialect)
+
     # ----------------------------------------------------------- yardımcılar
     def _source(self, table: str, alias: str) -> exp.Expression:
         t = self.model.table(table)

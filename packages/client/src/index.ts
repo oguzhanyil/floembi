@@ -206,6 +206,28 @@ export interface TableQuery {
   adimlar?: TransformStep[];
 }
 
+// ---- Tablo görünümü (Power BI "Veri görünümü")
+export interface DataViewColumn {
+  name: string;
+  type: ColumnType;
+  calculated: boolean;
+  hidden: boolean;
+  /** Gösterilemeyen hesaplanmış sütunun nedeni */
+  warning: string | null;
+}
+export interface DataViewRows {
+  columns: DataViewColumn[];
+  rows: unknown[][];
+  offset: number;
+  total: number;
+}
+export interface DataViewRequest {
+  offset?: number;
+  limit?: number;
+  sort?: { column: string; desc: boolean } | null;
+  filters?: { column: string; values: unknown[] }[];
+}
+
 // ---- Veri dönüştürme (Power Query) adımları; floem_bi.transform.steps ile aynı şema
 export type StepType = "int64" | "decimal" | "double" | "string" | "date" | "datetime" | "bool";
 export type FilterOp =
@@ -518,6 +540,8 @@ export interface DocumentClient {
   relationshipProfile(kimden: string, kime: string): Promise<RelationshipProfile>;
   validateDax(expression: string): Promise<{ ok: boolean; errors: DaxDiagnostic[] }>;
   transformPreview(table: string, steps: TransformStep[], upto?: number | null, limit?: number): Promise<TransformPreview>;
+  tableRows(table: string, req: DataViewRequest): Promise<DataViewRows>;
+  columnValues(table: string, column: string): Promise<{ values: unknown[]; truncated: boolean }>;
   applySteps(table: string, steps: TransformStep[]): Promise<{ warnings: string[]; document: DocumentState }>;
   startImport(connectionId: string, database: string | null, items: ImportItem[]): Promise<Job>;
   startRefresh(tables?: string[]): Promise<Job>;
@@ -582,6 +606,14 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   }
   validateDax(expression: string) {
     return this.doc.request<{ ok: boolean; errors: DaxDiagnostic[] }>("POST", "/document/dax/validate", { expression });
+  }
+  tableRows(table: string, req: DataViewRequest) {
+    return this.doc.request<DataViewRows>("POST", `/document/tables/${encodeURIComponent(table)}/rows`, req);
+  }
+  columnValues(table: string, column: string) {
+    return this.doc.request<{ values: unknown[]; truncated: boolean }>(
+      "GET", `/document/tables/${encodeURIComponent(table)}/values`, undefined, { column },
+    );
   }
   transformPreview(table: string, steps: TransformStep[], upto: number | null = null, limit = 1000) {
     return this.doc.request<TransformPreview>("POST", "/document/transform/preview", { table, adimlar: steps, upto, limit });
