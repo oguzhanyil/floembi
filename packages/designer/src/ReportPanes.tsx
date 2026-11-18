@@ -1,9 +1,9 @@
-import type { Agg, FieldRef, ModelTable, ValueRef, Visual, VisualFormat, VisualType } from "@floem/client";
+import type { Agg, FieldRef, ModelTable, ReportPage, ValueRef, Visual, VisualFormat, VisualType } from "@floem/client";
 import {
   AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, valueLabel, type WellDef, type WellKey,
 } from "@floem/report";
 import { useState, type ReactNode } from "react";
-import { FIELD_MIME, readPayload, usesField, type FieldPayload } from "./fields";
+import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from "./fields";
 import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 
 const readField = readPayload;
@@ -109,6 +109,50 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
   const colors = Array.isArray(f.colors) ? (f.colors as string[]) : [];
   const swatches = isPie || visual.legend?.length ? 8 : Math.max(1, Math.min(8, visual.values.length));
 
+  if (visual.type === "text") {
+    const labels = visual.values.map(valueLabel);
+    return (
+      <Section title="Metin">
+        <textarea
+          rows={7}
+          value={typeof f.text === "string" ? f.text : ""}
+          placeholder={"# Satış özeti\nBu dönemin satışı: [Toplam Satış]"}
+          onChange={(e) => set({ text: e.target.value })}
+        />
+        <p className="hint">
+          "# " ile başlayan satır başlık, "## " ara başlık olur.
+          {labels.length > 0 ? (
+            <>
+              {" "}Dinamik değerler: {labels.map((l) => <code key={l}>[{l}]</code>).reduce<ReactNode[]>((a, c, i) => (i ? [...a, ", ", c] : [c]), [])}
+            </>
+          ) : (
+            " Ölçü değeri göstermek için Alanlar sekmesinde Dinamik değerler kutusuna ölçü ekleyip metne [Ölçü adı] yazın."
+          )}
+        </p>
+        <label>
+          Yazı boyutu
+          <input type="number" min={8} max={72} value={Number(f.fontSize) || 14} onChange={(e) => set({ fontSize: Number(e.target.value) })} />
+        </label>
+        <label>
+          Hizalama
+          <select value={(f.align as string) || "left"} onChange={(e) => set({ align: e.target.value })}>
+            <option value="left">Sola</option>
+            <option value="center">Ortaya</option>
+            <option value="right">Sağa</option>
+          </select>
+        </label>
+        <label className="inline">
+          <input type="checkbox" checked={!!f.bold} onChange={(e) => set({ bold: e.target.checked })} />
+          Kalın
+        </label>
+        <label className="inline">
+          Renk
+          <input type="color" value={typeof f.color === "string" ? f.color : "#201f1e"} onChange={(e) => set({ color: e.target.value })} />
+        </label>
+      </Section>
+    );
+  }
+
   return (
     <>
       <Section title="Başlık">
@@ -188,6 +232,18 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
             Satırları dönüşümlü renklendir
           </label>
           <p className="hint">Sıralamak için tablo başlığına tıklayın.</p>
+          {visual.type === "table" && (
+            <>
+              <label className="inline">
+                <input type="checkbox" checked={!!f.detailOnly} onChange={(e) => set({ detailOnly: e.target.checked })} />
+                Ayrıntı tablosu: yalnızca seçim yapılınca göster
+              </label>
+              <p className="hint">
+                Ana-ayrıntı: ana tablodaki bir satıra tıklamak, o satırın tüm alanlarıyla diğer görselleri filtreler
+                (ör. fatura satırı → fatura kalemleri).
+              </p>
+            </>
+          )}
         </Section>
       )}
       {visual.type === "card" && (
@@ -196,6 +252,16 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
             <input type="checkbox" checked={f.categoryLabel !== false} onChange={(e) => set({ categoryLabel: e.target.checked })} />
             Kategori etiketi
           </label>
+          {visual.group.length > 0 && (
+            <label>
+              Trend yönü
+              <select value={f.higherIsBetter === false ? "low" : "high"} onChange={(e) => set({ higherIsBetter: e.target.value === "high" })}>
+                <option value="high">Artış iyi (yeşil)</option>
+                <option value="low">Azalış iyi (yeşil)</option>
+              </select>
+            </label>
+          )}
+          <p className="hint">Trend ekseni (ör. Tarih[Ay]) eklenirse değerin altında eğilim çizgisi ve önceki döneme göre değişim görünür.</p>
         </Section>
       )}
       {visual.type === "kpi" && (
@@ -228,10 +294,62 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
   );
 }
 
+/** Seçili görsel yokken: sayfa ayarları ve Detaya git (drill-through) alanları (Power BI'daki gibi). */
+function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: ReportPage) => void }) {
+  const [over, setOver] = useState(false);
+  const fields = page.drillthrough ?? [];
+  return (
+    <>
+      <div className="viz-selected">Sayfa: {page.name}</div>
+      <div
+        className={`well ${over ? "over" : ""}`}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(FIELD_MIME)) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          setOver(false);
+          const f = readField(e);
+          if (!f || isMeasure(f)) return;
+          e.preventDefault();
+          if (!fields.some((x) => x.table === f.table && x.column === f.column)) {
+            onChange({ ...page, drillthrough: [...fields, { table: f.table, column: f.column }] });
+          }
+        }}
+      >
+        <div className="well-label">Detaya git (drill-through)</div>
+        {fields.length === 0 && <div className="well-empty">Detay alanlarını buraya sürükleyin</div>}
+        {fields.map((f, i) => (
+          <div key={`${f.table}.${f.column}`} className="well-item">
+            <span className="well-name" title={`${f.table}[${f.column}]`}>
+              {f.column}
+            </span>
+            <button
+              className="well-x"
+              onClick={() => onChange({ ...page, drillthrough: fields.filter((_, j) => j !== i) })}
+              aria-label="Kaldır"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="hint pad">
+        Bu sayfayı bir detay sayfası yapar. Başka bir sayfadaki görselde bu alanın bir değerine tıklayınca görsel
+        başlığında <strong>↪ Detaya git</strong> çıkar; bu sayfa o değere filtrelenmiş açılır, üstte <strong>← Geri</strong> düğmesi olur.
+      </p>
+    </>
+  );
+}
+
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  visual, onPickType, onChange, onDropToWell,
+  page, onPageChange, visual, onPickType, onChange, onDropToWell,
 }: {
+  page: ReportPage;
+  onPageChange: (p: ReportPage) => void;
   visual: Visual | null;
   onPickType: (t: VisualType) => void;
   onChange: (v: Visual) => void;
@@ -281,7 +399,10 @@ export function VisualizationsPane({
           )}
         </>
       ) : (
-        <p className="hint pad">Alanlarını görmek için sayfada bir görsel seçin ya da yukarıdan yeni görsel ekleyin.</p>
+        <>
+          <p className="hint pad">Alanlarını görmek için sayfada bir görsel seçin ya da yukarıdan yeni görsel ekleyin.</p>
+          <PageSettings page={page} onChange={onPageChange} />
+        </>
       )}
     </aside>
   );

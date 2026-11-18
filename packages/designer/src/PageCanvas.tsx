@@ -1,6 +1,9 @@
-import type { ModelColumn, ReportPage, Visual } from "@floem/client";
-import { VisualBody, crossFiltersFor, slicerFilters, snap, toggleCross, visualTitle, type CrossFilter, type QueryFn } from "@floem/report";
-import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import type { FilterRef, ModelColumn, ReportPage, Visual } from "@floem/client";
+import {
+  DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
+  type CrossFilter, type DrillTarget, type QueryFn,
+} from "@floem/report";
+import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 
 import { FIELD_MIME, readPayload, type FieldPayload } from "./fields";
 
@@ -11,8 +14,15 @@ type Drag = { id: string; mode: "move" | "resize"; sx: number; sy: number; orig:
 /** Sabit boyutlu rapor sayfası (Power BI'daki 16:9 tuval); görseller taşınır ve boyutlandırılır. */
 export function PageCanvas({
   page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
+  pages, pageFilters, onDrillThrough, banner,
 }: {
   page: ReportPage;
+  /** Detaya git hedeflerini bulmak için tüm sayfalar */
+  pages: ReportPage[];
+  /** Detay sayfasına gelinmişse, gelinen değerin filtreleri */
+  pageFilters: FilterRef[];
+  onDrillThrough: (t: DrillTarget) => void;
+  banner?: ReactNode;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChange: (v: Visual) => void;
@@ -79,6 +89,7 @@ export function PageCanvas({
 
   return (
     <div className="page-outer" ref={outer} onPointerDown={() => { onSelect(null); setCross(null); }}>
+      {banner}
       <div
         className="page"
         style={{ width: page.width * scale, height: page.height * scale }}
@@ -136,6 +147,7 @@ export function PageCanvas({
                 title="Taşımak için sürükleyin"
               >
                 <span className="visual-title">{title}</span>
+                <DrillThroughButton targets={drillTargets(pages, page.id, v, cross)} onGo={onDrillThrough} />
                 <button
                   className="visual-del"
                   aria-label="Görseli sil"
@@ -149,7 +161,9 @@ export function PageCanvas({
               <div className="visual-content">
                 <VisualBody
                   v={v}
-                  extra={[...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, {}, v.id)]}
+                  extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, {}, v.id)]}
+                  detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
+                  onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
                   dataRev={dataRev}
                   cross={cross}
                   onCross={(value) => setCross(toggleCross(v, cross, value))}

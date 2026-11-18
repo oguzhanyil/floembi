@@ -1,6 +1,6 @@
-import type { ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualType } from "@floem/client";
+import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualType } from "@floem/client";
 import {
-  VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, type CrossFilter, type QueryFn, type WellKey,
+  DrillBanner, VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
@@ -41,6 +41,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cross, setCross] = useState<CrossFilter | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  // Detaya git (drill-through): hedef sayfa, filtreler, geri dönülecek sayfa
+  const [drill, setDrill] = useState<{ pageId: string; from: string; filters: FilterRef[]; label: string } | null>(null);
 
   // Dışarıdan gelen değişiklik (dosya aç, yeniden adlandırma) yerel taslağı günceller
   useEffect(() => {
@@ -139,10 +141,14 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     if (!c) return v;
     const wanted = well ?? defaultRole(c);
     // İstenen kutu bu görselde yoksa ilk uygun kutuya (ör. dilimleyiciye sayı → Alan)
-    const def =
+    let def =
       wells.find((w) => w.key === wanted) ??
       wells.find((w) => (wanted === "group" || wanted === "legend" ? w.key === "group" : w.key === "values")) ??
       wells[0];
+    // Kart/KPI trend ekseni yalnızca tarih alanlarını kendiliğinden alır; diğerleri değer olur (Say)
+    if (!well && def.dateOnly && c.tip !== "date" && c.tip !== "datetime") {
+      def = wells.find((w) => w.key === "values") ?? def;
+    }
     const ref = { table, column };
     if (def.key === "group" || def.key === "legend") {
       const cur = def.key === "group" ? v.group : v.legend ?? [];
@@ -276,6 +282,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   if (!page) return null;
+  const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
   return (
     <div className="report-view">
@@ -297,6 +304,26 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           setCross={setCross}
           columnOf={columnOf}
           run={host.run}
+          pages={report.pages}
+          pageFilters={pageFilters}
+          onDrillThrough={(t) => {
+            setDrill({ pageId: t.page.id, from: page.id, filters: t.filters, label: t.label });
+            setPageId(t.page.id);
+            setSelectedId(null);
+            setCross(null);
+          }}
+          banner={
+            drill && pageFilters.length > 0 ? (
+              <DrillBanner
+                label={drill.label}
+                onBack={() => {
+                  setPageId(drill.from);
+                  setDrill(null);
+                  setCross(null);
+                }}
+              />
+            ) : undefined
+          }
         />
         <nav className="page-tabs" aria-label="Sayfalar">
           {report.pages.map((p) =>
@@ -320,11 +347,13 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
                   setPageId(p.id);
                   setSelectedId(null);
                   setCross(null);
+                  setDrill(null);
                 }}
                 onDoubleClick={() => setRenaming(p.id)}
                 title="Yeniden adlandırmak için çift tıklayın"
               >
                 {p.name}
+                {p.drillthrough?.length ? <span className="dt-mark" title="Detay (drill-through) sayfası">↪</span> : null}
                 {report.pages.length > 1 && p.id === page.id && (
                   <span
                     className="page-tab-x"
@@ -347,6 +376,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <VisualizationsPane
+        page={page}
+        onPageChange={(next) => updatePage(() => next)}
         visual={selected}
         onPickType={pickType}
         onChange={updateVisual}

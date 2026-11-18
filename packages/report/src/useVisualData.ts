@@ -93,6 +93,10 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     case "gauge":
       if (!v.values.length) return null;
       return { group: [], values: [...v.values.slice(0, 2), ...(v.target ?? []).slice(0, 1)], filters, limit: 1 };
+    case "text":
+      // Metin kutusu: yalnızca dinamik değer varsa sorgu (tek satır)
+      if (!v.values.length) return null;
+      return { group: [], values: v.values, filters, limit: 1 };
     case "slicer": {
       const f = v.group[0];
       if (!f) return null;
@@ -106,6 +110,15 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     }
   }
   return null;
+}
+
+/** Kart/KPI trend ekseni: değerin dönemlere göre serisi (eksen sırasıyla). */
+export function trendQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
+  if ((v.type !== "card" && v.type !== "kpi") || !v.group[0] || !v.values.length) return null;
+  return {
+    group: [v.group[0]], values: v.values.slice(0, 1), filters: [...v.filters, ...extra],
+    order_by: [{ index: 0, desc: false }], limit: 400,
+  };
 }
 
 /**
@@ -163,6 +176,11 @@ function toError(e: unknown): VisualError {
 /** Görselin verisini getirir; aynı sorgu tekrar istenmez, eski yanıt yenisinin üstüne yazılmaz. */
 export function useVisualData(v: Visual, extra: FilterRef[], revision: string, run: QueryFn, enabled = true): VisualData {
   const query = useMemo(() => (enabled ? buildQuery(v, extra) : null), [v, extra, enabled]);
+  return useQueryData(query, revision, run);
+}
+
+/** Verilen sorguyu çalıştırır (null: boş). */
+export function useQueryData(query: VisualQuery | null, revision: string, run: QueryFn): VisualData {
   const key = query ? JSON.stringify(query) + "#" + revision : "";
   const [data, setData] = useState<VisualData>({ state: "empty" });
 

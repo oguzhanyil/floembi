@@ -19,6 +19,7 @@ VisualType = Literal[
     "matrix",                                   # pivot / ağaç tablo (satır + sütun grupları, alt toplamlar)
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
+    "text",                                     # metin kutusu (isteğe bağlı dinamik ölçü değerleriyle)
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
@@ -82,6 +83,7 @@ class Page(_B):
     width: int = 1280
     height: int = 720
     visuals: list[Visual] = Field(default_factory=list)
+    drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
 
 
 class Report(_B):
@@ -105,6 +107,7 @@ def empty_report() -> dict:
 # ------------------------------------------------- yeniden adlandırmada referanslar
 def _refs(report: dict):
     for page in report.get("pages", []):
+        yield from page.get("drillthrough", [])
         for v in page.get("visuals", []):
             for key in ("group", "legend", "values", "target", "filters"):
                 for ref in v.get(key, []):

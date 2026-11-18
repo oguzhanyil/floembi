@@ -1,17 +1,25 @@
-import type { ColumnType, FilterRef, Visual, VisualState } from "@floem/client";
-import { useState } from "react";
+import type { ColumnType, FilterRef, ReportPage, Visual, VisualState } from "@floem/client";
+import { useEffect, useMemo, useState } from "react";
 import { CategoryChart, PieChartVisual } from "./charts";
 import { GaugeVisual, HeatmapVisual, ScatterVisual, TreemapVisual, WaterfallVisual } from "./charts2";
 import { MatrixVisual, ProgressVisual } from "./matrix";
 import { VISUAL_DEFS, formatValue, groupFields, valueLabel } from "./reportUtils";
-import { currentAxis, drillOf, supportsDrill, useMatrixData, useVisualData, type QueryFn } from "./useVisualData";
-import { CardVisual, DataGrid, KpiVisual, MultiCard, Slicer } from "./visuals";
+import {
+  currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
+} from "./useVisualData";
+import { CardVisual, DataGrid, KpiVisual, MultiCard, Slicer, TextVisual } from "./visuals";
+
+type Scalar = string | number | boolean;
 
 export interface CrossFilter {
   visualId: string;
   table: string;
   column: string;
-  value: string | number | boolean;
+  value: Scalar;
+  /** Tablo satırı seçimi (ana-ayrıntı): satırın diğer gruplama alanları */
+  and?: { table: string; column: string; value: Scalar }[];
+  /** Seçili satırın anahtarı (gruplama değerlerinin JSON'u) */
+  key?: string;
 }
 
 export function visualTitle(v: Visual): string {
@@ -21,7 +29,7 @@ export function visualTitle(v: Visual): string {
   // Drill-down'da başlık o an görünen düzeyi gösterir (Power BI'daki gibi)
   const axis = supportsDrill(v) && v.group.length > 1 ? currentAxis(v) : undefined;
   const grp = axis ? [axis.column, ...(v.legend ?? []).map((g) => g.column)] : groupFields(v).map((g) => g.column);
-  if (v.type === "card" || v.type === "kpi") return "";
+  if (v.type === "card" || v.type === "kpi" || v.type === "text") return "";
   if (v.type === "slicer") return grp[0] ?? VISUAL_DEFS.slicer.label;
   if (!vals.length && !grp.length) return VISUAL_DEFS[v.type].label;
   if (!vals.length) return grp.join(", ");
@@ -30,7 +38,96 @@ export function visualTitle(v: Visual): string {
 
 /** Çapraz filtre: seçimi yapan görsel dışındaki görsellere uygulanır. */
 export function crossFiltersFor(v: Visual, cross: CrossFilter | null): FilterRef[] {
-  return cross && cross.visualId !== v.id ? [{ table: cross.table, column: cross.column, op: "in", values: [cross.value] }] : [];
+  return cross && cross.visualId !== v.id ? selectionFilters(cross) : [];
+}
+
+/** Seçimin tüm alanları → filtreler */
+export function selectionFilters(cross: CrossFilter): FilterRef[] {
+  return [cross, ...(cross.and ?? [])].map((x) => ({ table: x.table, column: x.column, op: "in" as const, values: [x.value] }));
+}
+
+/** Tablo satırına tıklama: satırın tüm gruplama alanlarıyla filtre (OINV satırı → INV1 kalemleri). */
+export function toggleCrossRow(v: Visual, cross: CrossFilter | null, row: unknown[]): CrossFilter | null {
+  const key = JSON.stringify(row.slice(0, v.group.length));
+  if (cross && cross.visualId === v.id && cross.key === key) return null;
+  const pairs = v.group
+    .map((g, i) => ({ table: g.table, column: g.column, value: row[i] }))
+    .filter((x): x is { table: string; column: string; value: Scalar } =>
+      x.value !== null && x.value !== undefined && typeof x.value !== "object");
+  if (!pairs.length) return cross;
+  return { visualId: v.id, ...pairs[0], and: pairs.slice(1), key };
+}
+
+// ------------------------------------------------------------------ detaya git (drill-through)
+export interface DrillTarget {
+  page: ReportPage;
+  filters: FilterRef[];
+  /** Hedef sayfanın alanları ve seçilen değerleri: "CardName = Anadolu Gıda" */
+  label: string;
+}
+
+/** Görselde yapılan seçimle açılabilecek detay sayfaları (sayfanın tüm detay alanları seçimde olmalı). */
+export function drillTargets(pages: ReportPage[], currentPage: string, v: Visual, cross: CrossFilter | null): DrillTarget[] {
+  if (!cross || cross.visualId !== v.id) return [];
+  const sel = [cross, ...(cross.and ?? [])];
+  const out: DrillTarget[] = [];
+  for (const p of pages) {
+    const fields = p.drillthrough ?? [];
+    if (p.id === currentPage || !fields.length) continue;
+    const hits = fields.map((f) => sel.find((x) => x.table === f.table && x.column === f.column));
+    if (hits.some((h) => !h)) continue;
+    out.push({
+      page: p,
+      filters: selectionFilters(cross),
+      label: hits.map((h) => `${h!.column} = ${formatValue(h!.value, undefined) || "(Boş)"}`).join(", "),
+    });
+  }
+  return out;
+}
+
+/** Görsel başlığındaki "Detaya git" düğmesi (birden çok hedef varsa menü). */
+export function DrillThroughButton({ targets, onGo }: { targets: DrillTarget[]; onGo: (t: DrillTarget) => void }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [open]);
+  if (!targets.length) return null;
+  return (
+    <span className="v-drillthrough" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button
+        title={targets.length === 1 ? `Detaya git: ${targets[0].page.name} (${targets[0].label})` : "Detaya git"}
+        onClick={() => (targets.length === 1 ? onGo(targets[0]) : setOpen(!open))}
+      >
+        ↪ Detaya git{targets.length === 1 ? `: ${targets[0].page.name}` : " ▾"}
+      </button>
+      {open && (
+        <div className="v-drillthrough-menu">
+          {targets.map((t) => (
+            <button key={t.page.id} onClick={() => (setOpen(false), onGo(t))}>
+              {t.page.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** Detay sayfasındayken sayfanın üstündeki şerit: hangi değerle gelindiği + geri. */
+export function DrillBanner({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <div className="drill-banner" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button onClick={onBack} title="Önceki sayfaya dön">
+        ← Geri
+      </button>
+      <span>
+        Detay: <strong>{label}</strong>
+      </span>
+    </div>
+  );
 }
 
 /** Çapraz filtre seçimini değiştirir (aynı değere ikinci tıklama seçimi kaldırır). */
@@ -61,13 +158,17 @@ function ErrorView({ message, detail }: { message: string; detail?: string }) {
 
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
 export function VisualBody({
-  v, extra, dataRev, cross, onCross, run, state, onState, fieldType,
+  v, extra, dataRev, cross, onCross, onCrossRow, detailReady, run, state, onState, fieldType,
 }: {
   v: Visual;
   extra: FilterRef[];
   dataRev: string;
   cross: CrossFilter | null;
   onCross: (value: string | number | boolean | null) => void;
+  /** Tablo satırı seçimi (verilirse satırın tüm alanlarıyla filtreler) */
+  onCrossRow?: (row: unknown[]) => void;
+  /** Ana-ayrıntı: dışarıdan bir seçim (başka görsel ya da detaya git) var mı */
+  detailReady?: boolean;
   run: QueryFn;
   /** Etkileşim durumu (dilimleyici seçimi, sıralama); verilmezse görselin kayıtlı durumu */
   state?: VisualState;
@@ -80,6 +181,9 @@ export function VisualBody({
   const isMatrix = v.type === "matrix";
   const data = useVisualData(vq, extra, dataRev, run, !isMatrix);
   const mdata = useMatrixData(vq, extra, dataRev, run, isMatrix);
+  const tq = useMemo(() => trendQuery(vq, extra), [vq, extra]);
+  const tdata = useQueryData(tq, dataRev, run);
+  const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
   const [drillMode, setDrillMode] = useState(false);
   const drillable = supportsDrill(v) && v.group.length > 1;
   const drill = drillOf(vq);
@@ -125,6 +229,16 @@ export function VisualBody({
     </div>
   );
   const selected = cross && cross.visualId === v.id ? cross.value : undefined;
+  const outerSelection = detailReady ?? (!!cross && cross.visualId !== v.id);
+
+  if (v.type === "text") {
+    if (data.state === "error") return <ErrorView {...data.error} />;
+    const r = data.state === "ready" ? data.result : data.state === "loading" ? data.previous : undefined;
+    return <TextVisual v={v} result={r} loading={data.state === "loading"} />;
+  }
+  if (v.format.detailOnly && !outerSelection) {
+    return <div className="v-detail-wait">Ayrıntıları görmek için başka bir görselde bir değer ya da satır seçin</div>;
+  }
 
   if (isMatrix) {
     if (mdata.state === "empty") {
@@ -179,12 +293,14 @@ export function VisualBody({
       {v.type === "table" && (
         <DataGrid
           result={result} selected={selected} onSelect={onCross} format={v.format}
+          selectedKey={cross && cross.visualId === v.id ? cross.key : undefined}
+          onSelectRow={onCrossRow}
           sort={st.sort} onSort={onState ? (sort) => onState({ ...st, sort }) : undefined}
         />
       )}
-      {v.type === "card" && <CardVisual result={result} format={v.format} />}
+      {v.type === "card" && <CardVisual result={result} format={v.format} trend={trend} />}
       {v.type === "multicard" && <MultiCard result={result} selected={selected} onSelect={onCross} />}
-      {v.type === "kpi" && <KpiVisual result={result} format={v.format} />}
+      {v.type === "kpi" && <KpiVisual result={result} format={v.format} trend={trend} />}
       {v.type === "slicer" && (
         <Slicer result={result} format={v.format} state={st} onState={(s) => onState?.(s)} fieldType={fieldType} />
       )}

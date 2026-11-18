@@ -296,7 +296,8 @@ export type VisualType =
   | "pie" | "donut"
   | "matrix"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
-  | "slicer";
+  | "slicer"
+  | "text";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -366,6 +367,8 @@ export interface ReportPage {
   width: number;
   height: number;
   visuals: Visual[];
+  /** Detaya git (drill-through) alanları: başka sayfadan bu alanın değeriyle filtrelenerek açılır */
+  drillthrough?: FieldRef[];
 }
 
 export interface ReportDefinition {

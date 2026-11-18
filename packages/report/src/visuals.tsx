@@ -1,7 +1,7 @@
-import type { VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
+import type { Visual, VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { formatCompact, formatValue, isNumericType } from "./reportUtils";
+import { SERIES, formatCompact, formatValue, isNumericType, valueLabel } from "./reportUtils";
 
 import type { CrossSelect } from "./charts";
 
@@ -27,11 +27,14 @@ const ROW_H = 26;
 
 /** Sanal kaydırmalı tablo: başlığa tıklayınca sıralar, toplam satırı, satıra tıklayınca çapraz filtre. */
 export function DataGrid({
-  result, selected, onSelect, sort, onSort, format,
+  result, selected, onSelect, selectedKey, onSelectRow, sort, onSort, format,
 }: {
   result: VisualResult;
   selected?: unknown;
   onSelect?: CrossSelect;
+  /** Satır seçimi (ana-ayrıntı): seçili satırın gruplama değerleri (JSON) */
+  selectedKey?: string;
+  onSelectRow?: (row: Raw[]) => void;
   sort?: VisualState["sort"];
   onSort?: (s: VisualState["sort"]) => void;
   format: VisualFormat;
@@ -40,7 +43,7 @@ export function DataGrid({
   const groupCount = columns.filter((c) => c.kind === "group").length;
   const scroller = useRef<HTMLDivElement>(null);
   const v = useVirtualizer({ count: rows.length, getScrollElement: () => scroller.current, estimateSize: () => ROW_H, overscan: 12 });
-  const hasSel = selected !== undefined;
+  const hasSel = selected !== undefined || selectedKey !== undefined;
   const banded = format.banded !== false;
 
   // Sütun genişliği: başlık ve ilk 200 değerin uzunluğuna göre. Sığmazsa önce metin
@@ -97,13 +100,14 @@ export function DataGrid({
       <div style={{ height: v.getTotalSize(), position: "relative" }}>
         {v.getVirtualItems().map((it) => {
           const r = rows[it.index];
-          const isSel = hasSel && groupCount > 0 && r[0] === selected;
+          const isSel = hasSel && groupCount > 0 &&
+            (selectedKey !== undefined ? JSON.stringify(r.slice(0, groupCount)) === selectedKey : r[0] === selected);
           return (
             <div
               key={it.key}
               className={`v-grid-row ${banded && it.index % 2 ? "band" : ""} ${hasSel ? (isSel ? "sel" : "dim") : ""}`}
               style={{ gridTemplateColumns: template, transform: `translateY(${it.start}px)`, height: ROW_H }}
-              onClick={groupCount && onSelect ? () => onSelect(r[0]) : undefined}
+              onClick={groupCount ? () => (onSelectRow ? onSelectRow(r) : onSelect?.(r[0])) : undefined}
             >
               {r.map((val, ci) => (
                 <div key={ci} className={columns[ci].kind === "value" ? "num" : ""}>
@@ -138,18 +142,21 @@ function bigNumber(v: Raw, c: VisualResultColumn): string {
   return typeof v === "number" && !c.format ? formatCompact(v) : fmt(v, c);
 }
 
-export function CardVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
+export function CardVisual({ result, format, trend }: { result: VisualResult; format: VisualFormat; trend?: VisualResult }) {
   const c = result.columns[0];
   const v = result.rows[0]?.[0] ?? null;
   const [ref, size] = useSize<HTMLDivElement>();
   const text = bigNumber(v, c);
-  const font = Math.max(18, Math.min(size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
+  // Trend şeridi (~42 px) ve etiket için yer bırak
+  const avail = size.h - (trend ? 26 : 0) - (format.categoryLabel !== false ? 18 : 0);
+  const font = Math.max(16, Math.min(avail * 0.7, size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
   return (
     <div className="v-card" ref={ref}>
       <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)}>
         {text}
       </div>
       {format.categoryLabel !== false && <div className="v-card-label">{c.name}</div>}
+      {trend && <TrendStrip result={trend} higherIsBetter={format.higherIsBetter !== false} />}
     </div>
   );
 }
@@ -183,7 +190,7 @@ export function MultiCard({ result, selected, onSelect }: { result: VisualResult
 }
 
 /** KPI: değer, hedef ve fark. Durum renk + simge + metinle gösterilir (yalnızca renk değil). */
-export function KpiVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
+export function KpiVisual({ result, format, trend }: { result: VisualResult; format: VisualFormat; trend?: VisualResult }) {
   const [vc, tc] = result.columns;
   const row = result.rows[0] ?? [];
   const value = row[0] ?? null;
@@ -195,10 +202,11 @@ export function KpiVisual({ result, format }: { result: VisualResult; format: Vi
   if (typeof value === "number" && typeof target === "number" && target !== 0) {
     const diff = (value - target) / Math.abs(target);
     status = (diff >= 0) === higherIsBetter ? "good" : "bad";
-    diffText = `${diff >= 0 ? "+" : ""}%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(diff * 100)}`;
+    diffText = `${diff >= 0 ? "+" : "-"}%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(Math.abs(diff) * 100)}`;
   }
   const text = bigNumber(value, vc);
-  const font = Math.max(18, Math.min(size.h * 0.36, (size.w / Math.max(text.length, 3)) * 1.5));
+  const avail = size.h - (trend ? 26 : 0) - (tc ? 38 : 18);
+  const font = Math.max(16, Math.min(avail * 0.7, size.h * 0.36, (size.w / Math.max(text.length, 3)) * 1.5));
   return (
     <div className="v-kpi" ref={ref}>
       <div className="v-kpi-main">
@@ -214,6 +222,94 @@ export function KpiVisual({ result, format }: { result: VisualResult; format: Vi
         <div className="v-kpi-target">
           Hedef: {bigNumber(target, tc)} {diffText && <strong className={status ?? ""}>({diffText})</strong>}
         </div>
+      )}
+      {trend && <TrendStrip result={trend} higherIsBetter={higherIsBetter} />}
+    </div>
+  );
+}
+
+const pct = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
+
+/**
+ * Trend göstergesi: değerin dönemlere göre küçük çizgisi ve son dönemin bir öncekine göre
+ * değişimi. Yön renk + ok + metinle gösterilir (yalnızca renge dayanmaz).
+ */
+export function TrendStrip({ result, higherIsBetter = true }: { result: VisualResult; higherIsBetter?: boolean }) {
+  const [axis, val] = result.columns;
+  const pts = result.rows.filter((r) => typeof r[1] === "number") as [Raw, number][];
+  if (!val || pts.length < 2) return null;
+  const ys = pts.map((p) => p[1]);
+  const min = Math.min(...ys);
+  const max = Math.max(...ys);
+  const W = 100;
+  const H = 24;
+  const xy = ys.map((y, i) => [(i / (ys.length - 1)) * W, H - 2 - ((y - min) / (max - min || 1)) * (H - 4)]);
+  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const [lastLabel, last] = pts[pts.length - 1];
+  const prev = pts[pts.length - 2][1];
+  const change = prev !== 0 ? (last - prev) / Math.abs(prev) : null;
+  const up = last >= prev;
+  const status = last === prev ? "flat" : up === higherIsBetter ? "good" : "bad";
+  const title = pts.map(([a, y]) => `${formatValue(a, axis.type, axis.format)}: ${formatValue(y, val.type, val.format)}`).join("\n");
+  return (
+    <div className="v-trend" title={`${formatValue(lastLabel, axis.type, axis.format)}, önceki döneme göre
+
+${title}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        <path d={`${line} L${W},${H} L0,${H} Z`} fill={SERIES[0]} opacity={0.12} />
+        <path d={line} fill="none" stroke={SERIES[0]} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className={`v-trend-text ${status}`}>
+        <strong>
+          {status === "flat" ? "▬" : up ? "▲" : "▼"}{" "}
+          {change === null ? "" : `${change >= 0 ? "+" : "-"}%${pct.format(Math.abs(change) * 100)}`}
+        </strong>{" "}
+        <span>önceki döneme göre</span>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Metin kutusu
+/**
+ * Metin kutusu: Biçim bölmesinde yazılan metin. "[Toplam Satış]" gibi köşeli parantez
+ * içindeki adlar, Dinamik değerler kutusundaki alanın o anki (filtrelenmiş) değeriyle değişir.
+ * "# " ile başlayan satır başlık, "## " ara başlık olur.
+ */
+export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualResult; loading?: boolean }) {
+  const f = v.format;
+  const text = typeof f.text === "string" ? f.text : "";
+  const values = new Map<string, string>();
+  v.values.forEach((ref, i) => {
+    const col = result?.columns[i];
+    const raw = result?.rows[0]?.[i] ?? null;
+    const shown = !col ? (loading ? "…" : "") : formatValue(raw, col.type, col.format) || "(Boş)";
+    values.set(valueLabel(ref).toLocaleLowerCase("tr"), shown);
+    if (col) values.set(col.name.toLocaleLowerCase("tr"), shown);
+  });
+  const fill = (line: string) =>
+    line.replace(/\[([^\]]+)\]/g, (m, name: string) => values.get(name.trim().toLocaleLowerCase("tr")) || m);
+  if (!text.trim()) {
+    return <div className="v-text v-text-empty">Metni Biçim bölmesindeki "Metin" alanına yazın</div>;
+  }
+  return (
+    <div
+      className="v-text"
+      style={{
+        fontSize: Number(f.fontSize) || 14,
+        textAlign: (f.align as "left" | "center" | "right") || "left",
+        color: typeof f.color === "string" ? f.color : undefined,
+        fontWeight: f.bold ? 600 : undefined,
+      }}
+    >
+      {text.split("\n").map((line, i) =>
+        line.startsWith("# ") ? (
+          <div key={i} className="v-text-h1">{fill(line.slice(2))}</div>
+        ) : line.startsWith("## ") ? (
+          <div key={i} className="v-text-h2">{fill(line.slice(3))}</div>
+        ) : (
+          <div key={i}>{fill(line) || "\u00a0"}</div>
+        ),
       )}
     </div>
   );

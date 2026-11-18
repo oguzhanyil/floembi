@@ -1,6 +1,9 @@
-import type { ReportDefinition, VisualState } from "@floem/client";
+import type { FilterRef, ReportDefinition, VisualState } from "@floem/client";
 import { useLayoutEffect, useRef, useState } from "react";
-import { VisualBody, crossFiltersFor, toggleCross, visualTitle, type CrossFilter } from "./VisualBody";
+import {
+  DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
+  type CrossFilter,
+} from "./VisualBody";
 import { slicerFilters, type QueryFn } from "./useVisualData";
 
 /**
@@ -19,6 +22,8 @@ export function ReportViewer({
 }) {
   const [pageId, setPageId] = useState(initialPage ?? report.pages[0]?.id);
   const [cross, setCross] = useState<CrossFilter | null>(null);
+  // Detaya git: hangi sayfaya, hangi filtrelerle, nereden gelindi
+  const [drill, setDrill] = useState<{ pageId: string; from: string; filters: FilterRef[]; label: string } | null>(null);
   // İzleyicinin dilimleyici seçimleri ve sıralamaları yalnızca bu ekranda yaşar (raporu değiştirmez)
   const [states, setStates] = useState<Record<string, VisualState>>({});
   const outer = useRef<HTMLDivElement>(null);
@@ -35,11 +40,22 @@ export function ReportViewer({
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
   if (!page) return <div className="viewer-empty">Bu raporda sayfa yok.</div>;
   // Power BI "Sayfaya sığdır" görünümü
+  const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
   const scale = box.w ? Math.max(0.2, Math.min((box.w - 32) / page.width, (box.h - 32) / page.height)) : 1;
 
   return (
     <div className="viewer">
       <div className="viewer-stage" ref={outer} onClick={() => setCross(null)}>
+        {drill && pageFilters.length > 0 && (
+          <DrillBanner
+            label={drill.label}
+            onBack={() => {
+              setPageId(drill.from);
+              setDrill(null);
+              setCross(null);
+            }}
+          />
+        )}
         <div className="page" style={{ width: page.width * scale, height: page.height * scale }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {page.visuals.map((v) => {
@@ -53,11 +69,21 @@ export function ReportViewer({
               >
                 <div className="visual-head">
                   <span className="visual-title">{title}</span>
+                  <DrillThroughButton
+                    targets={drillTargets(report.pages, page.id, v, cross)}
+                    onGo={(t) => {
+                      setDrill({ pageId: t.page.id, from: page.id, filters: t.filters, label: t.label });
+                      setPageId(t.page.id);
+                      setCross(null);
+                    }}
+                  />
                 </div>
                 <div className="visual-content">
                   <VisualBody
                     v={v}
-                    extra={[...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
+                    extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
+                    detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
+                    onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
                     dataRev={dataRev}
                     cross={cross}
                     onCross={(value) => setCross(toggleCross(v, cross, value))}
@@ -80,9 +106,11 @@ export function ReportViewer({
               onClick={() => {
                 setPageId(p.id);
                 setCross(null);
+                setDrill(null);
               }}
             >
               {p.name}
+              {p.drillthrough?.length ? <span className="dt-mark" title="Detay (drill-through) sayfası">↪</span> : null}
             </button>
           ))}
         </nav>

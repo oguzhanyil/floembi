@@ -130,3 +130,28 @@ def test_refresh_resets_time_maps(sap):
     assert job["status"] == "succeeded"
     n = con.execute("SELECT count(*) FROM duckdb_tables() WHERE schema_name = 'floem' AND table_name = 'tarih_map'").fetchone()[0]
     assert n == 0 or con.execute("SELECT count(*) FROM floem.tarih_map").fetchone()[0] == 0
+
+
+def test_text_visual_and_drillthrough_page(sap):
+    report = {"version": 1, "pages": [
+        {"id": "p1", "name": "Özet", "visuals": [
+            {"id": "t1", "type": "text", "format": {"text": "# Satış\nToplam: [Toplam LineTotal]"},
+             "values": [{"table": "INV1", "column": "LineTotal"}]},
+            {"id": "c1", "type": "card", "values": [{"table": "INV1", "column": "LineTotal"}],
+             "group": [{"table": "OINV", "column": "DocDate"}]},
+        ]},
+        {"id": "p2", "name": "Müşteri detayı", "drillthrough": [{"table": "OCRD", "column": "CardName"}], "visuals": []},
+    ]}
+    assert sap.put("/document/report", headers=H, json=report).status_code == 200
+    ops(sap, {"op": "rename_column", "table": "OCRD", "column": "CardName", "new_name": "Müşteri Adı"})
+    pages = doc(sap)["report"]["pages"]
+    assert pages[1]["drillthrough"] == [{"table": "OCRD", "column": "Müşteri Adı"}]
+    assert pages[0]["visuals"][0]["format"]["text"].startswith("# Satış")
+    # detay sayfasının filtresiyle sorgu (detaya git ile açılınca görsellere eklenen filtre)
+    d = q(sap, group=[], values=[{"table": "INV1", "column": "LineTotal"}],
+          filters=[{"table": "OCRD", "column": "Müşteri Adı", "values": ["Ege Yapı"]}]).json()
+    assert d["rows"][0] == [80]
+    # trend serisi: tarihe göre artan sırada
+    d = q(sap, group=[{"table": "OINV", "column": "DocDate"}], values=[{"table": "INV1", "column": "LineTotal"}],
+          order_by=[{"index": 0, "desc": False}]).json()
+    assert [r[0] for r in d["rows"]] == sorted(r[0] for r in d["rows"])

@@ -11,6 +11,8 @@ export interface WellDef {
   /** Değer listesinde sabit yuva (dağılım: 0 = X, 1 = Y, 2 = boyut) */
   slot?: number;
   optional?: boolean;
+  /** Alan otomatik eklenirken (işaretleme) yalnızca tarih sütunları bu kutuya girer */
+  dateOnly?: boolean;
 }
 
 export interface VisualDef {
@@ -19,7 +21,7 @@ export interface VisualDef {
   wells: WellDef[];
   size: [number, number];
   /** Görselleştirmeler bölmesindeki grup */
-  group: "Veri" | "Grafik" | "Kart" | "Etkileşim";
+  group: "Veri" | "Grafik" | "Kart" | "Etkileşim" | "Ekle";
   /** Kategori grafiği mi (eksen + değer + gösterge) */
   category?: { horizontal?: boolean; stacked?: boolean; line?: boolean; area?: boolean };
 }
@@ -28,6 +30,8 @@ export interface VisualDef {
 const AXIS: WellDef = { key: "group", label: "X ekseni" };
 const LEGEND: WellDef = { key: "legend", label: "Gösterge", max: 1 };
 const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
+// Kart ve KPI: değerin dönemlere göre eğilimi (küçük çizgi + önceki döneme göre değişim)
+const TREND: WellDef = { key: "group", label: "Trend ekseni", max: 1, optional: true, dateOnly: true };
 
 export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   table: {
@@ -114,7 +118,7 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   },
   card: {
     label: "Kart", icon: "▢", group: "Kart", size: [240, 140],
-    wells: [{ key: "values", label: "Alan", max: 1 }],
+    wells: [{ key: "values", label: "Alan", max: 1 }, TREND],
   },
   multicard: {
     label: "Çok satırlı kart", icon: "☰", group: "Kart", size: [300, 240],
@@ -122,15 +126,19 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   },
   kpi: {
     label: "KPI kartı", icon: "◆", group: "Kart", size: [280, 160],
-    wells: [{ key: "values", label: "Değer", max: 1 }, { key: "target", label: "Hedef", max: 1 }],
+    wells: [{ key: "values", label: "Değer", max: 1 }, { key: "target", label: "Hedef", max: 1 }, TREND],
   },
   slicer: {
     label: "Dilimleyici", icon: "☷", group: "Etkileşim", size: [240, 280],
     wells: [{ key: "group", label: "Alan", max: 1 }],
   },
+  text: {
+    label: "Metin kutusu", icon: "T", group: "Ekle", size: [360, 120],
+    wells: [{ key: "values", label: "Dinamik değerler", optional: true }],
+  },
 };
 
-export const VISUAL_GROUPS: VisualDef["group"][] = ["Grafik", "Kart", "Veri", "Etkileşim"];
+export const VISUAL_GROUPS: VisualDef["group"][] = ["Grafik", "Kart", "Veri", "Etkileşim", "Ekle"];
 
 /** Görselin tüm gruplama alanları (eksen + gösterge) */
 export const groupFields = (v: Visual): FieldRef[] => [...v.group, ...(v.legend ?? [])];
