@@ -1,7 +1,7 @@
 import type { ModelDefinition } from "@floem/client";
 import { monaco } from "../monaco";
 
-/** Floem DAX'ta desteklenen fonksiyonlar (derleyiciyle uyumlu) ve kısa açıklamaları. */
+/** FDX (Floem Data Expressions) için desteklenen fonksiyonlar (derleyiciyle uyumlu) ve kısa açıklamaları. */
 export const DAX_FUNCTIONS: [string, string, string][] = [
   ["SUM", "SUM(<sütun>)", "Sütundaki sayıların toplamı"],
   ["AVERAGE", "AVERAGE(<sütun>)", "Ortalama"],

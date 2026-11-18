@@ -169,7 +169,7 @@ function Shell() {
             className="ribbon-btn"
             onClick={() => setMeasureEdit({ mode: "new", table: defaultMeasureTable() })}
             disabled={tableCount === 0}
-            title="Yeni DAX ölçüsü (formül çubuğu)"
+            title="Yeni FDX ölçüsü (formül çubuğu)"
           >
             <span className="ribbon-ico">ƒx</span>Yeni ölçü
           </button>
