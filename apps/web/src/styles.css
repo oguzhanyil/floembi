@@ -142,3 +142,6 @@ td.actions .link { margin-right: 8px; }
 .grant-list { margin: 0; padding-left: 18px; font-size: 13px; }
 .admin td label.inline { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
 .admin td input[type="checkbox"] { width: auto; margin: 0; }
+.status-banner.failing { background: #fde7e9; border-color: #f1bbbc; }
+.status-banner .small { display: block; }
+.warn-text { color: #8a5300; }

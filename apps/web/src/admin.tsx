@@ -109,6 +109,7 @@ export function MailSettingsPage() {
     setTest(null);
     try {
       setTest(await guard(client.testMailConfig(payload(), testTo.trim() || null)));
+      if (!dirty) setView(await guard(client.mailConfig()));
     } catch (err) {
       setError(toErr(err));
     } finally {
@@ -120,17 +121,31 @@ export function MailSettingsPage() {
     return <div className="page-wrap">{error ? <ErrorLine error={error} /> : <p className="muted">Yükleniyor…</p>}</div>;
   }
   const c = view.config;
+  const last = view.last_attempt;
+  const userHint = form.enabled && form.username && !form.username.includes("@")
+    && /(gmail|office365|outlook|yandex)\./i.test(form.host)
+    ? "Bu sağlayıcıda kullanıcı adı tam e-posta adresi olmalı (ör. ad@gmail.com)" : null;
   return (
     <div className="page-wrap admin">
       <h1>E-posta sunucusu</h1>
       <p className="muted">
         floembi.app paylaşım, davet ve yetki e-postalarını bu sunucu üzerinden otomatik gönderir.
       </p>
-      <div className={`status-banner ${view.source}`}>
-        {view.source === "screen" && <>✓ E-postalar <strong>{c.host}:{c.port}</strong> üzerinden gönderiliyor.</>}
+      <div className={`status-banner ${view.source}${last?.status === "failed" ? " failing" : ""}`}>
+        {view.source === "screen" && <>SMTP ayarı etkin: <strong>{c.host}:{c.port}</strong>.</>}
         {view.source === "env" && view.env && (
-          <>✓ E-postalar ortam değişkenlerindeki <strong>{view.env.host}:{view.env.port}</strong> üzerinden gönderiliyor.
+          <>Ortam değişkenlerindeki SMTP ayarı etkin: <strong>{view.env.host}:{view.env.port}</strong>.
             Bu ekranda ayarı etkinleştirirseniz o geçerli olur.</>
+        )}
+        {view.source !== "outbox" && !last && (
+          <div className="small">Bu ayarla henüz e-posta gönderilmedi; aşağıdan test e-postası gönderin.</div>
+        )}
+        {view.source !== "outbox" && last && (
+          <div className="small">
+            {last.status === "sent" ? "✓ Son gönderim başarılı" : "⚠ Son gönderim başarısız"}
+            {" "}({when(last.at)}, {last.kind === "test" ? "test e-postası" : "e-posta"} → {last.to})
+            {last.error && <>: {last.error}</>}
+          </div>
         )}
         {view.source === "outbox" && (
           <>Geliştirme modu: e-posta sunucusu ayarlı değil. E-postalar gönderilmez, sunucuda saklanır ve
@@ -186,6 +201,7 @@ export function MailSettingsPage() {
             Kullanıcı adı
             <input value={form.username} autoComplete="off" placeholder="Boşsa kimlik doğrulama yapılmaz"
               onChange={(e) => set("username", e.target.value)} />
+            {userHint && <span className="warn-text small">⚠ {userHint}</span>}
           </label>
           <label>
             Şifre

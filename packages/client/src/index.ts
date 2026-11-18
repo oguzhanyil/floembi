@@ -766,6 +766,8 @@ export interface MailConfigView {
   config: MailConfig;
   env: { host: string; port: number; security: string; username: string; sender: string } | null;
   public_url: string;
+  /** Ayar değiştikten sonraki son SMTP gönderim denemesi (test ya da gerçek) */
+  last_attempt: { kind: string; status: "sent" | "failed"; to: string; at: string; error: string | null } | null;
 }
 
 /** Kaydederken: password null → kayıtlı şifre korunur, "" → silinir */

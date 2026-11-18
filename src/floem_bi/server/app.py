@@ -53,7 +53,7 @@ from ..report import QueryError, Report, VisualQuery, run_visual_query
 from . import db
 from .mail import (
     SECURITY, Mail, MailError, MailSettings, SecretBox, SmtpSettings, access_mail, invite_mail, load_mail_settings,
-    send, sender_display, settings_from_row, share_mail, test_mail,
+    login_hint, send, sender_display, settings_from_row, share_mail, test_mail,
 )
 from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
 
@@ -703,8 +703,18 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         if row and row.updated_by:
             with engine.connect() as c:
                 cfg["updated_by"] = user_name(c, row.updated_by)
+        # Ayar son değiştirildikten sonraki son gönderim denemesi: bant ayarın gerçekten çalışıp çalışmadığını gösterir
+        last = None
+        with engine.connect() as c:
+            q = select(db.mail_log).order_by(db.mail_log.c.id.desc()).limit(1)
+            if row is not None and row.updated_at:
+                q = q.where(db.mail_log.c.created_at >= row.updated_at)
+            r = c.execute(q).first()
+            if r is not None and r.status in ("sent", "failed"):
+                last = {"kind": r.kind, "status": r.status, "to": r.to_email, "at": iso(r.created_at),
+                        "error": (r.error or "").split(": ", 1)[0] if r.error else None}
         return {
-            "source": source, "config": cfg, "public_url": settings.public_url,
+            "source": source, "config": cfg, "public_url": settings.public_url, "last_attempt": last,
             "env": ({"host": env.smtp.host, "port": env.smtp.port, "security": env.smtp.security,
                      "username": env.smtp.user or "", "sender": env.sender} if env.smtp else None),
         }
@@ -717,6 +727,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 raise ApiError(400, "invalid", "SMTP sunucusu adresini yazın")
             if not valid_email(body.from_address.strip()):
                 raise ApiError(400, "invalid", "Gönderen adresi geçerli bir e-posta adresi olmalı")
+            hint = login_hint(body.host, (body.username or "").strip())
+            if hint:
+                raise ApiError(400, "invalid", hint)
 
     def sealed_password(body: MailConfigIn, row) -> str | None:
         if body.password is None:                      # alan boş bırakıldı: kayıtlı şifre korunur

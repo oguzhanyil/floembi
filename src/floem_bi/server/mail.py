@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import os
 import smtplib
+import socket
 import ssl
 import uuid
 from dataclasses import dataclass
@@ -127,6 +128,8 @@ def send(settings: MailSettings, mail: Mail, outbox: Path) -> tuple[str, str | N
         path.write_bytes(bytes(msg))
         return "outbox", str(path)
     s = settings.smtp
+    where = f"{s.host}:{s.port}"
+    step = "connect"                          # connect | tls | login | send: hata mesajı adıma göre
     try:
         if s.security == "ssl":
             client = smtplib.SMTP_SSL(s.host, s.port, timeout=s.timeout, context=ssl.create_default_context())
@@ -134,17 +137,56 @@ def send(settings: MailSettings, mail: Mail, outbox: Path) -> tuple[str, str | N
             client = smtplib.SMTP(s.host, s.port, timeout=s.timeout)
         with client:
             if s.security == "starttls":
+                step = "tls"
                 client.starttls(context=ssl.create_default_context())
             if s.user:
+                step = "login"
                 client.login(s.user, s.password or "")
+            step = "send"
             client.send_message(msg)
     except smtplib.SMTPAuthenticationError as e:
-        raise MailError("E-posta sunucusu kullanıcı adı/şifreyi kabul etmedi", str(e)) from e
+        raise MailError(LOGIN_REFUSED, str(e)) from e
+    except smtplib.SMTPNotSupportedError as e:
+        raise MailError("E-posta sunucusu bu güvenlik türünde girişe izin vermiyor; Güvenlik olarak STARTTLS "
+                        "ya da SSL/TLS seçin", str(e)) from e
     except smtplib.SMTPRecipientsRefused as e:
         raise MailError(f"E-posta sunucusu alıcıyı reddetti: {mail.to}", str(e)) from e
+    except smtplib.SMTPSenderRefused as e:
+        raise MailError("E-posta sunucusu gönderen adresini reddetti; gönderen adresi çoğu sunucuda kullanıcı "
+                        "adıyla aynı olmalı", str(e)) from e
+    except smtplib.SMTPServerDisconnected as e:
+        if step == "login":                   # Gmail yanlış kimlik bilgisinde bağlantıyı açıklamasız keser
+            raise MailError(LOGIN_REFUSED, str(e)) from e
+        if step == "connect" and s.security == "starttls" and s.port == 465:
+            raise MailError(f"Port 465 SSL/TLS ister; Güvenlik olarak SSL/TLS seçin ya da port 587 kullanın ({where})",
+                            str(e)) from e
+        raise MailError(f"E-posta sunucusu bağlantıyı kapattı ({where})", str(e)) from e
+    except ssl.SSLError as e:
+        raise MailError(f"Şifreli bağlantı kurulamadı ({where}); port ile güvenlik türü uyuşmuyor olabilir "
+                        "(587 → STARTTLS, 465 → SSL/TLS)", str(e)) from e
+    except ConnectionRefusedError as e:
+        raise MailError(f"Bu adreste çalışan bir e-posta sunucusu yok ({where}); sunucu açık mı, port doğru mu?",
+                        str(e)) from e
+    except (TimeoutError, socket.timeout) as e:
+        raise MailError(f"E-posta sunucusu yanıt vermedi ({where}); güvenlik duvarı bu portu engelliyor olabilir",
+                        str(e)) from e
+    except socket.gaierror as e:
+        raise MailError(f"Sunucu adı bulunamadı: {s.host}", str(e)) from e
     except (OSError, smtplib.SMTPException) as e:
-        raise MailError(f"E-posta sunucusuna ulaşılamadı ({s.host}:{s.port})", str(e)) from e
+        raise MailError(f"E-posta sunucusuna ulaşılamadı ({where})", str(e)) from e
     return "sent", None
+
+
+LOGIN_REFUSED = ("E-posta sunucusu girişi reddetti: kullanıcı adı tam e-posta adresi mi, şifre doğru mu? "
+                 "Gmail ve Microsoft 365'te hesap şifresi değil uygulama şifresi gerekir")
+
+
+def login_hint(host: str, username: str | None) -> str | None:
+    """Bilinen sağlayıcılarda sık yapılan hata: kullanıcı adı tam adres değil."""
+    known = ("smtp.gmail.com", "smtp.office365.com", "smtp-mail.outlook.com", "smtp.yandex.com")
+    if host.strip().lower() in known and username and "@" not in username:
+        return f"{host.strip()} için kullanıcı adı tam e-posta adresi olmalı (ör. ad@sirket.com)"
+    return None
 
 
 # ------------------------------------------------------------------ şablonlar

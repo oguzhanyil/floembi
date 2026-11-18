@@ -256,7 +256,7 @@ def test_share_smtp_failure_is_readable(tmp_path, floem_file, monkeypatch):
     assert item["status"] == "shared"                 # erişim verildi, yalnızca e-posta gitmedi
     assert item["mail"] == "failed" and "127.0.0.1:1" in item["mail_error"]
     log = server.get("/api/mail/inbox", headers=hy).json()["items"][0]
-    assert log["status"] == "failed" and "ulaşılamadı" in log["error"]
+    assert log["status"] == "failed" and "127.0.0.1:1" in log["error"]   # reddedildi ya da zaman aşımı (Windows)
 
 
 def test_smtp_send_uses_starttls_and_login(monkeypatch, tmp_path):
@@ -436,3 +436,58 @@ def test_old_database_gets_admin_column(tmp_path):
         assert [tuple(r) for r in c.execute(db.users.select().with_only_columns(db.users.c.id, db.users.c.is_admin)
                                              .order_by(db.users.c.id))] == [(1, True), (2, False)]
     eng.dispose()
+
+
+def test_smtp_errors_are_explained(monkeypatch, tmp_path):
+    """Gmail yanlış girişte bağlantıyı açıklamasız keser; mesaj adıma göre anlaşılır olmalı."""
+    import smtplib
+    from floem_bi.server import mail as m
+
+    class Drop(FakeSMTP):
+        def login(self, u, p):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+
+    monkeypatch.setattr(m.smtplib, "SMTP", Drop)
+    s = m.MailSettings(smtp=m.SmtpSettings(host="smtp.gmail.com", port=587, user="kisi", password="x"))
+    mail = m.test_mail(to="a@b.co", by="A", url="http://x", server="s")
+    try:
+        m.send(s, mail, tmp_path)
+        raise AssertionError("hata bekleniyordu")
+    except m.MailError as e:
+        assert "girişi reddetti" in e.message and "uygulama şifresi" in e.message
+
+    def refused(*a, **k):
+        raise ConnectionRefusedError(10061, "Hedef makine etkin olarak reddetti")
+
+    monkeypatch.setattr(m.smtplib, "SMTP", refused)
+    s = m.MailSettings(smtp=m.SmtpSettings(host="127.0.0.1", port=1, security="none", timeout=2))
+    try:
+        m.send(s, mail, tmp_path)
+        raise AssertionError("hata bekleniyordu")
+    except m.MailError as e:
+        assert "çalışan bir e-posta sunucusu yok (127.0.0.1:1)" in e.message
+
+
+def test_mail_config_hints_and_last_attempt(server, monkeypatch):
+    from floem_bi.server import mail as m
+    hy = login(server, YON)
+    # Gmail'de kullanıcı adı tam adres değilse kaydetmeden ve test etmeden önce uyarır
+    bad = {**SMTP_CFG, "host": "smtp.gmail.com", "username": "kisi"}
+    r = server.put("/api/admin/mail", headers=hy, json=bad)
+    assert r.status_code == 400 and "tam e-posta adresi" in r.json()["error"]["message"]
+    assert server.post("/api/admin/mail/test", headers=hy, json=bad).status_code == 400
+    # kaydedilince henüz deneme yok; başarısız ve başarılı deneme banda yansır
+    assert server.put("/api/admin/mail", headers=hy, json=SMTP_CFG).json()["last_attempt"] is None
+
+    class Refuse(FakeSMTP):
+        def login(self, u, p):
+            raise m.smtplib.SMTPAuthenticationError(535, b"bad credentials")
+
+    monkeypatch.setattr(m.smtplib, "SMTP", Refuse)
+    server.post("/api/admin/mail/test", headers=hy, json={**SMTP_CFG, "password": None})
+    last = server.get("/api/admin/mail", headers=hy).json()["last_attempt"]
+    assert last["status"] == "failed" and last["kind"] == "test" and "girişi reddetti" in last["error"]
+    monkeypatch.setattr(m.smtplib, "SMTP", FakeSMTP)
+    server.post("/api/admin/mail/test", headers=hy, json={**SMTP_CFG, "password": None})
+    last = server.get("/api/admin/mail", headers=hy).json()["last_attempt"]
+    assert last["status"] == "sent" and last["error"] is None
