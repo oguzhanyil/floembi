@@ -145,3 +145,15 @@ td.actions .link { margin-right: 8px; }
 .status-banner.failing { background: #fde7e9; border-color: #f1bbbc; }
 .status-banner .small { display: block; }
 .warn-text { color: #8a5300; }
+.report-bar .role.rls { background: #fff4ce; color: #6b4e00; }
+.security .sec-grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; margin-top: 16px; }
+.security .sec-roles { list-style: none; margin: 0; padding: 0; border-right: 1px solid var(--line, #e1dfdd); }
+.security .sec-roles button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; }
+.security .sec-roles button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.security .sec-detail h2 { margin-top: 0; }
+.security .sec-filters { background: #faf9f8; border: 1px solid #edebe9; border-radius: 4px; padding: 8px 10px; margin-bottom: 12px; display: grid; gap: 4px; }
+.security .sec-filters code { font-family: Consolas, monospace; }
+.security .sec-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.security .sec-add input { flex: 1; max-width: 320px; }
+.security td.right { text-align: right; }
+@media (max-width: 700px) { .security .sec-grid { grid-template-columns: 1fr; } .security .sec-roles { border-right: 0; } }

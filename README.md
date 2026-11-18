@@ -121,6 +121,21 @@ etkileşimlidir (çapraz filtre, sayfalar). Yetkisiz işlemler 403 alır ve ekra
 Erişim aynı pencerenin "Erişimi olanlar" listesinden kaldırılır. floembi.app hesabı olmayan
 adrese davet e-postası gider; kişi hesabını açınca rapor paylaşılmış olur.
 
+**Satır düzeyi güvenlik (RLS):** Power BI'daki akışla aynı.
+
+1. Desktop'ta **Güvenlik → Rolleri yönet**: rol oluşturulur, tablo başına FDX filtresi yazılır
+   (`[CardName] = "Ege Yapı"`, kişiye göre `[E-posta] = USERPRINCIPALNAME()`). Filtre kaydederken
+   derlenir; hatalıysa kaydedilmez. Filtre ilişkiler boyunca diğer tablolara yayılır.
+2. **Güvenlik → Farklı görüntüle**: rapor seçilen rollerin (ve isteğe bağlı bir e-postanın) gözünden
+   sorgulanır; üstte sarı bant çıkar, "Görüntülemeyi durdur" ile kapanır.
+3. Yayımladıktan sonra web'de çalışma alanında anlam modeline tıklanır → **Güvenlik** ekranında
+   rollere kişi atanır (çalışma alanı Yöneticisi ve Üyesi). Atama rol adına bağlıdır; yeniden
+   yayımlamada rol modelde kalırsa korunur, kalkarsa "modelde artık olmayan roller" altında görünür.
+
+Filtreler yalnızca **İzleyicilere** ve raporu paylaşımla görenlere uygulanır; Yönetici, Üye ve
+Katkıda bulunan tüm veriyi görür. Modelde rol varsa ve izleyici hiçbir role atanmamışsa rapor
+açılmaz, nedeni ekranda yazar. `USERPRINCIPALNAME()` web'de oturum açan kişinin e-postasıdır.
+
 **Yönetim (sistem yöneticisi):** web'de sol menüdeki *Yönetim* bölümü yalnızca sistem
 yöneticilerine görünür (sahte kullanıcılardan `yonetici@floembi.test`). Mevcut bir metadata
 veritabanı açılınca çalışma alanı Yöneticileri otomatik olarak sistem yöneticisi yapılır.

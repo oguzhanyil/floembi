@@ -1,4 +1,4 @@
-import type { ConnectResult, Connection, ImportItem } from "@floem/client";
+import type { ConnectResult, Connection, ImportItem, ViewAs } from "@floem/client";
 import { useCallback, useEffect, useState } from "react";
 import { ClientProvider, toUiError, useClient } from "./api";
 import { DateTableDialog } from "./components/DateTableDialog";
@@ -13,6 +13,7 @@ import { DocumentProvider, useDocument } from "./document";
 import { DataView } from "./data/DataView";
 import { ModelView } from "./model/ModelView";
 import { ReportView } from "./report/ReportView";
+import { RolesDialog, ViewAsDialog } from "./model/RolesDialog";
 import { FloemQueryEditor } from "./transform/FloemQueryEditor";
 
 type View = "rapor" | "veri" | "model" | "sql";
@@ -45,6 +46,12 @@ function Shell() {
   const [measureEdit, setMeasureEdit] = useState<MeasureEdit | null>(null);
   const [dateDialog, setDateDialog] = useState(false);
   const [transform, setTransform] = useState<{ table?: string } | null>(null);
+  const [rolesOpen, setRolesOpen] = useState(false);
+  const [viewAsOpen, setViewAsOpen] = useState(false);
+  const [viewAs, setViewAs] = useState<ViewAs | null>(null);
+  // Rol silinir/yeniden adlandırılırsa ya da başka belge açılırsa "Farklı görüntüle" kapanır
+  const roleNames = (doc?.model.roller ?? []).map((r) => r.ad);
+  const activeViewAs = viewAs && viewAs.roles.every((r) => roleNames.includes(r)) ? viewAs : null;
   // Yeni ölçünün ana tablosu: olgu tablosu tahmini (en çok satırlı tablo)
   const defaultMeasureTable = () => {
     const tables = doc?.model.tablolar ?? [];
@@ -180,6 +187,17 @@ function Shell() {
           <span className="ribbon-label">Hesaplamalar</span>
         </div>
         <div className="ribbon-group">
+          <button className="ribbon-btn" onClick={() => setRolesOpen(true)} disabled={tableCount === 0}
+            title="Satır düzeyi güvenlik rolleri ve FDX filtreleri">
+            <span className="ribbon-ico">🛡</span>Rolleri yönet
+          </button>
+          <button className="ribbon-btn" onClick={() => setViewAsOpen(true)} disabled={tableCount === 0}
+            title="Raporu seçilen rollerin gözünden görüntüle">
+            <span className="ribbon-ico">👁</span>Farklı görüntüle
+          </button>
+          <span className="ribbon-label">Güvenlik</span>
+        </div>
+        <div className="ribbon-group">
           {connections.slice(0, 4).map((c) => (
             <button key={c.id} className="ribbon-btn small" onClick={() => reopen(c)} title="Gezgin'de aç">
               {c.server}
@@ -220,8 +238,22 @@ function Shell() {
               <ErrorBox error={error} onClose={() => setError(null)} />
             </div>
           )}
+          {view === "rapor" && tableCount > 0 && activeViewAs && (
+            <div className="viewas-bar" role="status">
+              <span>
+                👁 Şu anda görüntülenen: <strong>{activeViewAs.roles.join(", ")}</strong>
+                {activeViewAs.upn && <> · kullanıcı <strong>{activeViewAs.upn}</strong></>}
+              </span>
+              <button onClick={() => setViewAsOpen(true)}>Değiştir</button>
+              <button onClick={() => setViewAs(null)}>Görüntülemeyi durdur</button>
+            </div>
+          )}
           {view === "rapor" && tableCount > 0 && (
-            <ReportView key={doc?.id} onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })} />
+            <ReportView
+              key={doc?.id}
+              viewAs={activeViewAs}
+              onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })}
+            />
           )}
           {view === "rapor" && tableCount === 0 && (
             <div className="empty-state">
@@ -288,6 +320,18 @@ function Shell() {
       {navigator && <Navigator connection={navigator} onClose={() => setNavigator(null)} onLoad={loadFromNavigator} />}
       {job && <JobDialog onShowModel={() => setView("model")} />}
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
+      {rolesOpen && <RolesDialog onClose={() => setRolesOpen(false)} />}
+      {viewAsOpen && (
+        <ViewAsDialog
+          current={activeViewAs}
+          onClose={() => setViewAsOpen(false)}
+          onApply={(v) => {
+            setViewAs(v);
+            setViewAsOpen(false);
+            setView("rapor");
+          }}
+        />
+      )}
       {transform && <FloemQueryEditor initialTable={transform.table} onClose={() => setTransform(null)} />}
       {dateDialog && (
         <DateTableDialog

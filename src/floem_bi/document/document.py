@@ -239,6 +239,7 @@ class Document:
                 op.apply(ctx)
             self.validate(ctx.tanim)
             self._check_measures(ctx.tanim, ctx.measure_checks)
+            self._check_roles(ctx.tanim, ctx.role_checks)
             if ctx.checks:
                 cur = self.con.cursor()
                 cur.execute("BEGIN TRANSACTION")
@@ -270,6 +271,25 @@ class Document:
                 MeasureCompiler(model).measure(name, _ir.Context())
             except CompileError as e:
                 raise ModelError(f"[{name}] {e.message}") from e
+
+    @staticmethod
+    def _check_roles(tanim: ModelTanimi, names: list[str]) -> None:
+        """RLS filtreleri tablonun satır bağlamında derlenebilmeli (ör. [Sehir] = "İstanbul")."""
+        if not names:
+            return
+        from ..compiler import CompileError, MeasureCompiler, UserInfo
+
+        model = SemanticModel(tanim)
+        compiler = MeasureCompiler(model, UserInfo(upn="kontrol@floem"))
+        wanted = {n.lower() for n in names}
+        for rol in tanim.roller:
+            if rol.ad.lower() not in wanted:
+                continue
+            for iz in rol.tablo_izinleri:
+                try:
+                    compiler.row_predicate(iz.filtre, model.table(iz.tablo).ad)
+                except CompileError as e:
+                    raise ModelError(f"'{rol.ad}' rolü, {iz.tablo} filtresi: {e.message}") from e
 
     def validate_dax(self, expression: str, table: str | None = None) -> dict:
         """Formül çubuğu için: hataları konumlarıyla döndürür (kaydetmeden)."""
@@ -326,10 +346,19 @@ class Document:
             self._engine = (self.revision, model, DuckDBEngine(None, model, con=self.con))
         return self._engine[1], self._engine[2]
 
-    def query(self, q: VisualQuery) -> dict:
+    def query(self, q: VisualQuery, view_as: list[str] | None = None, upn: str | None = None) -> dict:
+        """view_as: Power BI "Farklı görüntüle"; verilen rollerin RLS filtreleriyle sorgular."""
         with self.lock:
             model, engine = self._semantic_engine()
-            return run_visual_query(model, engine, q)
+            if not view_as:
+                return run_visual_query(model, engine, q)
+            from ..compiler import UserInfo
+
+            known = {r.ad.lower() for r in self.tanim.roller}
+            missing = [r for r in view_as if r.lower() not in known]
+            if missing:
+                raise ModelError(f"Rol bulunamadı: {', '.join(missing)}")
+            return run_visual_query(model, engine, q, user=UserInfo(upn=upn or ""), roles=view_as)
 
     # ---------------------------------------------------------------- veri
     def preview(self, table: str, limit: int = 100) -> dict:

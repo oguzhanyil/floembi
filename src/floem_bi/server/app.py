@@ -44,6 +44,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.engine import Engine
 
+from ..compiler import UserInfo
 from ..document import floemfile
 from ..document.floemfile import FloemFileError
 from ..engine.duckdb_engine import DuckDBEngine
@@ -164,6 +165,11 @@ class GrantIn(BaseModel):
 
 class RoleIn(BaseModel):
     role: str
+
+
+class RoleMemberIn(BaseModel):
+    role: str = Field(min_length=1)
+    email: str = Field(min_length=3)
 
 
 class AdminFlagIn(BaseModel):
@@ -351,6 +357,30 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             and_(db.shares.c.report_id == report_row.id, db.shares.c.user_id == user_id))).first()
         return "viewer" if shared else None
 
+    def rls_roles(c, user: dict, ds, access_role: str, model_roles: list[str]) -> list[str] | None:
+        """Kullanıcıya uygulanacak RLS rolleri; None = kısıtlama yok.
+
+        Power BI'daki gibi: RLS yalnızca İzleyicilere (ve raporu paylaşımla görenlere) uygulanır;
+        Yönetici, Üye ve Katkıda bulunan modeli düzenleyebildiği için tüm veriyi görür. Modelde rol
+        varsa ve izleyiciye hiçbir rol atanmamışsa veri gösterilmez."""
+        if access_role != "viewer" or not model_roles:
+            return None
+        by_lower = {r.lower(): r for r in model_roles}
+        rows = c.execute(select(db.role_members.c.role).where(and_(
+            db.role_members.c.dataset_id == ds.id, db.role_members.c.user_id == user["id"]))).all()
+        mine = sorted({by_lower[r.role.lower()] for r in rows if r.role.lower() in by_lower})
+        if not mine:
+            raise ApiError(
+                403, "rls_no_role",
+                "Bu raporun verisi satır düzeyi güvenlikle korunuyor ve size henüz bir rol atanmamış",
+                f"Çalışma alanı yöneticisinden '{ds.name}' anlam modelinin Güvenlik ekranında sizi bir role eklemesini isteyin.",
+            )
+        return mine
+
+    def model_role_names(ds) -> list[str]:
+        tanim = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+        return [r.ad for r in tanim.roller]
+
     def user_name(c, uid: int) -> str:
         r = c.execute(select(db.users.c.name).where(db.users.c.id == uid)).first()
         return r[0] if r else ""
@@ -525,9 +555,11 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             ds = c.execute(select(db.datasets).where(db.datasets.c.id == rp.dataset_id)).first()
             ws = c.execute(select(db.workspaces).where(db.workspaces.c.id == rp.workspace_id)).first()
             by = user_name(c, rp.published_by)
+            rls = rls_roles(c, user, ds, role, model_role_names(ds))
         return {
             "id": rp.id, "name": rp.name, "version": rp.version, "published_at": iso(rp.published_at),
             "published_by": by, "role": role, "role_label": ROLE_LABEL[role], "can_share": role in ("admin", "member"),
+            "rls_roles": rls,
             "workspace": {"id": ws.id, "name": ws.name},
             "dataset": {"id": ds.id, "name": ds.name, "version": ds.version},
             "definition": json.loads(rp.definition),
@@ -536,12 +568,16 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     @app.post("/api/reports/{rid}/query")
     def report_query(rid: int, q: VisualQuery, user: dict = Depends(current_user)):
         with engine.connect() as c:
-            rp, _ = load_report(c, rid, user)
+            rp, role = load_report(c, rid, user)
             ds = c.execute(select(db.datasets).where(db.datasets.c.id == rp.dataset_id)).first()
-        model, eng, lock = engines.get(ds.id, ds.version, ds.model_yaml, ds.snapshot)
+            model, eng, lock = engines.get(ds.id, ds.version, ds.model_yaml, ds.snapshot)
+            roles = rls_roles(c, user, ds, role, [r.ad for r in model.tanim.roller])
         try:
             with lock:
-                return run_visual_query(model, eng, q)
+                if roles is None:
+                    return run_visual_query(model, eng, q)
+                # RLS: rol filtreleri her sorguya eklenir; USERPRINCIPALNAME() oturumdaki e-posta
+                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles)
         except QueryError as e:
             raise ApiError(400, "query_error", "Görsel sorgusu çalıştırılamadı", str(e)) from e
 
@@ -987,6 +1023,73 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             "relationships": [r.model_dump() for r in tanim.iliskiler],
             "sources": [{"sunucu": k.sunucu, "veritabani": k.veritabani} for k in tanim.veri_kaynaklari],
         }
+
+    # -------------------------------------------------------------- satır düzeyi güvenlik (RLS)
+    def security_dataset(c, dsid: int, user: dict):
+        ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+        if ds is None:
+            raise NOT_FOUND("Anlam modeli")
+        if role_in(c, user["id"], ds.workspace_id) not in SHARE_ROLES:
+            raise FORBIDDEN("Güvenlik ayarlarını yalnızca çalışma alanı Yöneticisi ve Üyeleri yönetebilir")
+        return ds
+
+    def security_view(c, ds) -> dict:
+        tanim = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+        rows = c.execute(
+            select(db.role_members.c.id, db.role_members.c.role, db.users.c.id.label("uid"), db.users.c.email,
+                   db.users.c.name)
+            .join(db.users, db.users.c.id == db.role_members.c.user_id)
+            .where(db.role_members.c.dataset_id == ds.id).order_by(db.users.c.name)).all()
+        member = lambda r: {"id": r.id, "user_id": r.uid, "email": r.email, "name": r.name}  # noqa: E731
+        known = {r.ad.lower() for r in tanim.roller}
+        ws = c.execute(select(db.workspaces.c.id, db.workspaces.c.name).where(db.workspaces.c.id == ds.workspace_id)).first()
+        return {
+            "dataset": {"id": ds.id, "name": ds.name, "version": ds.version},
+            "workspace": {"id": ws.id, "name": ws.name},
+            "roles": [{
+                "name": rol.ad,
+                "filters": [{"table": iz.tablo, "filtre": iz.filtre} for iz in rol.tablo_izinleri],
+                "members": [member(r) for r in rows if r.role.lower() == rol.ad.lower()],
+            } for rol in tanim.roller],
+            # Yeniden yayımlamada modelden kalkan rollerin atamaları: etkisiz, temizlenebilir
+            "orphans": [{**member(r), "role": r.role} for r in rows if r.role.lower() not in known],
+        }
+
+    @app.get("/api/datasets/{dsid}/security")
+    def get_security(dsid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            return security_view(c, security_dataset(c, dsid, user))
+
+    @app.post("/api/datasets/{dsid}/security/members")
+    def add_role_member(dsid: int, body: RoleMemberIn, user: dict = Depends(current_user)):
+        email = body.email.strip().lower()
+        with engine.begin() as c:
+            ds = security_dataset(c, dsid, user)
+            roles = {r.lower(): r for r in model_role_names(ds)}
+            role = roles.get(body.role.strip().lower())
+            if role is None:
+                raise ApiError(400, "invalid", f"Modelde '{body.role}' adlı rol yok")
+            target = c.execute(select(db.users.c.id).where(db.users.c.email == email)).first()
+            if target is None:
+                raise ApiError(
+                    400, "unknown_user", f"{email} adresiyle kayıtlı kullanıcı yok",
+                    "Önce raporu bu kişiyle paylaşın ya da sistem yöneticisi Yönetim → Kullanıcılar ekranından davet etsin; "
+                    "hesabını oluşturunca role ekleyebilirsiniz.",
+                )
+            exists = c.execute(select(db.role_members.c.id).where(and_(
+                db.role_members.c.dataset_id == ds.id, db.role_members.c.role == role,
+                db.role_members.c.user_id == target.id))).first()
+            if exists is None:
+                c.execute(db.role_members.insert().values(dataset_id=ds.id, role=role, user_id=target.id, added_by=user["id"]))
+            return security_view(c, ds)
+
+    @app.delete("/api/datasets/{dsid}/security/members/{mid}")
+    def remove_role_member(dsid: int, mid: int, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            ds = security_dataset(c, dsid, user)
+            c.execute(db.role_members.delete().where(and_(
+                db.role_members.c.id == mid, db.role_members.c.dataset_id == ds.id)))
+            return security_view(c, ds)
 
     @app.get("/api/health")
     def health():

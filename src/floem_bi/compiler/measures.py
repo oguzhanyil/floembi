@@ -571,6 +571,10 @@ class MeasureCompiler:
                 return value
             raise self.err(f"'{node.name}' burada kullanılamaz", node)
         if isinstance(node, ast.BracketRef):
+            # DAX: satır bağlamında [Sütun] o tablonun sütunudur (RLS filtresi, hesaplanmış sütun)
+            own = next((c for c in self.model.table(table).sutunlar if c.ad.lower() == node.name.lower()), None)
+            if own is not None:
+                return ir.Col(self.model.column(table, own.ad)[0])
             raise self.err(
                 f"[{node.name}] burada kullanılamaz: ölçüler hesaplanmış sütunlarda ve filtre koşullarında "
                 "henüz desteklenmiyor; SUMX/AVERAGEX içinde kullanılabilir", node

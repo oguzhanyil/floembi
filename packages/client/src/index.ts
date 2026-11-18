@@ -107,9 +107,14 @@ export interface HttpConfig {
 export class HttpClient {
   constructor(private readonly config: HttpConfig) {}
 
-  async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string>): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string | string[]>): Promise<T> {
     const url = new URL(path, this.config.baseUrl);
-    if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, x));
+        else url.searchParams.set(k, v);
+      }
+    }
     let res: Response;
     try {
       res = await fetch(url, {
@@ -296,12 +301,24 @@ export interface DataSource {
   kullanici?: string;
 }
 
+/** Satır düzeyi güvenlik (RLS) rolü: tablo başına FDX filtresi (Power BI "Rolleri yönet") */
+export interface ModelRole {
+  ad: string;
+  tablo_izinleri?: { tablo: string; filtre: string }[];
+}
+
+/** Desktop "Farklı görüntüle": raporu bu rollerin (ve isteğe bağlı kullanıcı adının) gözünden sorgula */
+export interface ViewAs {
+  roles: string[];
+  upn?: string;
+}
+
 export interface ModelDefinition {
   model: { ad: string; surum: number; kultur: string };
   veri_kaynaklari: DataSource[];
   tablolar: ModelTable[];
   iliskiler: Relationship[];
-  roller: unknown[];
+  roller?: ModelRole[];
 }
 
 export interface DiagramPosition {
@@ -476,7 +493,9 @@ export type ModelOp =
       aciklama?: string | null;
     }
   | { op: "delete_measure"; name: string }
-  | { op: "create_date_table"; name?: string; start?: string | null; end?: string | null; relate?: string[] };
+  | { op: "create_date_table"; name?: string; start?: string | null; end?: string | null; relate?: string[] }
+  | { op: "set_role"; name: string; new_name?: string; filters: { table: string; filtre: string }[] }
+  | { op: "delete_role"; name: string };
 
 export interface DaxDiagnostic {
   message: string;
@@ -536,7 +555,7 @@ export interface DocumentClient {
   setDiagram(tables: Record<string, DiagramPosition>, auto?: boolean): Promise<{ ok: boolean; dirty: boolean }>;
   tablePreview(table: string, limit?: number): Promise<QueryResult>;
   setReport(report: ReportDefinition): Promise<{ ok: boolean; dirty: boolean }>;
-  query(q: VisualQuery): Promise<VisualResult>;
+  query(q: VisualQuery, viewAs?: ViewAs | null): Promise<VisualResult>;
   relationshipProfile(kimden: string, kime: string): Promise<RelationshipProfile>;
   validateDax(expression: string): Promise<{ ok: boolean; errors: DaxDiagnostic[] }>;
   transformPreview(table: string, steps: TransformStep[], upto?: number | null, limit?: number): Promise<TransformPreview>;
@@ -601,8 +620,11 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   setReport(report: ReportDefinition) {
     return this.doc.request<{ ok: boolean; dirty: boolean }>("PUT", "/document/report", report);
   }
-  query(q: VisualQuery) {
-    return this.doc.request<VisualResult>("POST", "/document/query", q);
+  query(q: VisualQuery, viewAs?: ViewAs | null) {
+    const params: Record<string, string | string[]> | undefined = viewAs?.roles.length
+      ? { view_as: viewAs.roles, ...(viewAs.upn ? { upn: viewAs.upn } : {}) }
+      : undefined;
+    return this.doc.request<VisualResult>("POST", "/document/query", q, params);
   }
   validateDax(expression: string) {
     return this.doc.request<{ ok: boolean; errors: DaxDiagnostic[] }>("POST", "/document/dax/validate", { expression });
@@ -722,6 +744,24 @@ export interface PublishedReport {
   definition: ReportDefinition;
   /** Paylaş düğmesi: çalışma alanı Yöneticisi ve Üyesi */
   can_share?: boolean;
+  /** Bu kullanıcıya uygulanan RLS rolleri; null = kısıtlama yok */
+  rls_roles?: string[] | null;
+}
+
+export interface RoleMember {
+  id: number;
+  user_id: number;
+  email: string;
+  name: string;
+}
+
+/** Anlam modeli → Güvenlik: modeldeki RLS rolleri ve atanan kullanıcılar */
+export interface DatasetSecurity {
+  dataset: { id: number; name: string; version: number };
+  workspace: { id: number; name: string };
+  roles: { name: string; filters: { table: string; filtre: string }[]; members: RoleMember[] }[];
+  /** Modelden kalkmış rollerin atamaları (etkisiz) */
+  orphans: (RoleMember & { role: string })[];
 }
 
 export type MailMode = "smtp" | "outbox";
@@ -878,6 +918,15 @@ export class WebClient {
   }
   reportQuery(id: number, q: VisualQuery) {
     return this.http.request<VisualResult>("POST", `/api/reports/${id}/query`, q);
+  }
+  datasetSecurity(id: number) {
+    return this.http.request<DatasetSecurity>("GET", `/api/datasets/${id}/security`);
+  }
+  addRoleMember(id: number, role: string, email: string) {
+    return this.http.request<DatasetSecurity>("POST", `/api/datasets/${id}/security/members`, { role, email });
+  }
+  removeRoleMember(id: number, memberId: number) {
+    return this.http.request<DatasetSecurity>("DELETE", `/api/datasets/${id}/security/members/${memberId}`);
   }
   reportAccess(id: number) {
     return this.http.request<ReportAccess>("GET", `/api/reports/${id}/access`);

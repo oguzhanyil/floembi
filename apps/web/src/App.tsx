@@ -3,6 +3,7 @@ import {
 } from "@floem/client";
 import { InboxPage, ShareDialog } from "./share";
 import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
+import { SecurityPage } from "./security";
 import { ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, SessionProvider, navigate, usePath, useSession } from "./session";
@@ -55,6 +56,7 @@ function Router() {
   let page = <Home />;
   let m: RegExpExecArray | null;
   if ((m = /^\/reports\/(\d+)/.exec(path))) page = <ReportPage id={Number(m[1])} key={m[1]} />;
+  else if ((m = /^\/datasets\/(\d+)\/security$/.exec(path))) page = <SecurityPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
   else if (path === "/inbox") page = <InboxPage />;
   else if (path === "/admin/mail" && isAdmin) page = <MailSettingsPage />;
@@ -220,6 +222,11 @@ function WorkspacePage({ id }: { id: number }) {
     ...data.reports.map((r) => ({ ...r, kind: "Rapor" as const })),
     ...data.datasets.map((d) => ({ ...d, kind: "Anlam modeli" as const })),
   ];
+  const canManage = data.workspace.role === "admin" || data.workspace.role === "member";
+  const open = (it: (typeof items)[number]) => {
+    if (it.kind === "Rapor") navigate(`/reports/${it.id}`);
+    else if (canManage) navigate(`/datasets/${it.id}/security`);
+  };
   return (
     <div className="page-wrap">
       <h1>{data.workspace.name}</h1>
@@ -238,10 +245,14 @@ function WorkspacePage({ id }: { id: number }) {
             {items.map((it) => (
               <tr
                 key={`${it.kind}-${it.id}`}
-                className={it.kind === "Rapor" ? "" : "static"}
-                onClick={it.kind === "Rapor" ? () => navigate(`/reports/${it.id}`) : undefined}
+                className={it.kind === "Rapor" || canManage ? "" : "static"}
+                onClick={() => open(it)}
+                title={it.kind === "Rapor" ? undefined : canManage ? "Güvenlik: rollere kişi ata" : undefined}
               >
-                <td><span className={it.kind === "Rapor" ? "ico-report" : "ico-dataset"} aria-hidden /> {it.name}</td>
+                <td>
+                  <span className={it.kind === "Rapor" ? "ico-report" : "ico-dataset"} aria-hidden /> {it.name}
+                  {it.kind !== "Rapor" && canManage && <span className="muted small"> · Güvenlik</span>}
+                </td>
                 <td>{it.kind}</td>
                 <td>{it.published_by}</td>
                 <td>{when(it.published_at)}</td>
@@ -294,6 +305,11 @@ function ReportPage({ id }: { id: number }) {
           </span>
         </div>
         <span className="spacer" />
+        {report.rls_roles && (
+          <span className="role rls" title="Satır düzeyi güvenlik: yalnızca bu rollerin görebildiği veriyi görüyorsunuz">
+            🔒 {report.rls_roles.join(", ")}
+          </span>
+        )}
         <span className="role">{report.role_label}</span>
         <button onClick={load} title="Raporu ve veriyi yeniden yükle">⟳ Yenile</button>
         {report.can_share && (

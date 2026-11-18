@@ -84,6 +84,20 @@ shares = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, default=now),
 )
 
+# Satır düzeyi güvenlik üyelikleri (Power BI: anlam modeli → Güvenlik). Roller ve filtreleri modelde
+# (Desktop'ta tanımlanır); burada yalnızca hangi kullanıcının hangi role atandığı durur. Rol adına
+# bağlıdır: yeniden yayımlamada rol modelde kalırsa atama korunur.
+role_members = Table(
+    "role_members", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("dataset_id", Integer, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False),
+    Column("role", String(128), nullable=False),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("added_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+    UniqueConstraint("dataset_id", "role", "user_id"),
+)
+
 
 # Gönderilen e-postalar: durum ve hata ekranda okunabilsin (giden kutusu modunda .eml yolu)
 mail_log = Table(

@@ -61,3 +61,25 @@ code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); 
 .fb-hint { color: var(--muted); }
 .danger-link { color: var(--danger) !important; }
 .formula-bar .error-box { margin: 4px 0 2px 28px; }
+
+/* Rolleri yönet / Farklı görüntüle */
+.modal.roles-dialog { width: min(920px, 96vw); }
+.roles-body { display: grid; grid-template-columns: 200px 220px 1fr; gap: 0; padding: 0; min-height: 360px; }
+.roles-col { padding: 12px 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.roles-col:last-child { border-right: 0; }
+.roles-col-head { display: flex; align-items: center; justify-content: space-between; }
+.roles-list { list-style: none; margin: 0; padding: 0; overflow: auto; max-height: 300px; }
+.roles-list button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.roles-list button:hover { background: var(--hover, #f3f2f1); }
+.roles-list button.active { background: var(--accent-soft, #e8f0fe); font-weight: 600; }
+.roles-name { display: grid; gap: 4px; }
+.roles-sub { margin-top: 6px; }
+.roles-filter textarea { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; width: 100%; box-sizing: border-box; }
+.roles-filter code { font-family: Consolas, monospace; }
+.roles-foot-left { margin-top: auto; }
+.roles-empty { grid-column: 2 / 4; display: flex; align-items: center; }
+.viewas-body { display: grid; gap: 8px; }
+.viewas-body label.inline { display: flex; align-items: center; gap: 8px; }
+.viewas-upn { margin-left: 26px; max-width: 320px; }
+.viewas-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: #fff4ce; border-bottom: 1px solid #f0d77a; color: #4d3800; font-size: 13px; }
+.viewas-bar span { flex: 1; }

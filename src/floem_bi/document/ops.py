@@ -23,7 +23,7 @@ from ..dax.rename import rename_table as dax_rename_table
 from ..importer.loader import qident
 from ..importer.types import DUCKDB_TYPE, tip_family
 from ..model.schema import (
-    Hiyerarsi, Iliski, ModelTanimi, Olcu, Sutun, Tablo, TabloKaynak, TarihTablosu, parse_column_ref,
+    Hiyerarsi, Iliski, ModelTanimi, Olcu, Rol, Sutun, Tablo, TabloIzni, TabloKaynak, TarihTablosu, parse_column_ref,
 )
 from ..model.semantic import ModelError
 from ..report.schema import rename_column_refs, rename_measure_refs, rename_table_refs
@@ -66,6 +66,7 @@ class OpContext:
     checks: list[Check] = field(default_factory=list)      # sırayla, tek transaction içinde
     report: dict = field(default_factory=dict)             # rapordaki alan referansları da güncellenir
     measure_checks: list[str] = field(default_factory=list)  # derlenebilirliği denetlenecek ölçüler
+    role_checks: list[str] = field(default_factory=list)     # filtreleri derlenecek roller
 
     def table(self, name: str) -> Tablo:
         for t in self.tanim.tablolar:
@@ -605,11 +606,69 @@ class CreateDateTable(_Op):
         ctx.checks.append(build)
 
 
+# ------------------------------------------------------------------ roller (RLS)
+class RoleFilterIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    table: str
+    filtre: str
+
+
+def _find_role(ctx: OpContext, name: str) -> Rol | None:
+    for r in ctx.tanim.roller:
+        if r.ad.lower() == name.lower():
+            return r
+    return None
+
+
+class SetRole(_Op):
+    """Power BI "Rolleri yönet": rolü oluşturur ya da günceller. Tablo filtreleri bütünüyle
+    verilen listeyle değiştirilir; boş filtreler atılır. Filtreler derlenebilir olmalı."""
+    op: Literal["set_role"]
+    name: str
+    new_name: str | None = None
+    filters: list[RoleFilterIn] = Field(default_factory=list)
+
+    def apply(self, ctx: OpContext) -> None:
+        rol = _find_role(ctx, self.name)
+        if rol is None:
+            rol = Rol(ad=clean_name(self.name, "Rol"))
+            ctx.tanim.roller.append(rol)
+        if self.new_name is not None:
+            new = clean_name(self.new_name, "Rol")
+            other = _find_role(ctx, new)
+            if other is not None and other is not rol:
+                raise ModelError(f"'{new}' adlı bir rol zaten var")
+            rol.ad = new
+        izinler: list[TabloIzni] = []
+        seen: set[str] = set()
+        for f in self.filters:
+            if not f.filtre.strip():
+                continue
+            t = ctx.table(f.table)
+            if t.ad.lower() in seen:
+                raise ModelError(f"'{rol.ad}' rolünde {t.ad} tablosu için birden fazla filtre var")
+            seen.add(t.ad.lower())
+            izinler.append(TabloIzni(tablo=t.ad, filtre=f.filtre.strip()))
+        rol.tablo_izinleri = izinler
+        ctx.role_checks.append(rol.ad)
+
+
+class DeleteRole(_Op):
+    op: Literal["delete_role"]
+    name: str
+
+    def apply(self, ctx: OpContext) -> None:
+        rol = _find_role(ctx, self.name)
+        if rol is None:
+            raise ModelError(f"Rol bulunamadı: {self.name}")
+        ctx.tanim.roller.remove(rol)
+
+
 Op = Annotated[
     Union[
         RenameTable, UpdateTable, DeleteTable, RenameColumn, UpdateColumn,
         AddRelationship, UpdateRelationship, DeleteRelationship, MarkDateTable,
-        AddMeasure, UpdateMeasure, DeleteMeasure, CreateDateTable,
+        AddMeasure, UpdateMeasure, DeleteMeasure, CreateDateTable, SetRole, DeleteRole,
     ],
     Field(discriminator="op"),
 ]

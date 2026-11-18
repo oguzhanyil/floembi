@@ -491,3 +491,64 @@ def test_mail_config_hints_and_last_attempt(server, monkeypatch):
     server.post("/api/admin/mail/test", headers=hy, json={**SMTP_CFG, "password": None})
     last = server.get("/api/admin/mail", headers=hy).json()["last_attempt"]
     assert last["status"] == "sent" and last["error"] is None
+
+
+def test_row_level_security(server, floem_file):
+    """Desktop'ta rol tanımı + Farklı görüntüle; sunucuda role kişi atama ve izleyiciye filtre uygulanması."""
+    desk, H = floem_file, td.H
+    bad = desk.post("/document/ops", headers=H, json={"ops": [
+        {"op": "set_role", "name": "Ege", "filters": [{"table": "OCRD", "filtre": "[Yok] = 1"}]}]})
+    assert bad.status_code == 400 and "'Ege' rolü, OCRD filtresi" in bad.json()["error"]["message"]
+    r = desk.post("/document/ops", headers=H, json={"ops": [
+        {"op": "set_role", "name": "Ege", "filters": [{"table": "OCRD", "filtre": '[CardName] = "Ege Yapı"'},
+                                                      {"table": "OITM", "filtre": "  "}]},
+        {"op": "set_role", "name": "Geçici", "filters": []},
+    ]})
+    assert r.status_code == 200, r.text
+    assert r.json()["model"]["roller"][0] == {"ad": "Ege", "uyeler": {}, "tablo_izinleri": [
+        {"tablo": "OCRD", "filtre": '[CardName] = "Ege Yapı"'}], "sutun_izinleri": []}
+    dup = desk.post("/document/ops", headers=H, json={"ops": [{"op": "set_role", "name": "Geçici", "new_name": "ege"}]})
+    assert dup.status_code == 400 and "zaten var" in dup.json()["error"]["message"]
+    desk.post("/document/ops", headers=H, json={"ops": [{"op": "delete_role", "name": "Geçici"}]})
+
+    q = {"group": [{"table": "OCRD", "column": "CardName"}], "values": [{"table": "INV1", "column": "LineTotal"}]}
+    assert desk.post("/document/query", headers=H, json=q).json()["rows"] == [["Anadolu Gıda", 192.75], ["Ege Yapı", 80.0]]
+    seen = desk.post("/document/query?view_as=Ege", headers=H, json=q).json()
+    assert seen["rows"] == [["Ege Yapı", 80.0]]                             # Farklı görüntüle
+    assert desk.post("/document/query?view_as=Yok", headers=H, json=q).status_code == 400
+    desk.post("/document/save", headers=H, json={})
+
+    hy = login(server, YON)
+    p = publish(server, hy, desk.path).json()
+    rid, dsid = p["report_id"], p["dataset_id"]
+    with server.app_.state.db.begin() as c:
+        c.execute(db.shares.insert().values(report_id=rid, user_id=2, shared_by=1))
+    hi = login(server, IZL)
+    # Modelde rol var, izleyiciye atanmamış: veri gösterilmez, neden okunur
+    r = server.get(f"/api/reports/{rid}", headers=hi)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "rls_no_role"
+    assert server.post(f"/api/reports/{rid}/query", headers=hi, json=q).status_code == 403
+    assert server.get(f"/api/datasets/{dsid}/security", headers=hi).status_code == 403
+
+    sec = server.get(f"/api/datasets/{dsid}/security", headers=hy).json()
+    assert sec["roles"] == [{"name": "Ege", "filters": [{"table": "OCRD", "filtre": '[CardName] = "Ege Yapı"'}], "members": []}]
+    r = server.post(f"/api/datasets/{dsid}/security/members", headers=hy, json={"role": "Ege", "email": "yok@x.co"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "unknown_user"
+    r = server.post(f"/api/datasets/{dsid}/security/members", headers=hy, json={"role": "ege", "email": "IZLEYICI@floembi.test"})
+    assert [m["email"] for m in r.json()["roles"][0]["members"]] == ["izleyici@floembi.test"]
+
+    assert server.get(f"/api/reports/{rid}", headers=hi).json()["rls_roles"] == ["Ege"]
+    assert server.post(f"/api/reports/{rid}/query", headers=hi, json=q).json()["rows"] == [["Ege Yapı", 80.0]]
+    # Yönetici RLS'den etkilenmez (Power BI: düzenleme yetkisi olanlar tüm veriyi görür)
+    assert len(server.post(f"/api/reports/{rid}/query", headers=hy, json=q).json()["rows"]) == 2
+    assert server.get(f"/api/reports/{rid}", headers=hy).json()["rls_roles"] is None
+
+    # Rol modelden kalkıp yeniden yayımlanırsa atama etkisiz kalır ve "sahipsiz" listelenir; modelde rol yoksa kısıt yok
+    desk.post("/document/ops", headers=H, json={"ops": [{"op": "delete_role", "name": "Ege"}]})
+    desk.post("/document/save", headers=H, json={})
+    publish(server, hy, desk.path)
+    sec = server.get(f"/api/datasets/{dsid}/security", headers=hy).json()
+    assert sec["roles"] == [] and [o["role"] for o in sec["orphans"]] == ["Ege"]
+    assert len(server.post(f"/api/reports/{rid}/query", headers=hi, json=q).json()["rows"]) == 2
+    mid = sec["orphans"][0]["id"]
+    assert server.delete(f"/api/datasets/{dsid}/security/members/{mid}", headers=hy).json()["orphans"] == []

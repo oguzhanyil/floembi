@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError, BaseModel, ConfigDict, Field, model_validator
@@ -339,8 +339,9 @@ def create_app(
         return {"ok": True, "dirty": doc().dirty}
 
     @app.post("/document/query", dependencies=[Depends(auth)])
-    def visual_query(body: VisualQuery):
-        return doc().query(body)
+    def visual_query(body: VisualQuery, view_as: list[str] = Query(default_factory=list), upn: str | None = None):
+        # view_as: "Farklı görüntüle" (rollerin RLS filtreleriyle), upn: USERPRINCIPALNAME() değeri
+        return doc().query(body, view_as or None, upn)
 
     @app.get("/document/tables/{table}/preview", dependencies=[Depends(auth)])
     def table_preview(table: str, limit: int = 100):
