@@ -183,7 +183,7 @@ LOGIN_REFUSED = ("E-posta sunucusu girişi reddetti: kullanıcı adı tam e-post
 
 def login_hint(host: str, username: str | None) -> str | None:
     """Bilinen sağlayıcılarda sık yapılan hata: kullanıcı adı tam adres değil."""
-    known = ("smtp.gmail.com", "smtp.office365.com", "smtp-mail.outlook.com", "smtp.yandex.com")
+    known = ("smtp.gmail.com", "smtp.office365.com", "smtp-mail.outlook.com", "smtp.yandex.com", "smtp.titan.email")
     if host.strip().lower() in known and username and "@" not in username:
         return f"{host.strip()} için kullanıcı adı tam e-posta adresi olmalı (ör. ad@sirket.com)"
     return None
