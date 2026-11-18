@@ -583,6 +583,8 @@ export interface PublishResult {
   report_version: number;
   replaced: boolean;
   url: string;
+  gateway_sync: { status: "ready" | "partial" | "pending" | "not_needed"; gateway_name: string | null;
+    synced: number; total: number; message: string };
 }
 
 /** Desktop yerel servisinin tamamı: kaynak + belge işlemleri. */
@@ -676,8 +678,11 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   publishWorkspaces() {
     return this.doc.request<WorkspaceInfo[]>("GET", "/publish/workspaces");
   }
-  publish(workspaceId: number) {
-    return this.doc.request<PublishResult>("POST", "/publish", { workspace_id: workspaceId });
+  publishGateways(workspaceId: number) {
+    return this.doc.request<GatewayInfo[]>("GET", `/publish/gateways/${workspaceId}`);
+  }
+  publish(workspaceId: number, gatewayId?: number | null) {
+    return this.doc.request<PublishResult>("POST", "/publish", { workspace_id: workspaceId, gateway_id: gatewayId ?? null });
   }
 }
 
@@ -719,7 +724,7 @@ export interface PublishedItem {
 
 export interface WorkspaceContent {
   workspace: WorkspaceInfo;
-  datasets: (PublishedItem & { size_bytes: number })[];
+  datasets: (PublishedItem & { size_bytes: number; gateway_ready: boolean; gateway_source_count: number })[];
   reports: (PublishedItem & { dataset_id: number })[];
   app: AppSummary | null;
 }
@@ -960,10 +965,15 @@ export interface MailMessage {
   text: string;
 }
 
-export interface GatewayInfo { id: number; name: string; registered: boolean; online: boolean; last_seen: string | null }
+export interface GatewayInfo { id: number; name: string; registered: boolean; online: boolean;
+  public_key: string | null; last_seen: string | null }
 export interface GatewayEnrollment extends GatewayInfo { registration_token: string; expires_in: number }
 export interface GatewaySource {
   id: number; gateway_id: number; gateway_name: string; server: string; database: string; username: string;
+}
+export interface GatewaySourceStatus {
+  dataset_id: number; dataset_name: string; source_key: string; server: string; database: string;
+  username: string; ready: boolean; gateway_id: number | null; gateway_name: string | null;
 }
 export interface DatasetSourceBinding {
   id: string; server: string; database: string; username: string; binding_id: number | null;
@@ -1012,6 +1022,9 @@ export class WebClient {
   }
   gatewaySources(workspaceId: number) {
     return this.http.request<GatewaySource[]>("GET", `/api/workspaces/${workspaceId}/gateway-sources`);
+  }
+  sourceStatus(workspaceId: number) {
+    return this.http.request<GatewaySourceStatus[]>("GET", `/api/workspaces/${workspaceId}/source-status`);
   }
   saveGatewaySource(source: { gateway_id: number; server: string; database: string; username: string; password: string }) {
     return this.http.request<{ id: number }>("POST", "/api/gateway-sources", source);

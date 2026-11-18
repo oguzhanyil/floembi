@@ -40,6 +40,19 @@ def setup_gateway(client, headers, dataset_id):
     return registration["id"], key
 
 
+def test_published_source_is_visible_before_floemway_registration(server, floem_file):
+    headers = login(server, YON)
+    published = publish(server, headers, floem_file.path).json()
+    status = server.get("/api/workspaces/1/source-status", headers=headers).json()
+    assert len(status) == 1
+    assert status[0]["dataset_id"] == published["dataset_id"]
+    assert status[0]["server"] == "SAPSRV" and status[0]["database"] == "SBO_DEMO"
+    assert status[0]["ready"] is False and status[0]["gateway_name"] is None
+    content = server.get("/api/workspaces/1/content", headers=headers).json()
+    assert content["datasets"][0]["gateway_source_count"] == 1
+    assert content["datasets"][0]["gateway_ready"] is False
+
+
 @contextmanager
 def connect_gateway(client, gateway_id, key, headers):
     with client.websocket_connect(f"/api/gateways/connect/{gateway_id}") as ws:
@@ -108,9 +121,9 @@ def test_gateway_login_failure_and_offline_keep_snapshot(server, floem_file):
         wait_run(server, headers, dsid, "running")
         ws.close()
     stopped = wait_run(server, headers, dsid, "failed")
-    assert stopped["id"] == interrupted["run_id"] and stopped["error"]["message"] == "Gateway çevrimdışı"
+    assert stopped["id"] == interrupted["run_id"] and stopped["error"]["message"] == "Floemway çevrimdışı"
     offline = server.post(f"/api/datasets/{dsid}/refresh", headers=headers).json()
-    assert offline["status"] == "failed" and offline["error"]["message"] == "Gateway çevrimdışı"
+    assert offline["status"] == "failed" and offline["error"]["message"] == "Floemway çevrimdışı"
     assert server.get(f"/api/datasets/{dsid}", headers=headers).json()["version"] == 1
 
 

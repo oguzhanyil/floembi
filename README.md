@@ -156,18 +156,22 @@ bağlantıyı oturumla alınan 60 saniyelik, tek kullanımlık bir biletle açar
 satırına ve sunucu günlüğüne düşmez. Ters vekil (nginx) arkasında `/api/events` için tamponlama
 kapalı olmalı (`X-Accel-Buffering: no` başlığı gönderiliyor).
 
-**Floem Gateway ve manuel yenileme (H7):** Çalışma alanı → **Gateway'ler** ekranında kayıt
+**Floemway (şirket içi veri ağ geçidi, H7):** Çalışma alanı → **Floemway** ekranında kayıt
 anahtarı oluşturun. Müşteri ağındaki Windows bilgisayarında Python ortamına projeyi
 `pip install -e .` ile kurup ekranda verilen `python -m floem_bi.gateway ...` komutunu bir kez
-çalıştırın. Gateway daha sonra `python -m floem_bi.gateway --id <numara>` ile yeniden başlatılır;
+çalıştırın. Floemway daha sonra `python -m floem_bi.gateway --id <numara>` ile yeniden başlatılır;
 ayar dosyası `%APPDATA%\FloemBI\gateway-<numara>.json` içindedir. Özel anahtar Windows Kimlik
 Bilgisi Yöneticisi'nde tutulur. İlk sürüm konsol uygulamasıdır; Windows servisi H8 kapsamındadır.
 Uzak floembi.app adresi HTTPS olmalıdır; yerel geliştirmede `127.0.0.1` için HTTP kullanılabilir.
 
-Gateway çevrimiçi olduktan sonra aynı ekranda SQL Server sunucusu, veritabanı, kullanıcı ve şifreyle
-**SQL Server bağlantısı** tanımlayın. Şifre, Gateway'in açık anahtarıyla şifrelenir; sunucu yalnızca
-şifreli metni saklar. Çalışma alanında anlam modeline tıklayıp kaynakları bu bağlantılara eşleştirin.
-**Şimdi yenile**, kaynak tabloları Gateway üzerinden Arrow parçalarıyla alır, Floem Query adımlarını
+Floem BI Desktop'ta kayıtlı SQL bağlantısıyla raporu kaydedip **Yayımla** düğmesine basın. Tek kayıtlı
+Floemway varsa bağlantı otomatik seçilir; birden fazla varsa yayımlama ekranında seçin. Desktop, SQL
+şifresini Floemway'in açık anahtarıyla kendi bilgisayarınızda şifreler ve yayımlanan anlam modelinin
+kaynaklarına otomatik eşler. Sunucu yalnızca şifreli metni saklar. Çalışma alanındaki **Floemway →
+Yayımlanan veri kaynakları** tablosunda sunucu, veritabanı ve hazır/bekliyor durumunu görebilirsiniz.
+Şifre Desktop'ta kayıtlı değilse, Windows kimlik doğrulaması kullanılıyorsa veya Floemway henüz
+kaydedilmemişse rapor yayımlanır ve bağlantı bekliyor görünür. Eksik eşlemeyi aynı ekranda veya anlam
+modelinin yenileme sayfasında tamamlayabilirsiniz. **Şimdi yenile**, kaynak tabloları Floemway üzerinden Arrow parçalarıyla alır, Floem Query adımlarını
 uygular ve başarılı olursa yeni DuckDB sürümüne geçirir. **Yenileme geçmişi** tablo, adım, süre ve
 ham hata ayrıntısını gösterir. Başarısız yenilemede rapor eski veriyle çalışmayı sürdürür.
 

@@ -190,12 +190,60 @@ def test_desktop_publish_flow(floem_file, live_server):
     r = desk.post("/publish", headers=td.H, json={"workspace_id": 1})
     assert r.status_code == 200, r.text
     assert r.json()["name"] == "Satış Raporu" and r.json()["url"].startswith(live_server)
+    assert r.json()["gateway_sync"]["status"] == "pending"
 
     # izleyici: sunucunun yetki mesajı Desktop'ta okunur şekilde görünür
     desk.post("/publish/login", headers=td.H, json={"server_url": live_server, "email": IZL[0], "password": IZL[1]})
     r = desk.post("/publish", headers=td.H, json={"workspace_id": 1})
     assert r.status_code == 400 and r.json()["error"]["code"] == "forbidden"
     assert "yayımlama yetkiniz yok" in r.json()["error"]["message"]
+
+
+def test_desktop_publish_auto_syncs_floemway(floem_file, live_server, tmp_path):
+    import base64
+    import json
+    import sqlite3
+    import urllib.request
+    from nacl.public import PrivateKey, SealedBox
+
+    def api(method, path, payload=None, token=None):
+        data = json.dumps(payload).encode() if payload is not None else None
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(live_server + path, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req) as response:
+            return json.loads(response.read())
+
+    session = api("POST", "/api/auth/login", {"email": YON[0], "password": YON[1]})
+    token = session["token"]
+    enrollment = api("POST", "/api/gateways", {"workspace_id": 1, "name": "Floemway Test"}, token)
+    key = PrivateKey.generate()
+    api("POST", "/api/gateways/register", {
+        "token": enrollment["registration_token"],
+        "public_key": base64.b64encode(bytes(key.public_key)).decode(),
+    })
+    desk = floem_file
+    assert desk.post("/publish/login", headers=td.H, json={
+        "server_url": live_server, "email": YON[0], "password": YON[1],
+    }).status_code == 200
+    gateways = desk.get("/publish/gateways/1", headers=td.H).json()
+    assert gateways[0]["name"] == "Floemway Test" and gateways[0]["registered"]
+    result = desk.post("/publish", headers=td.H, json={"workspace_id": 1})
+    assert result.status_code == 200, result.text
+    published = result.json()
+    assert published["gateway_sync"]["status"] == "ready"
+    assert published["gateway_sync"]["synced"] == 1
+    status = api("GET", "/api/workspaces/1/source-status", token=token)
+    assert len(status) == 1 and status[0]["ready"] is True
+    assert status[0]["server"] == "SAPSRV" and status[0]["database"] == "SBO_DEMO"
+    assert status[0]["gateway_name"] == "Floemway Test"
+    content = api("GET", "/api/workspaces/1/content", token=token)
+    assert content["datasets"][0]["gateway_ready"] is True
+    with sqlite3.connect(tmp_path / "live" / "floem.db") as conn:
+        ciphertext = conn.execute("SELECT password_enc FROM gateway_sources").fetchone()[0]
+    assert ciphertext != "x"
+    assert SealedBox(key).decrypt(bytes.fromhex(ciphertext)) == b"x"
 
 
 def test_desktop_publish_unreachable(floem_file):

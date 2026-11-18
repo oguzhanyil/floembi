@@ -3,7 +3,7 @@
 ## Bağlam
 Ben Oğuzhan. SAP Business One ve SQL Server üzerinde çalışıyorum. Kendi ürünüm
 Floemdata Analytics, Python tabanlı bir veri entegrasyon platformu:
-- `agent/`: müşteri sunucusunda çalışan on-prem ajan (Gateway rolü)
+- `agent/`: müşteri sunucusunda çalışan on-prem ajan (Floemway rolü)
 - `warehouse/`: Bronze/Silver/Gold (medallion) katmanları
 - Not (17.11.2026): `agent/` ve `warehouse/` henüz bu depoda yok. Bu araştırmada
   kod olarak yazılmayacak, hedef mimarileri tasarlanacak; MVP'de koda dökülecek.
@@ -12,7 +12,7 @@ Bunun üstüne **Floem BI** adında bir modül inşa ediyoruz. Amaç, Power BI v
 Microsoft Fabric'in temel yeteneklerini kendi sunucumda çalışan bağımsız,
 modüler, ölçeklenebilir ve lisans bağımlılığı düşük bir platformda sunmak:
 1. Kaynaklar: SQL Server, SAP B1, PostgreSQL, Excel, REST API
-2. Gateway (Floemdata agent) üzerinden yerel sunuculardan veri aktarımı (Import + DirectQuery)
+2. Floemway (Floemdata agent) üzerinden yerel sunuculardan veri aktarımı (Import + DirectQuery)
 3. Grafik arayüzle semantik model: tablolar, ilişkiler (kardinalite, filtre yönü), hiyerarşiler, tarih tablosu
 4. DAX benzeri ölçü dili (filtre bağlamı, CALCULATE, zaman zekâsı), bu dil SQL'e derlenecek
 5. Sürükle-bırak rapor ve dashboard tasarımcısı (cross-filter, drill-down, slicer)
@@ -75,7 +75,7 @@ aşağıdaki listede yer alanlar.
 | https://github.com/dlt-hub/dlt | Apache 2.0 | Artımlı yükleme, şema evrimi (Floemdata agent ile uyum) |
 | https://github.com/dbt-labs/dbt-core | Apache 2.0 | Silver→Gold dönüşüm modellemesi |
 | https://github.com/dagster-io/dagster | Apache 2.0 | Zamanlanmış yenileme, asset tabanlı orkestrasyon |
-| https://github.com/fatedier/frp | Apache 2.0 | Gateway tünel mimarisi |
+| https://github.com/fatedier/frp | Apache 2.0 | Floemway tünel mimarisi |
 | https://github.com/jpillora/chisel | MIT | HTTP/WebSocket üzerinden tünel |
 | https://github.com/xyflow/xyflow | MIT | Model görünümü: tablo kutuları ve ilişki okları (React Flow) |
 | https://github.com/react-grid-layout/react-grid-layout | MIT | Dashboard tuvali (taşıma ve boyutlandırma) |
@@ -94,7 +94,7 @@ aşağıdaki listede yer alanlar.
 |---|---|---|
 | https://github.com/duckdb/duckdb | MIT | Import modu analitik motoru (VertiPaq yerine) |
 | https://github.com/ClickHouse/ClickHouse | Apache 2.0 | Büyük ölçek ve çok kiracılı analitik motor |
-| https://github.com/apache/arrow | Apache 2.0 | Bellek formatı, Arrow Flight ile Gateway veri taşıma |
+| https://github.com/apache/arrow | Apache 2.0 | Bellek formatı, Arrow Flight ile Floemway veri taşıma |
 | https://github.com/apache/iceberg | Apache 2.0 | Lakehouse tablo formatı |
 | https://github.com/delta-io/delta-rs | Apache 2.0 | Delta Lake (Python/Rust) |
 | https://github.com/seaweedfs/seaweedfs | Apache 2.0 | S3 uyumlu nesne depolama (olgun) |
@@ -120,7 +120,7 @@ Değerlendirmeye alma, yerine SeaweedFS veya RustFS kullan.
 
 ## Adım 1: Floemdata hedef mimarisini tasarla
 `agent/` ve `warehouse/` henüz yok. `research/notes/00-floemdata-hedef.md`
-dosyasına şunları yaz: agent (Gateway) ve warehouse (medallion) için hedef
+dosyasına şunları yaz: agent (Floemway) ve warehouse (medallion) için hedef
 mimari, önerilen kütüphaneler, Floem BI'ın hangi noktalardan bağlanacağı,
 açık sorular.
 

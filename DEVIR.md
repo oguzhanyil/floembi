@@ -12,7 +12,7 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 ## 1. Proje ve kullanıcı
 
 - **Floem BI**, Power BI'ın karşılığı olan, kendi sunucuda çalışan, ticari ve kapalı kaynak bir BI ürünü.
-  - Üç parçası var: Desktop (Electron), floembi.app (web sunucusu) ve Gateway.
+  - Üç parçası var: Desktop (Electron), floembi.app (web sunucusu) ve Floemway (şirket içi ağ geçidi).
 - **Kullanıcı (Oğuzhan)** Power BI'ı iyi biliyor, SQL Server ve SAP Business One üzerinde çalışıyor.
   - Anlatımlarda ve arayüzde Power BI kavramlarını kullanın ("Power BI'daki X'in karşılığı…").
 - **Dil:** tüm yanıtlar, arayüz metinleri, hata mesajları, commit mesajları ve belgeler **Türkçe**.
@@ -32,7 +32,7 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 2. **Kimlik bilgileri** dosyaya, depoya ve günlüğe düz metin olarak yazılmaz.
    - Desktop'ta Windows Kimlik Bilgisi Yöneticisi (`keyring`) kullanılır.
    - Sunucuda SMTP şifresi Fernet ile şifreli saklanır.
-   - Gateway veri kaynağı şifresi, gateway'in açık anahtarıyla şifrelenecek; sunucu çözemeyecek.
+   - Floemway veri kaynağı şifresi, ağ geçidinin açık anahtarıyla şifrelenecek; sunucu çözemeyecek.
    - Kullanıcının sohbette paylaştığı şifreleri hiçbir yere yazmayın.
 3. **Push öncesi gizli bilgi taraması yapın:** şifreler, anahtarlar ve kullanıcının sunucu IP'si.
    - Kullanıcının gerçek SQL Server IP'si **asla commit edilmez**.
@@ -120,46 +120,54 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H4 | ✓ | Rapor tasarımcısı: ECharts görselleri, matris, drill-down, dilimleyici, Biçim bölmesi, çapraz filtre, detaya git, metin kutusu, KPI ve trend, hizalama kılavuzları |
 | H5 | ✓ | floembi.app sunucusu, giriş (JWT + argon2), çalışma alanları, Desktop'tan **Yayımla**, web'de rapor görüntüleme |
 | H6 | ✓ | E-postayla paylaşım ve davet, Yönetim (e-posta sunucusu ekranı, kullanıcılar), **RLS** (Desktop: Rolleri yönet + Farklı görüntüle; web: anlam modeli → Güvenlik), **App** yayınlama (dondurulmuş sürüm, erişim, davet), **SSE** ile anlık güncelleme |
-| H7 | ✓ | Floem Gateway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, şifreli SQL bağlantıları, kaynak eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
+| H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
 
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
 
-### H7: Floem Gateway ve manuel yenileme (tamamlandı)
+### H7: Floemway ve manuel yenileme (tamamlandı)
 
 Uygulama: `src/floem_bi/gateway/__main__.py`, `src/floem_bi/server/refresh.py`,
-`server/app.py` ve `db.py`; web'de çalışma alanı → Gateway'ler ve anlam modeli →
+`server/app.py` ve `db.py`; web'de çalışma alanı → Floemway ve anlam modeli →
 Yenileme ekranı. Hedefli kabul testleri `tests/test_gateway.py` içindedir.
 Windows'ta açık DuckDB dosyası fiziksel kopyalanamadığı için yeni sürüm DuckDB'nin
 `COPY FROM DATABASE` komutuyla geçici klasörde kurulur. Başarısız aktarımda mevcut
-snapshot değişmez. Son iki sürüm tutulur. Gateway özel anahtarı dosyada değil,
+snapshot değişmez. Son iki sürüm tutulur. Floemway özel anahtarı dosyada değil,
 Windows Kimlik Bilgisi Yöneticisi'ndedir. Uzak bağlantı HTTPS/WSS gerektirir.
 
-**Gateway** müşteri sunucusunda çalışan bir Python uygulaması. Yeni modül: `src/floem_bi/gateway/`.
+Desktop yayımlama artık kullanılan model kaynaklarını Desktop bağlantı deposundan bulur. Tek kayıtlı
+Floemway otomatik seçilir; birden fazla varsa kullanıcı seçer. SQL şifresi Desktop'ta açık anahtarla
+şifrelenip `/api/datasets/{id}/gateway-sync` üzerinden yüklenir. Şifresiz bilgi `.floem` dosyasına
+yazılmaz. Web'de çalışma alanı ve Floemway sayfaları kaynakların hazır/bekliyor durumunu gösterir.
+Kayıtlı Floemway veya Desktop'ta kayıtlı SQL şifresi yoksa rapor yayımlanır, bağlantı bekler.
+Test: `tests/test_server.py::test_desktop_publish_auto_syncs_floemway` uçtan uca akışı doğrular.
+
+**Floemway** müşteri sunucusunda çalışan bir Python uygulaması. Yeni modül: `src/floem_bi/gateway/`.
 - İlk sürümde konsol uygulaması olacak; Windows servisi H8'de.
 - **Kayıt:**
-  1. Web'de yeni bir **"Gateway'ler"** sayfası tek kullanımlık bir kayıt anahtarı üretir.
-  2. Gateway ilk açılışta bu anahtarla kaydolur ve bir anahtar çifti (PyNaCl, Apache-2.0) üretir.
-  3. Gateway'in açık anahtarı sunucuda saklanır.
+  1. Web'deki **"Floemway"** sayfası tek kullanımlık bir kayıt anahtarı üretir.
+  2. Floemway ilk açılışta bu anahtarla kaydolur ve bir anahtar çifti (PyNaCl, Apache-2.0) üretir.
+  3. Floemway'in açık anahtarı sunucuda saklanır.
 - **Bağlantı:**
   - Yalnızca **dışa açılan WebSocket (wss)** kullanılır; müşteri tarafında port açılmaz.
-  - Gateway kalp atışı gönderir ve bağlantı koparsa yeniden bağlanır.
+  - Floemway kalp atışı gönderir ve bağlantı koparsa yeniden bağlanır.
   - Web'de gateway'in çevrimiçi/çevrimdışı durumu görünür.
   - Bağımlılık `websockets` (BSD-3). Lisansı tekrar doğrulayın.
-- **Veri kaynağı tanımı (web):**
-  - Alanlar: sunucu, veritabanı, SQL kullanıcısı ve şifresi.
-  - Şifre sunucuda gateway'in açık anahtarıyla **sealed box** olarak şifrelenir; yalnızca gateway çözebilir.
+- **Veri kaynağı tanımı:**
+  - Desktop yayımlamada sunucu, veritabanı, SQL kullanıcısı ve kayıtlı şifre otomatik alınır.
+  - Şifre Desktop'ta Floemway'in açık anahtarıyla **sealed box** olarak şifrelenir; yalnızca Floemway çözebilir.
+  - Web'deki elle bağlantı girişi ve anlam modeli eşlemesi eksik kaynaklar için yedektir.
   - Dataset'in `veri_kaynaklari` alanı (sunucu + veritabanı) bu tanımla eşleşir. Power BI'daki "gateway connection" eşlemesinin karşılığıdır.
 - **"Şimdi yenile"** (yalnızca Yönetici/Üye):
   1. Sunucu bir yenileme işi kaydı açar (kuyrukta → çalışıyor → başarılı/hata).
-  2. Gateway, modeldeki her tablonun kaynak sorgusunu SQL Server'da çalıştırır. Mevcut `connectors/sqlserver.py` kullanılır; Floem Query adımları varsa `transform/` ile uygulanır.
+  2. Floemway, modeldeki her tablonun kaynak sorgusunu SQL Server'da çalıştırır. Mevcut `connectors/sqlserver.py` kullanılır; Floem Query adımları varsa `transform/` ile uygulanır.
   3. Sonuç Arrow parçaları halinde sunucuya akar.
   4. Sunucu yeni DuckDB anlık görüntüsünü kurar ve dataset sürümünü atomik olarak artırır. Yayımlamadaki `engines.drop` ve `KEEP_VERSIONS` mantığına bakın.
   5. Açık ekranlar SSE ile güncellenir. `notify_report` zaten var; dataset olayı için genişletin.
 - **Hatalar ekranda okunur olmalı.** Bu, kullanıcının özel isteği. Örnek mesajlar:
-  - "Gateway çevrimdışı"
+  - "Floemway çevrimdışı"
   - "SQL Server'a bağlanılamadı: Login failed for user 'x'"
   - "OINV tablosu bulunamadı"
   - "Zaman aşımı (300 sn)"
@@ -177,7 +185,7 @@ Windows Kimlik Bilgisi Yöneticisi'ndedir. Uzak bağlantı HTTPS/WSS gerektirir.
   - E-postada hata özeti ve "Geçmişi aç" bağlantısı olur.
   - `server/mail.py` içindeki `_layout` ve `deliver` kullanılır.
 - **Paketleme:**
-  - Gateway yükleyicisi ve Windows servisi.
+  - Floemway yükleyicisi ve Windows servisi.
   - Sunucu için `deploy/docker-compose.yml`: servis + Postgres. Postgres'e geçiş SQLAlchemy Core sayesinde küçük bir iş; `asyncpg` ya da `psycopg` lisansını doğrulayın.
   - Desktop yükleyicisi zaten var (`npm run desktop:package`).
 - **Doğrulanacak bilinen sorun:** Electron 45, uygulama yolundan sonra 2 ya da daha fazla argümanla açılınca 127 koduyla çıkıyor. `.floem` dosyasına çift tıklayarak açmayı H8'de doğrulayın.
@@ -190,12 +198,12 @@ Windows Kimlik Bilgisi Yöneticisi'ndedir. Uzak bağlantı HTTPS/WSS gerektirir.
 
 ### Kabul senaryosu (Aşama 3 sonu)
 
-1. Gateway kaydedilir; web'de çevrimiçi görünür.
+1. Floemway kaydedilir; web'de çevrimiçi görünür.
 2. Veri kaynağı tanımlanır; SQL Server'a yeni fatura satırları eklenir.
 3. Yönetici "Şimdi yenile"ye basar; raporda yeni rakamlar görünür.
 4. SQL şifresi bozulup yenilenir: ekranda tablo ve adım bilgisiyle "Login failed" hatası çıkar ve geçmişe yazılır.
    Zamanlanmış yenilemede hata olursa e-posta gider.
-5. Gateway durdurulur: "Gateway çevrimdışı" hatası çıkar, rapor eski veriyle çalışmaya devam eder.
+5. Floemway durdurulur: "Floemway çevrimdışı" hatası çıkar, rapor eski veriyle çalışmaya devam eder.
 
 ## 7. Bekleyen küçük işler (plan dışı, araya alınabilir)
 

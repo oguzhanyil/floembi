@@ -1,5 +1,5 @@
 import {
-  FloemApiError, type DatasetBindings, type DatasetDetails, type GatewaySource, type RefreshRun,
+  FloemApiError, type DatasetBindings, type DatasetDetails, type GatewaySource, type GatewaySourceStatus, type RefreshRun,
   type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
 } from "@floem/client";
 import { InboxPage, ShareDialog } from "./share";
@@ -252,7 +252,7 @@ function WorkspacePage({ id }: { id: number }) {
     <div className="page-wrap">
       <div className="ws-head">
         <h1>{data.workspace.name}</h1>
-        {canManage && <Link to={`/workspaces/${id}/gateways`} className="button">Gateway'ler</Link>}
+        {canManage && <Link to={`/workspaces/${id}/gateways`} className="button">Floemway</Link>}
         <span className="spacer" />
         {data.app && (
           <Link to={`/apps/${data.app.id}`} className="button">▦ Uygulamayı aç</Link>
@@ -289,6 +289,10 @@ function WorkspacePage({ id }: { id: number }) {
                 <td>
                   <span className={it.kind === "Rapor" ? "ico-report" : "ico-dataset"} aria-hidden /> {it.name}
                   {it.kind !== "Rapor" && canManage && <span className="muted small"> · Yenileme ve güvenlik</span>}
+                  {it.kind === "Anlam modeli" && it.gateway_source_count > 0 &&
+                    <span className={it.gateway_ready ? "ok-text small" : "warn-text small"}>
+                      {it.gateway_ready ? " · Floemway hazır" : " · Floemway bağlantısı bekliyor"}
+                    </span>}
                 </td>
                 <td>{it.kind}</td>
                 <td>{it.published_by}</td>
@@ -307,13 +311,14 @@ function GatewayPage({ id }: { id: number }) {
   const { client, guard } = useSession();
   const [items, setItems] = useState<import("@floem/client").GatewayInfo[]>([]);
   const [sources, setSources] = useState<GatewaySource[]>([]);
+  const [publishedSources, setPublishedSources] = useState<GatewaySourceStatus[]>([]);
   const [name, setName] = useState("");
   const [source, setSource] = useState({ gateway_id: 0, server: "", database: "", username: "", password: "" });
   const [enrollment, setEnrollment] = useState<import("@floem/client").GatewayEnrollment | null>(null);
   const [error, setError] = useState<UiError | null>(null);
   const [saved, setSaved] = useState("");
-  const load = useCallback(() => Promise.all([guard(client.gateways(id)), guard(client.gatewaySources(id))])
-    .then(([g, s]) => { setItems(g); setSources(s); }).catch((e) => setError(toUiError(e))), [client, guard, id]);
+  const load = useCallback(() => Promise.all([guard(client.gateways(id)), guard(client.gatewaySources(id)), guard(client.sourceStatus(id))])
+    .then(([g, s, p]) => { setItems(g); setSources(s); setPublishedSources(p); }).catch((e) => setError(toUiError(e))), [client, guard, id]);
   useEffect(() => { load(); const timer = setInterval(load, 15000); return () => clearInterval(timer); }, [load]);
   async function create(e: FormEvent) {
     e.preventDefault(); setError(null);
@@ -325,18 +330,18 @@ function GatewayPage({ id }: { id: number }) {
     try {
       await guard(client.saveGatewaySource(source));
       setSource({ ...source, password: "" });
-      setSaved("Bağlantı kaydedildi. Şifre yalnızca Gateway tarafından çözülebilir.");
+      setSaved("Bağlantı kaydedildi. Şifre yalnızca Floemway tarafından çözülebilir.");
       await load();
     } catch (err) { setError(toUiError(err)); }
   }
   const command = enrollment && `python -m floem_bi.gateway --server ${window.location.origin} --id ${enrollment.id} --token ${enrollment.registration_token}`;
   return <div className="page-wrap">
     <p><Link to={`/workspaces/${id}`}>← Çalışma alanı</Link></p>
-    <h1>Gateway'ler</h1>
-    <p className="muted">Gateway, müşteri sunucusundan floembi.app'e dışa açılan bağlantı kurar.</p>
+    <h1>Floemway</h1>
+    <p className="muted">Floemway, şirket ağındaki ayrı bir servistir. floembi.app'e dışa doğru bağlanır; Desktop'ta kayıtlı SQL bağlantıları yayımlama sırasında otomatik eşlenir.</p>
     {error && <ErrorPanel error={error} />}
     <form className="inline-form" onSubmit={create}>
-      <label>Gateway adı<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></label>
+      <label>Floemway adı<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></label>
       <button className="primary">Kayıt anahtarı oluştur</button>
     </form>
     {enrollment && <section><h2>{enrollment.name}: tek kullanımlık kayıt</h2>
@@ -346,13 +351,22 @@ function GatewayPage({ id }: { id: number }) {
     </section>}
     <table className="items"><thead><tr><th>Ad</th><th>Durum</th><th>Son bağlantı</th></tr></thead><tbody>
       {items.map((g) => <tr key={g.id}><td>{g.name}</td><td>{g.online ? "Çevrimiçi" : g.registered ? "Çevrimdışı" : "Kayıt bekliyor"}</td><td>{g.last_seen ? when(g.last_seen) : "Henüz bağlanmadı"}</td></tr>)}
-      {items.length === 0 && <tr><td colSpan={3} className="muted">Henüz Gateway yok.</td></tr>}
+      {items.length === 0 && <tr><td colSpan={3} className="muted">Henüz Floemway yok.</td></tr>}
+    </tbody></table>
+    <h2>Yayımlanan veri kaynakları</h2>
+    <p className="hint">Desktop'tan yayımlanan bağlantılar burada görünür. Hazır durumu, Floemway bağlantı eşlemesini gösterir.</p>
+    <table className="items"><thead><tr><th>Anlam modeli</th><th>Sunucu</th><th>Veritabanı</th><th>SQL kullanıcısı</th><th>Floemway</th><th>Durum</th></tr></thead><tbody>
+      {publishedSources.map((s) => <tr key={`${s.dataset_id}-${s.source_key}`} className="static">
+        <td>{s.dataset_name}</td><td>{s.server}</td><td>{s.database}</td><td>{s.username}</td>
+        <td>{s.gateway_name ?? "—"}</td><td className={s.ready ? "ok-text" : "warn-text"}>{s.ready ? "Hazır" : "Bağlantı bekliyor"}</td>
+      </tr>)}
+      {publishedSources.length === 0 && <tr><td colSpan={6} className="muted">Henüz yayımlanmış kaynak bağlantısı yok.</td></tr>}
     </tbody></table>
     <section className="form-card gateway-form">
-      <h2>SQL Server bağlantısı</h2>
-      <p className="hint">Power BI'daki Gateway bağlantısı gibi, yayımlanan anlam modelindeki sunucu ve veritabanıyla eşleştirilir.</p>
+      <h2>Elle SQL Server bağlantısı</h2>
+      <p className="hint">Desktop'tan otomatik eşlenmeyen bir kaynak için bağlantıyı burada tamamlayabilirsiniz.</p>
       <form onSubmit={saveSource} className="gateway-fields">
-        <label>Gateway<select value={source.gateway_id} onChange={(e) => setSource({ ...source, gateway_id: Number(e.target.value) })} required>
+        <label>Floemway<select value={source.gateway_id} onChange={(e) => setSource({ ...source, gateway_id: Number(e.target.value) })} required>
           <option value={0}>Seçin</option>{items.filter((g) => g.registered).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select></label>
         <label>Sunucu<input value={source.server} onChange={(e) => setSource({ ...source, server: e.target.value })} required /></label>
@@ -364,7 +378,7 @@ function GatewayPage({ id }: { id: number }) {
       {saved && <p className="ok-text" role="status">{saved}</p>}
     </section>
     <h2>Kaydedilen bağlantılar</h2>
-    <table className="items"><thead><tr><th>Gateway</th><th>Sunucu</th><th>Veritabanı</th><th>Kullanıcı</th></tr></thead><tbody>
+    <table className="items"><thead><tr><th>Floemway</th><th>Sunucu</th><th>Veritabanı</th><th>Kullanıcı</th></tr></thead><tbody>
       {sources.map((s) => <tr key={s.id} className="static"><td>{s.gateway_name}</td><td>{s.server}</td><td>{s.database}</td><td>{s.username}</td></tr>)}
       {sources.length === 0 && <tr><td colSpan={4} className="muted">Henüz bağlantı tanımlanmadı.</td></tr>}
     </tbody></table>
@@ -429,15 +443,15 @@ function DatasetRefreshPage({ id }: { id: number }) {
     <p className="muted">Anlam modeli sürümü {dataset.version}. Yenileme bitene kadar raporlar önceki veriyle çalışır.</p>
     {error && <ErrorPanel error={error} />}
     <section className="form-card">
-      <h2>Gateway bağlantısı eşlemesi</h2>
-      <p className="hint">Power BI'daki veri kaynağı kimlik bilgileri gibi, her model kaynağına aynı sunucu ve veritabanındaki bağlantıyı seçin.</p>
+      <h2>Floemway bağlantısı eşlemesi</h2>
+      <p className="hint">Desktop'tan yayımlanan SQL bağlantıları otomatik eşlenir. Eksik kalan kaynakları burada tamamlayabilirsiniz.</p>
       <form onSubmit={saveBindings} className="gateway-fields">
         {bindings.sources.map((x) => {
           const matches = sources.filter((s) => s.server.toLowerCase() === x.server.toLowerCase() &&
             s.database.toLowerCase() === x.database.toLowerCase());
           return <label key={x.id}>{x.server} / {x.database}
             <select value={selected[x.id] ?? 0} onChange={(e) => setSelected({ ...selected, [x.id]: Number(e.target.value) })} required>
-              <option value={0}>Gateway bağlantısı seçin</option>
+              <option value={0}>Floemway bağlantısı seçin</option>
               {matches.map((s) => <option key={s.id} value={s.id}>{s.gateway_name} · {s.username}</option>)}
             </select>
           </label>;
@@ -446,7 +460,7 @@ function DatasetRefreshPage({ id }: { id: number }) {
         <button className="primary" disabled={bindings.sources.length === 0 || bindings.sources.some((x) => !selected[x.id])}>Eşlemeyi kaydet</button>
       </form>
       {saved && <p className="ok-text" role="status">{saved}</p>}
-      <p><Link to={`/workspaces/${dataset.workspace_id}/gateways`}>Gateway bağlantılarını yönet</Link></p>
+      <p><Link to={`/workspaces/${dataset.workspace_id}/gateways`}>Floemway bağlantılarını yönet</Link></p>
     </section>
     <h2>Yenileme geçmişi</h2>
     <table className="items"><thead><tr><th>Başlangıç</th><th>Durum</th><th>Tablo / adım</th><th>Süre</th><th>Hata</th></tr></thead><tbody>

@@ -1,4 +1,4 @@
-"""Floem Gateway: müşteri ağından yalnızca dışa açılan bağlantı kurar."""
+"""Floemway: müşteri ağından yalnızca dışa açılan bağlantı kurar."""
 
 from __future__ import annotations
 
@@ -26,7 +26,8 @@ from ..connectors.sqlserver import make_connector
 from ..importer.loader import unique_names
 from ..importer.types import arrow_type, to_arrow
 
-KEY_SERVICE = "FloemBI Gateway"
+KEY_SERVICE = "Floemway"
+LEGACY_KEY_SERVICE = "FloemBI Gateway"
 BATCH_ROWS = 50_000
 
 
@@ -59,7 +60,7 @@ def enroll(server: str, gateway_id: int, token: str, config: Path) -> PrivateKey
         "token": token, "public_key": base64.b64encode(bytes(key.public_key)).decode("ascii"),
     })
     if result["gateway_id"] != gateway_id:
-        raise ValueError("Kayıt anahtarı başka bir Gateway'e ait")
+        raise ValueError("Kayıt anahtarı başka bir Floemway'e ait")
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(json.dumps({"gateway_id": gateway_id, "server": server.rstrip("/")}), encoding="utf-8")
     return key
@@ -68,9 +69,10 @@ def enroll(server: str, gateway_id: int, token: str, config: Path) -> PrivateKey
 def load(config: Path) -> tuple[str, int, PrivateKey]:
     saved = json.loads(config.read_text(encoding="utf-8"))
     server, gateway_id = saved["server"], int(saved["gateway_id"])
-    secret = keyring.get_password(KEY_SERVICE, _key_name(server, gateway_id))
+    secret = keyring.get_password(KEY_SERVICE, _key_name(server, gateway_id)) or keyring.get_password(
+        LEGACY_KEY_SERVICE, _key_name(server, gateway_id))
     if not secret:
-        raise ValueError("Gateway özel anahtarı Windows Kimlik Bilgisi Yöneticisi'nde bulunamadı")
+        raise ValueError("Floemway özel anahtarı Windows Kimlik Bilgisi Yöneticisi'nde bulunamadı")
     return server, gateway_id, PrivateKey(base64.b64decode(secret, validate=True))
 
 
@@ -160,7 +162,7 @@ async def run(server: str, gateway_id: int, key: PrivateKey) -> None:
                         if msg.get("type") == "refresh":
                             if active and not active.done():
                                 await send_async({"type": "error", "run_id": msg["run_id"], "stage": "Kuyruk",
-                                                  "message": "Gateway üzerinde başka bir yenileme sürüyor", "detail": ""})
+                                                  "message": "Floemway üzerinde başka bir yenileme sürüyor", "detail": ""})
                             else:
                                 active = asyncio.create_task(asyncio.to_thread(extract_job, msg, key, send))
                 finally:
@@ -168,16 +170,16 @@ async def run(server: str, gateway_id: int, key: PrivateKey) -> None:
                     if active:
                         active.cancel()
         except (OSError, ConnectionError, TimeoutError, ValueError, WebSocketException) as e:
-            print(f"Gateway bağlantısı kesildi: {e}; 5 saniye sonra yeniden denenecek", flush=True)
+            print(f"Floemway bağlantısı kesildi: {e}; 5 saniye sonra yeniden denenecek", flush=True)
         await asyncio.sleep(5)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Floem BI Gateway")
+    parser = argparse.ArgumentParser(description="Floemway")
     parser.add_argument("--server", help="floembi.app HTTPS adresi")
-    parser.add_argument("--id", type=int, help="Gateway numarası")
+    parser.add_argument("--id", type=int, help="Floemway numarası")
     parser.add_argument("--token", help="İlk kayıt için tek kullanımlık anahtar")
-    parser.add_argument("--config", type=Path, help="Şifresiz Gateway ayar dosyası")
+    parser.add_argument("--config", type=Path, help="Şifresiz Floemway ayar dosyası")
     args = parser.parse_args()
     default_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "FloemBI"
     config = args.config or default_dir / f"gateway-{args.id or 1}.json"
@@ -189,10 +191,10 @@ def main() -> None:
             server, gateway_id = args.server, args.id
         else:
             server, gateway_id, key = load(config)
-        print(f"Gateway {gateway_id} bağlanıyor: {server}", flush=True)
+        print(f"Floemway {gateway_id} bağlanıyor: {server}", flush=True)
         asyncio.run(run(server, gateway_id, key))
     except (ValueError, OSError, urllib.error.URLError, keyring.errors.KeyringError) as e:
-        parser.exit(1, f"Gateway başlatılamadı: {e}\n")
+        parser.exit(1, f"Floemway başlatılamadı: {e}\n")
 
 
 if __name__ == "__main__":

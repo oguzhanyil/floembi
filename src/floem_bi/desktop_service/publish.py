@@ -7,6 +7,7 @@ sunucu adresi ve e-posta yazılır.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import threading
@@ -16,6 +17,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlparse
+
+from nacl.public import PublicKey, SealedBox
 
 from ..document import DocumentError
 
@@ -88,6 +91,8 @@ class PublishClient:
         u = urlparse(server_url.strip())
         if u.scheme not in ("http", "https") or not u.netloc:
             raise DocumentError("Sunucu adresi http:// ya da https:// ile başlamalı", code="publish_invalid")
+        if u.scheme == "http" and u.hostname not in ("localhost", "127.0.0.1"):
+            raise DocumentError("Uzak sunucu için HTTPS gerekir", code="publish_invalid")
         with self._lock:
             self.server_url = f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}"
             self.token = None
@@ -103,13 +108,41 @@ class PublishClient:
         self._require()
         return self._call("GET", "/api/me")["workspaces"]
 
+    def gateways(self, workspace_id: int) -> list[dict]:
+        self._require()
+        return self._call("GET", f"/api/workspaces/{int(workspace_id)}/gateways")
+
     def _require(self) -> None:
         if not self.token:
             raise DocumentError("Yayımlamak için floembi.app'te oturum açın", code="publish_unauthorized")
 
     # ------------------------------------------------------------------ yükleme
-    def publish(self, workspace_id: int, file_path: str) -> dict:
+    def publish(self, workspace_id: int, file_path: str, gateway_id: int | None = None,
+                sources: list[dict] | None = None) -> dict:
         self._require()
+        sources = sources or []
+        try:
+            registered = [g for g in self.gateways(workspace_id) if g["registered"] and g.get("public_key")]
+        except DocumentError as e:
+            if e.code != "forbidden":
+                raise
+            # Yayımlama uç noktası kendi yetki mesajını döndürür.
+            registered = []
+        selected = next((g for g in registered if g["id"] == gateway_id), None) if gateway_id else (
+            registered[0] if len(registered) == 1 else None)
+        encrypted = []
+        missing = []
+        if selected:
+            try:
+                box = SealedBox(PublicKey(base64.b64decode(selected["public_key"], validate=True)))
+            except (ValueError, TypeError) as e:
+                raise DocumentError("Floemway açık anahtarı geçersiz", code="gateway_invalid_key") from e
+            for source in sources:
+                if source["auth"] != "sql" or not source["password"] or not source["database"] or not source["username"]:
+                    missing.append(source["source_key"])
+                    continue
+                encrypted.append({k: source[k] for k in ("source_key", "server", "database", "username")} |
+                                 {"password_enc": box.encrypt(source["password"].encode("utf-8")).hex()})
         path = Path(file_path)
         boundary = "floem" + uuid.uuid4().hex
         head = (
@@ -134,4 +167,26 @@ class PublishClient:
         )
         # Bağlantı, Desktop'un konuştuğu sunucu adresiyle kurulur (sunucunun kendi adres ayarından bağımsız)
         res["url"] = f"{self.server_url}/reports/{res['report_id']}"
+        total = len(sources)
+        synced = 0
+        warning = ""
+        if total and not selected:
+            warning = ("Floemway henüz kayıtlı değil; rapor yayımlandı, bağlantılar bekliyor." if not registered else
+                       "Birden fazla Floemway var; rapor yayımlandı, bağlantılar için birini seçin.")
+        elif selected and encrypted:
+            try:
+                self._call("POST", f"/api/datasets/{res['dataset_id']}/gateway-sync",
+                           {"gateway_id": selected["id"], "sources": encrypted})
+                synced = len(encrypted)
+            except DocumentError as e:
+                warning = f"Rapor yayımlandı; Floemway bağlantıları eşlenemedi: {e.message}"
+        if missing:
+            warning = (warning + " " if warning else "") + (
+                "Bazı bağlantıların SQL şifresi Desktop'ta kayıtlı değil veya Windows kimlik doğrulaması kullanılıyor.")
+        res["gateway_sync"] = {
+            "status": "not_needed" if total == 0 else "ready" if synced == total else "partial" if synced else "pending",
+            "gateway_name": selected["name"] if selected else None,
+            "synced": synced, "total": total,
+            "message": warning or ("Floemway bağlantıları otomatik eşlendi." if total else "Bu raporda kaynak bağlantısı yok."),
+        }
         return res

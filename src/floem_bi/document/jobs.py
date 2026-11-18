@@ -110,8 +110,8 @@ class JobRunner:
                 if job.cancelled():
                     job.status = "cancelled"
                 else:
-                    job.status = "failed"
                     job.error = error_dict(e)
+                    job.status = "failed"
                 for t in job.tables:
                     if t.status == "running":
                         t.status = "failed" if job.status == "failed" else "cancelled"

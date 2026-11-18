@@ -229,6 +229,19 @@ class GatewaySourceIn(BaseModel):
     password: str = Field(min_length=1, max_length=500)
 
 
+class GatewaySyncSourceIn(BaseModel):
+    source_key: str = Field(min_length=1, max_length=120)
+    server: str = Field(min_length=1, max_length=255)
+    database: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=254)
+    password_enc: str = Field(min_length=98, max_length=4096)
+
+
+class GatewaySyncIn(BaseModel):
+    gateway_id: int
+    sources: list[GatewaySyncSourceIn] = Field(min_length=1, max_length=500)
+
+
 class SourceBindingsIn(BaseModel):
     sources: dict[str, int]
 
@@ -428,12 +441,37 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         return source.veritabani or next((t.sorgu.veritabani for t in model.tablolar
                                           if t.sorgu and t.sorgu.kaynak == source_id and t.sorgu.veritabani), "")
 
+    def source_status(c, ds) -> list[dict]:
+        model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+        bindings = {r.source_key: r.gateway_source_id for r in c.execute(select(db.dataset_source_bindings).where(
+            db.dataset_source_bindings.c.dataset_id == ds.id)).all()}
+        used = {t.sorgu.kaynak for t in model.tablolar if t.sorgu}
+        out = []
+        for source in model.veri_kaynaklari:
+            if source.id not in used:
+                continue
+            linked = c.execute(select(db.gateway_sources.c.id, db.gateway_sources.c.server,
+                                      db.gateway_sources.c.database, db.gateway_sources.c.username,
+                                      db.gateways.c.id.label("gateway_id"), db.gateways.c.name.label("gateway_name"))
+                               .join(db.gateways, db.gateways.c.id == db.gateway_sources.c.gateway_id)
+                               .where(db.gateway_sources.c.id == bindings.get(source.id, -1))).first()
+            ready = linked is not None and (
+                linked.server.casefold(), linked.database.casefold()
+            ) == (source.sunucu.casefold(), source_database(model, source.id).casefold()) and (
+                not source.kullanici or linked.username.casefold() == source.kullanici.casefold())
+            out.append({"dataset_id": ds.id, "dataset_name": ds.name, "source_key": source.id,
+                        "server": source.sunucu, "database": source_database(model, source.id),
+                        "username": source.kullanici or "", "ready": ready,
+                        "gateway_id": linked.gateway_id if linked else None,
+                        "gateway_name": linked.gateway_name if linked else None})
+        return out
+
     @app.post("/api/gateways")
     def create_gateway(body: GatewayCreateIn, user: dict = Depends(current_user)):
         with engine.begin() as c:
             role = role_in(c, user["id"], body.workspace_id)
             if role not in ("admin", "member"):
-                raise FORBIDDEN("Gateway oluşturmak için çalışma alanı Yöneticisi ya da Üyesi olmalısınız")
+                raise FORBIDDEN("Floemway oluşturmak için çalışma alanı Yöneticisi ya da Üyesi olmalısınız")
             gid = c.execute(db.gateways.insert().values(
                 workspace_id=body.workspace_id, name=body.name, created_by=user["id"]
             )).inserted_primary_key[0]
@@ -453,7 +491,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         with gateway_lock:
             online = set(gateway_sockets)
         return [{"id": r.id, "name": r.name, "registered": bool(r.public_key), "online": r.id in online,
-                 "last_seen": iso(r.last_seen) if r.last_seen else None} for r in rows]
+                 "public_key": r.public_key, "last_seen": iso(r.last_seen) if r.last_seen else None} for r in rows]
 
     @app.post("/api/gateways/register")
     def register_gateway(body: GatewayRegisterIn):
@@ -461,7 +499,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         try:
             PublicKey(base64.b64decode(body.public_key, validate=True))
         except Exception as e:
-            raise ApiError(400, "invalid_key", "Gateway açık anahtarı geçersiz") from e
+            raise ApiError(400, "invalid_key", "Floemway açık anahtarı geçersiz") from e
         digest = hashlib.sha256(body.token.encode()).hexdigest()
         with engine.begin() as c:
             row = c.execute(select(db.gateway_tokens).where(db.gateway_tokens.c.token_hash == digest)).first()
@@ -477,11 +515,11 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         with engine.connect() as c:
             gw = c.execute(select(db.gateways).where(db.gateways.c.id == body.gateway_id)).first()
             if gw is None:
-                raise NOT_FOUND("Gateway")
+                raise NOT_FOUND("Floemway")
             if role_in(c, user["id"], gw.workspace_id) not in ("admin", "member"):
                 raise FORBIDDEN()
             if not gw.public_key:
-                raise ApiError(409, "gateway_unregistered", "Gateway henüz kaydolmadı")
+                raise ApiError(409, "gateway_unregistered", "Floemway henüz kaydolmadı")
         encrypted = SealedBox(PublicKey(base64.b64decode(gw.public_key))).encrypt(body.password.encode()).hex()
         with engine.begin() as c:
             existing = c.execute(select(db.gateway_sources.c.id).where(and_(
@@ -512,6 +550,74 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                              .join(db.gateways, db.gateways.c.id == db.gateway_sources.c.gateway_id)
                              .where(db.gateway_sources.c.workspace_id == wid).order_by(db.gateway_sources.c.id)).all()
         return [dict(r._mapping) for r in rows]
+
+    @app.get("/api/workspaces/{wid}/source-status")
+    def workspace_source_status(wid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            if role_in(c, user["id"], wid) is None:
+                raise FORBIDDEN()
+            datasets = c.execute(select(db.datasets).where(db.datasets.c.workspace_id == wid)
+                                 .order_by(db.datasets.c.name)).all()
+            return [status for ds in datasets for status in source_status(c, ds)]
+
+    @app.post("/api/datasets/{dsid}/gateway-sync")
+    def sync_gateway_sources(dsid: int, body: GatewaySyncIn, user: dict = Depends(current_user)):
+        """Desktop'tan gelen sealed box bilgilerini saklar ve model kaynaklarını bağlar."""
+        with engine.begin() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            if ds is None:
+                raise NOT_FOUND("Anlam modeli")
+            role = role_in(c, user["id"], ds.workspace_id)
+            if role not in ("admin", "member") and not (role == "contributor" and ds.published_by == user["id"]):
+                raise FORBIDDEN("Floemway bağlantısını yalnızca yayımlayan veya çalışma alanı yöneticisi eşleyebilir")
+            gateway = c.execute(select(db.gateways).where(db.gateways.c.id == body.gateway_id)).first()
+            if gateway is None or gateway.workspace_id != ds.workspace_id or not gateway.public_key:
+                raise ApiError(400, "gateway_unavailable", "Kayıtlı Floemway bulunamadı")
+            model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+            by_key = {s.id: s for s in model.veri_kaynaklari}
+            if len({s.source_key for s in body.sources}) != len(body.sources):
+                raise ApiError(400, "source_mismatch", "Aynı veri kaynağı birden fazla gönderildi")
+            for incoming in body.sources:
+                expected = by_key.get(incoming.source_key)
+                if expected is None or expected.kimlik != "sql":
+                    raise ApiError(400, "source_mismatch", "Modelde SQL veri kaynağı bulunamadı")
+                if (incoming.server.casefold(), incoming.database.casefold()) != (
+                    expected.sunucu.casefold(), source_database(model, expected.id).casefold()
+                ) or (expected.kullanici and incoming.username.casefold() != expected.kullanici.casefold()):
+                    raise ApiError(400, "source_mismatch", f"{expected.sunucu} bağlantı bilgileri modelle uyuşmuyor")
+                try:
+                    if len(bytes.fromhex(incoming.password_enc)) <= 48:
+                        raise ValueError("kısa şifreli metin")
+                except ValueError as e:
+                    raise ApiError(400, "invalid_secret", "Şifreli bağlantı bilgisi geçersiz") from e
+            synced = []
+            for incoming in body.sources:
+                existing = c.execute(select(db.gateway_sources.c.id).where(and_(
+                    db.gateway_sources.c.workspace_id == ds.workspace_id,
+                    db.gateway_sources.c.server == incoming.server,
+                    db.gateway_sources.c.database == incoming.database,
+                    db.gateway_sources.c.username == incoming.username,
+                ))).first()
+                values = dict(gateway_id=gateway.id, password_enc=incoming.password_enc, created_by=user["id"])
+                if existing:
+                    sid = existing.id
+                    c.execute(db.gateway_sources.update().where(db.gateway_sources.c.id == sid).values(**values))
+                else:
+                    sid = c.execute(db.gateway_sources.insert().values(
+                        workspace_id=ds.workspace_id, server=incoming.server, database=incoming.database,
+                        username=incoming.username, **values)).inserted_primary_key[0]
+                old = c.execute(select(db.dataset_source_bindings).where(and_(
+                    db.dataset_source_bindings.c.dataset_id == dsid,
+                    db.dataset_source_bindings.c.source_key == incoming.source_key))).first()
+                if old:
+                    c.execute(db.dataset_source_bindings.update().where(and_(
+                        db.dataset_source_bindings.c.dataset_id == dsid,
+                        db.dataset_source_bindings.c.source_key == incoming.source_key)).values(gateway_source_id=sid))
+                else:
+                    c.execute(db.dataset_source_bindings.insert().values(
+                        dataset_id=dsid, source_key=incoming.source_key, gateway_source_id=sid))
+                synced.append(incoming.source_key)
+        return {"gateway_id": gateway.id, "gateway_name": gateway.name, "sources": synced}
 
     @app.get("/api/datasets/{dsid}/source-bindings")
     def get_source_bindings(dsid: int, user: dict = Depends(current_user)):
@@ -550,7 +656,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                         source.sunucu.casefold(), source_database(model, source.id).casefold()
                 ):
                     raise ApiError(400, "source_mismatch",
-                                   f"{source.sunucu} / {source.veritabani} için uygun Gateway bağlantısı seçin")
+                                   f"{source.sunucu} / {source.veritabani} için uygun Floemway bağlantısı seçin")
             c.execute(db.dataset_source_bindings.delete().where(db.dataset_source_bindings.c.dataset_id == dsid))
             for key, sid in body.sources.items():
                 c.execute(db.dataset_source_bindings.insert().values(
@@ -570,7 +676,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         with engine.connect() as c:
             return refresh_view(c.execute(select(db.refresh_runs).where(db.refresh_runs.c.id == run_id)).one())
 
-    async def fail_refresh(gateway_id: int, message: str, *, stage: str = "Gateway", table: str | None = None,
+    async def fail_refresh(gateway_id: int, message: str, *, stage: str = "Floemway", table: str | None = None,
                            detail: str = "") -> None:
         with gateway_lock:
             task = active_refreshes.pop(gateway_id, None)
@@ -647,9 +753,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         if not tables:
             error = "Yenilenebilir kaynak tablosu yok"
         elif any(s is None for s in selected):
-            error = "Veri kaynağı Gateway bağlantısıyla eşleştirilmedi"
+            error = "Veri kaynağı Floemway bağlantısıyla eşleştirilmedi"
         elif len({s.gateway_id for s in selected}) != 1:
-            error = "Bir anlam modeli için aynı Gateway üzerindeki bağlantıları seçin"
+            error = "Bir anlam modeli için aynı Floemway üzerindeki bağlantıları seçin"
         with engine.begin() as c:
             run_id = c.execute(db.refresh_runs.insert().values(
                 dataset_id=dsid, gateway_id=gateway_id, status="queued", stage="Kuyruk",
@@ -666,13 +772,13 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         if busy:
             with engine.begin() as c:
                 c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Kuyruk", error=json.dumps({"message": "Gateway üzerinde başka bir yenileme sürüyor", "detail": ""}, ensure_ascii=False),
+                    status="failed", stage="Kuyruk", error=json.dumps({"message": "Floemway üzerinde başka bir yenileme sürüyor", "detail": ""}, ensure_ascii=False),
                     finished_at=db.now()))
             return refresh_row(run_id)
         if connected is None:
             with engine.begin() as c:
                 c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Bağlantı", error=json.dumps({"message": "Gateway çevrimdışı", "detail": ""}, ensure_ascii=False),
+                    status="failed", stage="Bağlantı", error=json.dumps({"message": "Floemway çevrimdışı", "detail": ""}, ensure_ascii=False),
                     finished_at=db.now()))
             return refresh_row(run_id)
         tmp_root = settings.data_dir / "tmp"
@@ -689,7 +795,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             with engine.begin() as c:
                 c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
                     status="failed", stage="Kuyruk", finished_at=db.now(),
-                    error=json.dumps({"message": "Gateway bağlantısı değişti; yeniden deneyin", "detail": ""},
+                    error=json.dumps({"message": "Floemway bağlantısı değişti; yeniden deneyin", "detail": ""},
                                      ensure_ascii=False)))
             return refresh_row(run_id)
         payload = {"type": "refresh", "run_id": run_id, "tables": []}
@@ -703,7 +809,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             async with send_lock:
                 await socket.send_json(payload)
         except Exception:
-            await fail_refresh(gateway_id, "Gateway çevrimdışı", stage="Bağlantı")
+            await fail_refresh(gateway_id, "Floemway çevrimdışı", stage="Bağlantı")
             return refresh_row(run_id)
 
         async def watchdog() -> None:
@@ -753,7 +859,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             prior = gateway_sockets.get(gateway_id)
             gateway_sockets[gateway_id] = (websocket, send_lock)
         if prior:
-            await fail_refresh(gateway_id, "Gateway bağlantısı yeniden kuruldu", stage="Bağlantı")
+            await fail_refresh(gateway_id, "Floemway bağlantısı yeniden kuruldu", stage="Bağlantı")
             await prior[0].close(code=4000)
         with engine.begin() as c:
             c.execute(db.gateways.update().where(db.gateways.c.id == gateway_id).values(last_seen=db.now()))
@@ -797,8 +903,8 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                         elif kind == "table_end":
                             task.builder.end_table(message["name"])
                         elif kind == "error":
-                            await fail_refresh(gateway_id, message.get("message", "Gateway hatası"),
-                                               stage=message.get("stage") or "Gateway",
+                            await fail_refresh(gateway_id, message.get("message", "Floemway hatası"),
+                                               stage=message.get("stage") or "Floemway",
                                                table=message.get("table_name"), detail=message.get("detail") or "")
                         elif kind == "done":
                             await complete_refresh(task)
@@ -815,7 +921,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 if was_current:
                     del gateway_sockets[gateway_id]
             if was_current:
-                await fail_refresh(gateway_id, "Gateway çevrimdışı", stage="Bağlantı")
+                await fail_refresh(gateway_id, "Floemway çevrimdışı", stage="Bağlantı")
 
     def report_access(c, user_id: int, report_row) -> str | None:
         role = role_in(c, user_id, report_row.workspace_id)
@@ -895,11 +1001,14 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             rp = c.execute(select(db.reports).where(db.reports.c.workspace_id == wid).order_by(db.reports.c.name)).all()
             names = {r.published_by: user_name(c, r.published_by) for r in [*ds, *rp]}
             app_sum = app_summary(c, wid)
+            source_summaries = {d.id: source_status(c, d) for d in ds}
         return {
             "workspace": {"id": ws.id, "name": ws.name, "role": role, "role_label": ROLE_LABEL[role]},
             "datasets": [{
                 "id": d.id, "name": d.name, "version": d.version, "size_bytes": d.size_bytes,
                 "published_at": iso(d.published_at), "published_by": names[d.published_by],
+                "gateway_ready": bool(source_summaries[d.id]) and all(s["ready"] for s in source_summaries[d.id]),
+                "gateway_source_count": len(source_summaries[d.id]),
             } for d in ds],
             "reports": [{
                 "id": r.id, "name": r.name, "version": r.version, "dataset_id": r.dataset_id,

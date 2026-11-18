@@ -106,6 +106,7 @@ class PublishLoginIn(BaseModel):
 
 class PublishIn(BaseModel):
     workspace_id: int
+    gateway_id: int | None = None
 
 
 class DaxIn(BaseModel):
@@ -437,6 +438,10 @@ def create_app(
     def publish_workspaces():
         return publisher.workspaces()
 
+    @app.get("/publish/gateways/{workspace_id}", dependencies=[Depends(auth)])
+    def publish_gateways(workspace_id: int):
+        return publisher.gateways(workspace_id)
+
     @app.post("/publish", dependencies=[Depends(auth)])
     def publish(body: PublishIn):
         ensure_idle()
@@ -449,7 +454,29 @@ def create_app(
             )
         if not d.tanim.tablolar:
             raise DocumentError("Yayımlanacak veri yok; önce tablo yükleyin", code="nothing_to_publish")
-        return publisher.publish(body.workspace_id, d.path)
+        sources = []
+        used = {t.sorgu.kaynak for t in d.tanim.tablolar if t.sorgu}
+        for k in d.tanim.veri_kaynaklari:
+            if k.id not in used:
+                continue
+            database = k.veritabani or next((t.sorgu.veritabani for t in d.tanim.tablolar
+                                               if t.sorgu and t.sorgu.kaynak == k.id and t.sorgu.veritabani), "")
+            item = {"source_key": k.id, "server": k.sunucu, "database": database,
+                    "username": k.kullanici or "", "auth": k.kimlik, "password": None}
+            if k.kimlik == "sql":
+                try:
+                    try:
+                        spec = store.get(k.id)
+                    except ConnectorError as e:
+                        if e.code != "not_found":
+                            raise
+                        cid = store.find(k.sunucu, database, k.kimlik, k.kullanici)
+                        spec = store.get(cid) if cid else None
+                    item["password"] = spec.password if spec else None
+                except ConnectorError:
+                    pass
+            sources.append(item)
+        return publisher.publish(body.workspace_id, d.path, body.gateway_id, sources)
 
     @app.get("/jobs/{job_id}", dependencies=[Depends(auth)])
     def get_job(job_id: str):

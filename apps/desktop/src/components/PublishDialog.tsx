@@ -1,4 +1,4 @@
-import type { PublishResult, PublishSession, WorkspaceInfo } from "@floem/client";
+import type { GatewayInfo, PublishResult, PublishSession, WorkspaceInfo } from "@floem/client";
 import { useEffect, useState, type FormEvent } from "react";
 import { toUiError, useClient, type UiError } from "../api";
 import { useDocument } from "../document";
@@ -16,6 +16,8 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
+  const [gateways, setGateways] = useState<GatewayInfo[]>([]);
+  const [gatewayId, setGatewayId] = useState<number | null>(null);
   const [busy, setBusy] = useState<null | "login" | "publish" | "save">(null);
   const [error, setError] = useState<UiError | null>(null);
   const [result, setResult] = useState<PublishResult | null>(null);
@@ -35,6 +37,20 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (workspaces && picked === null) setPicked(workspaces.find((w) => CAN_PUBLISH.has(w.role))?.id ?? null);
   }, [workspaces, picked]);
+
+  useEffect(() => {
+    if (picked === null || !session?.logged_in) return;
+    let active = true;
+    setGateways([]);
+    setGatewayId(null);
+    client.publishGateways(picked).then((items) => {
+      if (!active) return;
+      const registered = items.filter((g) => g.registered);
+      setGateways(registered);
+      setGatewayId(registered.length === 1 ? registered[0].id : null);
+    }).catch((e) => { if (active) setError(toUiError(e)); });
+    return () => { active = false; };
+  }, [client, picked, session?.logged_in]);
 
   const needsSave = !doc?.path || doc.dirty;
 
@@ -74,7 +90,7 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
     setBusy("publish");
     setError(null);
     try {
-      setResult(await client.publish(picked));
+      setResult(await client.publish(picked, gatewayId));
     } catch (err) {
       const ui = toUiError(err);
       setError(ui);
@@ -108,6 +124,11 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
                 Raporu floembi.app'te aç
               </a>
               <p className="hint">{result.url}</p>
+              {result.gateway_sync.status !== "not_needed" && (
+                <p className={result.gateway_sync.status === "ready" ? "ok-text" : "warn-text"} role="status">
+                  {result.gateway_sync.message} ({result.gateway_sync.synced}/{result.gateway_sync.total})
+                </p>
+              )}
             </div>
           ) : needsSave ? (
             <>
@@ -170,6 +191,17 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
                   );
                 })}
               </div>
+              {picked !== null && <div className="form">
+                <h3>Floemway</h3>
+                {gateways.length === 0 ? <p className="hint">Kayıtlı Floemway yok. Rapor yayımlanır; kaynak bağlantıları Floemway kaydından sonra bekler.</p> :
+                  gateways.length === 1 ? <p className="hint">Bağlantılar {gateways[0].name} ile otomatik eşlenecek.</p> :
+                    <label>Bağlantıları kullanacak Floemway
+                      <select value={gatewayId ?? ""} onChange={(e) => setGatewayId(Number(e.target.value) || null)}>
+                        <option value="">Seçin</option>
+                        {gateways.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    </label>}
+              </div>}
             </>
           )}
           {error && <ErrorBox error={error} onClose={() => setError(null)} />}
