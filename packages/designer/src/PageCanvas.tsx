@@ -11,6 +11,85 @@ export { FIELD_MIME };
 
 type Drag = { id: string; mode: "move" | "resize"; sx: number; sy: number; orig: Visual; moved: boolean };
 
+/** Hizalama kılavuzu: dikey (v) çizgi x'te, yatay (h) çizgi y'de; from–to arası çizilir */
+type Guide = { o: "v" | "h"; pos: number; from: number; to: number };
+type Rect = { x: number; y: number; w: number; h: number };
+
+/** Sayfa birimiyle yapışma mesafesi (ekranda yaklaşık 6–8 px) */
+const SNAP = 6;
+
+/**
+ * Akıllı kılavuzlar (Power BI'daki gibi): sürüklenen görselin kenarları ve ortası, diğer
+ * görsellerin ve sayfanın kenar/orta çizgilerine yaklaşınca oraya yapışır; eşleşen çizgiler
+ * kılavuz olarak döner. Taşımada sol/orta/sağ (üst/orta/alt), boyutlandırmada sağ ve alt kenar.
+ */
+function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: number; height: number }) {
+  const targets = [{ x: 0, y: 0, w: page.width, h: page.height }, ...others];
+  const lines = (t: Rect, axis: "x" | "y") =>
+    axis === "x" ? [t.x, t.x + t.w / 2, t.x + t.w] : [t.y, t.y + t.h / 2, t.y + t.h];
+  const edges = (q: Rect, axis: "x" | "y") => {
+    const [a, m, b] = lines(q, axis);
+    return mode === "move" ? [a, m, b] : [b];
+  };
+
+  function best(axis: "x" | "y"): number | null {
+    let found: number | null = null;
+    for (const t of targets) {
+      for (const c of lines(t, axis)) {
+        for (const e of edges(r, axis)) {
+          const d = c - e;
+          if (Math.abs(d) <= SNAP && (found === null || Math.abs(d) < Math.abs(found))) found = d;
+        }
+      }
+    }
+    return found;
+  }
+
+  const dx = best("x");
+  const dy = best("y");
+  const out = { ...r };
+  if (dx !== null) {
+    if (mode === "move") out.x += dx;
+    else out.w += dx;
+  }
+  if (dy !== null) {
+    if (mode === "move") out.y += dy;
+    else out.h += dy;
+  }
+
+  // Aynı çizgideki tüm eşleşmeler tek kılavuzda birleşir (çizgi hepsini kapsar)
+  const byLine = new Map<string, Guide>();
+  const add = (g: Guide) => {
+    const k = `${g.o}${g.pos}`;
+    const cur = byLine.get(k);
+    if (cur) {
+      cur.from = Math.min(cur.from, g.from);
+      cur.to = Math.max(cur.to, g.to);
+    } else byLine.set(k, { ...g });
+  };
+  for (const t of targets) {
+    const isPage = t === targets[0];
+    if (dx !== null) {
+      for (const c of lines(t, "x")) {
+        if (!lines(out, "x").some((e) => Math.abs(e - c) < 0.5)) continue;
+        add(isPage
+          ? { o: "v", pos: c, from: 0, to: page.height }
+          : { o: "v", pos: c, from: Math.min(out.y, t.y), to: Math.max(out.y + out.h, t.y + t.h) });
+      }
+    }
+    if (dy !== null) {
+      for (const c of lines(t, "y")) {
+        if (!lines(out, "y").some((e) => Math.abs(e - c) < 0.5)) continue;
+        add(isPage
+          ? { o: "h", pos: c, from: 0, to: page.width }
+          : { o: "h", pos: c, from: Math.min(out.x, t.x), to: Math.max(out.x + out.w, t.x + t.w) });
+      }
+    }
+  }
+  const guides = [...byLine.values()];
+  return { rect: out, snappedX: dx !== null, snappedY: dy !== null, guides };
+}
+
 /** Sabit boyutlu rapor sayfası (Power BI'daki 16:9 tuval); görseller taşınır ve boyutlandırılır. */
 export function PageCanvas({
   page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
@@ -39,6 +118,7 @@ export function PageCanvas({
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dropHover, setDropHover] = useState<string | null>(null);
+  const [guides, setGuides] = useState<Guide[]>([]);
 
   useLayoutEffect(() => {
     const el = outer.current;
@@ -68,20 +148,35 @@ export function PageCanvas({
     const dy = (e.clientY - drag.sy) / scale;
     if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
     const o = drag.orig;
+    const raw: Rect =
+      drag.mode === "move" ? { x: o.x + dx, y: o.y + dy, w: o.w, h: o.h } : { x: o.x, y: o.y, w: o.w + dx, h: o.h + dy };
+    // Alt basılıyken kılavuz ve yapışma yok (serbest konum)
+    const others = page.visuals.filter((v) => v.id !== o.id);
+    const a = e.altKey ? null : alignRect(raw, drag.mode, others, page);
+    const r = a?.rect ?? raw;
+    // Kılavuza yapışmayan eksende 8 px ızgara
+    const gx = (v: number) => (a?.snappedX ? v : e.altKey ? Math.round(v) : snap(v));
+    const gy = (v: number) => (a?.snappedY ? v : e.altKey ? Math.round(v) : snap(v));
     const next =
       drag.mode === "move"
         ? {
             ...o,
-            x: Math.max(0, Math.min(page.width - o.w, snap(o.x + dx))),
-            y: Math.max(0, Math.min(page.height - o.h, snap(o.y + dy))),
+            x: Math.max(0, Math.min(page.width - o.w, gx(r.x))),
+            y: Math.max(0, Math.min(page.height - o.h, gy(r.y))),
           }
         : {
             ...o,
-            w: Math.max(120, Math.min(page.width - o.x, snap(o.w + dx))),
-            h: Math.max(80, Math.min(page.height - o.y, snap(o.h + dy))),
+            w: Math.max(120, Math.min(page.width - o.x, gx(r.w))),
+            h: Math.max(80, Math.min(page.height - o.y, gy(r.h))),
           };
+    setGuides(a?.guides ?? []);
     if (!drag.moved) setDrag({ ...drag, moved: true });
     onChange(next);
+  }
+
+  function end() {
+    setDrag(null);
+    setGuides([]);
   }
 
   const readField = readPayload;
@@ -111,6 +206,17 @@ export function PageCanvas({
             veya <strong>Görselleştirmeler</strong> bölmesinden bir görsel seçin.
           </div>
         )}
+        {guides.map((g, i) => (
+          <div
+            key={i}
+            className={`align-guide ${g.o}`}
+            style={
+              g.o === "v"
+                ? { left: g.pos * scale, top: g.from * scale, height: (g.to - g.from) * scale }
+                : { top: g.pos * scale, left: g.from * scale, width: (g.to - g.from) * scale }
+            }
+          />
+        ))}
         {page.visuals.map((v) => {
           const selected = v.id === selectedId;
           const title = visualTitle(v);
@@ -143,7 +249,8 @@ export function PageCanvas({
                 className="visual-head"
                 onPointerDown={(e) => start(e, v, "move")}
                 onPointerMove={move}
-                onPointerUp={() => setDrag(null)}
+                onPointerUp={end}
+                onPointerCancel={end}
                 title="Taşımak için sürükleyin"
               >
                 <span className="visual-title">{title}</span>
@@ -178,7 +285,8 @@ export function PageCanvas({
                   className="visual-resize"
                   onPointerDown={(e) => start(e, v, "resize")}
                   onPointerMove={move}
-                  onPointerUp={() => setDrag(null)}
+                  onPointerUp={end}
+                onPointerCancel={end}
                   title="Boyutlandır"
                 />
               )}
