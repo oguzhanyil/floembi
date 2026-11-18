@@ -144,13 +144,12 @@ function Shell({ children }: { children: React.ReactNode }) {
         {mailMode === "outbox" && (
           <Link to="/inbox" className={path === "/inbox" ? "active" : ""}>✉ Gelen e-postalar</Link>
         )}
-        <div className="nav-section">Çalışma alanları</div>
+        {workspaces.length > 0 && <div className="nav-section">Çalışma alanları</div>}
         {workspaces.map((w) => (
           <Link key={w.id} to={`/workspaces/${w.id}`} className={path === `/workspaces/${w.id}` ? "active" : ""}>
             ▣ {w.name}
           </Link>
         ))}
-        {workspaces.length === 0 && <span className="muted pad">Üye olduğunuz çalışma alanı yok</span>}
         {isAdmin && (
           <>
             <div className="nav-section">Yönetim</div>
@@ -205,21 +204,24 @@ function Home() {
           </table>
         )}
       </section>
+      {workspaces.length === 0 ? (
+        <p className="muted small">
+          Size açılan uygulamalar ve raporlar yukarıda görünür. Raporları hazırlayıp yayımlamak için bir çalışma
+          alanına üye olmanız gerekir; bunu sistem yöneticiniz verir.
+        </p>
+      ) : (
       <section>
         <h2>Çalışma alanlarım</h2>
-        {workspaces.length === 0 ? (
-          <p className="muted">Hiçbir çalışma alanına üye değilsiniz. Raporlar sizinle paylaşıldığında yukarıda görünür.</p>
-        ) : (
-          <div className="tiles">
-            {workspaces.map((w) => (
-              <Link key={w.id} to={`/workspaces/${w.id}`} className="tile">
-                <strong>{w.name}</strong>
-                <span className="muted">Rolünüz: {w.role_label}</span>
-              </Link>
-            ))}
-          </div>
-        )}
+        <div className="tiles">
+          {workspaces.map((w) => (
+            <Link key={w.id} to={`/workspaces/${w.id}`} className="tile">
+              <strong>{w.name}</strong>
+              <span className="muted">Rolünüz: {w.role_label}</span>
+            </Link>
+          ))}
+        </div>
       </section>
+      )}
     </div>
   );
 }
