@@ -20,8 +20,5 @@
     "web": "npm run dev -w @floem/web",
     "web:build": "npm run build -w @floem/web",
     "server": "node packaging/run-server.mjs"
-  },
-  "dependencies": {
-    "server": "^1.0.42"
   }
 }
