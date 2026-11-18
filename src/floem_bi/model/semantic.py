@@ -113,16 +113,37 @@ class SemanticModel:
             self.warnings.append(f"{r.kimden} ↔ {r.kime}: çift yönlü filtre MVP'de tek yön olarak uygulanır")
         self._edges.setdefault(f.table.lower(), []).append(Edge(f, to, r.referans_butunlugu))
 
-    def path(self, base: str, target: str) -> list[Edge] | None:
+    def relationship_between(self, a: ColKey, b: ColKey) -> tuple[ColKey, ColKey] | None:
+        """İki sütun arasındaki ilişkiyi (etkin ya da pasif) (çok, bir) sırasıyla döndürür."""
+        for r in self.tanim.iliskiler:
+            many, one = self.col_key(r.kimden), self.col_key(r.kime)
+            if {many, one} == {a, b}:
+                return many, one
+        return None
+
+    def _edges_with(self, activate: frozenset) -> dict[str, list[Edge]]:
+        """USERELATIONSHIP: verilen ilişkiler etkinleşir; aynı iki tablo arasındaki etkin ilişki devre dışı kalır."""
+        if not activate:
+            return self._edges
+        edges = {k: list(v) for k, v in self._edges.items()}
+        for many, one in activate:
+            pair = {many.table.lower(), one.table.lower()}
+            for k in edges:
+                edges[k] = [e for e in edges[k] if {e.from_col.table.lower(), e.to_col.table.lower()} != pair]
+            edges.setdefault(many.table.lower(), []).append(Edge(many, one, False))
+        return edges
+
+    def path(self, base: str, target: str, activate: frozenset = frozenset()) -> list[Edge] | None:
         """`base` tablosundan `target`a çok→bir yönünde en kısa yol (filtre yayılım yönünün tersi)."""
         base_l, target_l = base.lower(), target.lower()
         if base_l == target_l:
             return []
+        all_edges = self._edges_with(activate)
         seen = {base_l}
         queue: deque[tuple[str, list[Edge]]] = deque([(base_l, [])])
         while queue:
             node, p = queue.popleft()
-            for e in self._edges.get(node, []):
+            for e in all_edges.get(node, []):
                 nxt = e.to_col.table.lower()
                 if nxt in seen:
                     continue
@@ -133,8 +154,8 @@ class SemanticModel:
                 queue.append((nxt, np))
         return None
 
-    def reachable(self, base: str, target: str) -> bool:
-        return self.path(base, target) is not None
+    def reachable(self, base: str, target: str, activate: frozenset = frozenset()) -> bool:
+        return self.path(base, target, activate) is not None
 
     # --- doğrulama ----------------------------------------------------------
     @cached_property

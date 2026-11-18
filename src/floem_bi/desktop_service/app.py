@@ -100,6 +100,11 @@ class PublishIn(BaseModel):
     workspace_id: int
 
 
+class DaxIn(BaseModel):
+    expression: str
+    table: str | None = None
+
+
 class ProfileIn(BaseModel):
     kimden: str
     kime: str
@@ -325,6 +330,10 @@ def create_app(
     @app.get("/document/tables/{table}/preview", dependencies=[Depends(auth)])
     def table_preview(table: str, limit: int = 100):
         return doc().preview(table, max(1, min(limit, 1000)))
+
+    @app.post("/document/dax/validate", dependencies=[Depends(auth)])
+    def dax_validate(body: DaxIn):
+        return doc().validate_dax(body.expression, body.table)
 
     @app.post("/document/relationship-profile", dependencies=[Depends(auth)])
     def relationship_profile(body: ProfileIn):

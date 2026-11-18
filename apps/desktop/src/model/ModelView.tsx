@@ -28,7 +28,14 @@ type Dialog =
   | null;
 
 /** Power BI'daki model görünümü: tablo kartları, ilişki çizgileri, Özellikler ve Veri bölmeleri. */
-export function ModelView({ onGetData, onRefreshTable }: { onGetData: () => void; onRefreshTable: (t: string) => void }) {
+export function ModelView({
+  onGetData, onRefreshTable, onEditMeasure, onNewMeasure,
+}: {
+  onGetData: () => void;
+  onRefreshTable: (t: string) => void;
+  onEditMeasure: (name: string) => void;
+  onNewMeasure: (table: string) => void;
+}) {
   const { doc } = useDocument();
   if (!doc) return null;
   if (doc.model.tablolar.length === 0) {
@@ -44,12 +51,18 @@ export function ModelView({ onGetData, onRefreshTable }: { onGetData: () => void
   }
   return (
     <ReactFlowProvider>
-      <ModelCanvas onRefreshTable={onRefreshTable} />
+      <ModelCanvas onRefreshTable={onRefreshTable} onEditMeasure={onEditMeasure} onNewMeasure={onNewMeasure} />
     </ReactFlowProvider>
   );
 }
 
-function ModelCanvas({ onRefreshTable }: { onRefreshTable: (t: string) => void }) {
+function ModelCanvas({
+  onRefreshTable, onEditMeasure, onNewMeasure,
+}: {
+  onRefreshTable: (t: string) => void;
+  onEditMeasure: (name: string) => void;
+  onNewMeasure: (table: string) => void;
+}) {
   const client = useClient();
   const { doc, reload, apply, setError } = useDocument();
   const rf = useReactFlow();
@@ -249,8 +262,9 @@ function ModelCanvas({ onRefreshTable }: { onRefreshTable: (t: string) => void }
           onPreview={(t) => setDialog({ kind: "preview", table: t })}
           onEditRelationship={editRelationship}
           onRefresh={onRefreshTable}
+          onNewMeasure={onNewMeasure}
         />
-        <DataPane tables={tables} selection={selection} onSelect={selectFromPane} />
+        <DataPane tables={tables} selection={selection} onSelect={selectFromPane} onEditMeasure={onEditMeasure} />
       </div>
       {dialog?.kind === "rel" && (
         <RelationshipDialog draft={dialog.draft} editing={dialog.editing} onClose={() => setDialog(null)} />

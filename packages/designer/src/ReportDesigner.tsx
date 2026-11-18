@@ -1,8 +1,9 @@
 import type { ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualType } from "@floem/client";
 import {
-  VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, usesColumn, type CrossFilter, type QueryFn, type WellKey,
+  VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
 import "./designer.css";
@@ -25,6 +26,8 @@ export interface DesignerHost {
   onError(e: unknown): void;
   /** Kaydet/Yayımla öncesi bekleyen değişikliğin yazılması için */
   registerFlush?(fn: () => Promise<void>): () => void;
+  /** Veri bölmesinde ölçünün düzenle düğmesi (Desktop'ta formül çubuğunu açar) */
+  onEditMeasure?(name: string): void;
 }
 
 /** Power BI rapor görünümü: sayfa tuvali, Görselleştirmeler ve Veri bölmeleri, sayfa sekmeleri. */
@@ -111,22 +114,40 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     return { x: 16, y: 16 };
   }
 
-  /** Alanı görsele ekler: kutu verilmezse alanın türüne göre (sayı → değer, diğerleri → gruplama). */
-  function addField(v: Visual, table: string, column: string, well?: WellKey, slot?: number): Visual {
+  /** Alanı görsele ekler: kutu verilmezse alanın türüne göre (ölçü/sayı → değer, diğerleri → gruplama). */
+  function addField(v: Visual, field: FieldPayload, well?: WellKey, slot?: number): Visual {
+    const wells = VISUAL_DEFS[v.type].wells;
+    if (isMeasure(field)) {
+      // Ölçü yalnızca değer ya da hedef kutusuna girer
+      const def = wells.find((w) => w.key === well && (w.key === "values" || w.key === "target")) ??
+        wells.find((w) => w.key === "values") ?? wells.find((w) => w.key === "target");
+      if (!def) return v;
+      const value: ValueRef = { measure: field.measure };
+      if (def.key === "values" && slot !== undefined) {
+        const values = [...v.values];
+        if (slot < values.length) values[slot] = value;
+        else values.push(value);
+        return { ...v, values };
+      }
+      const cur = def.key === "values" ? v.values : v.target ?? [];
+      if (cur.some((x) => "measure" in x && x.measure === field.measure)) return v;
+      const next = def.max && cur.length >= def.max ? [value] : [...cur, value];
+      return def.key === "values" ? { ...v, values: next } : { ...v, target: next };
+    }
+    const { table, column } = field;
     const c = columnOf(table, column);
     if (!c) return v;
-    const wells = VISUAL_DEFS[v.type].wells;
     const wanted = well ?? defaultRole(c);
     // İstenen kutu bu görselde yoksa ilk uygun kutuya (ör. dilimleyiciye sayı → Alan)
     const def =
       wells.find((w) => w.key === wanted) ??
       wells.find((w) => (wanted === "group" || wanted === "legend" ? w.key === "group" : w.key === "values")) ??
       wells[0];
-    const field = { table, column };
+    const ref = { table, column };
     if (def.key === "group" || def.key === "legend") {
       const cur = def.key === "group" ? v.group : v.legend ?? [];
-      if (cur.some((g) => sameField(g, field))) return v;
-      const next = def.max && cur.length >= def.max ? [field] : [...cur, field];
+      if (cur.some((g) => sameField(g, ref))) return v;
+      const next = def.max && cur.length >= def.max ? [ref] : [...cur, ref];
       return def.key === "group" ? { ...v, group: next } : { ...v, legend: next };
     }
     const value: ValueRef = { table, column, agg: defaultAgg(c) };
@@ -182,19 +203,26 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     }
   }
 
-  function dropOnCanvas(table: string, column: string, x: number, y: number) {
-    const c = columnOf(table, column);
-    if (!c) return;
-    // Power BI: sayısal alan sütun grafiği, diğerleri tablo oluşturur
-    const v = createVisual(defaultRole(c) === "values" ? "column" : "table", { x, y });
-    insert(addField(v, table, column));
+  /** Boş sayfaya bırakılan alana uygun görsel: ölçü → kart, sayı → sütun grafiği, diğerleri → tablo (Power BI). */
+  function typeFor(field: FieldPayload): VisualType | null {
+    if (isMeasure(field)) return "card";
+    const c = columnOf(field.table, field.column);
+    if (!c) return null;
+    return defaultRole(c) === "values" ? "column" : "table";
   }
 
-  function toggleField(table: string, column: string, checked: boolean) {
+  function dropOnCanvas(field: FieldPayload, x: number, y: number) {
+    const t = typeFor(field);
+    if (t) insert(addField(createVisual(t, { x, y }), field));
+  }
+
+  function toggleField(field: FieldPayload, checked: boolean) {
     if (!checked) {
       if (!selected) return;
-      const keep = (g: { table: string; column: string }) => !(g.table === table && g.column === column);
-      const keepV = (x: ValueRef) => "measure" in x || keep(x);
+      const keep = (g: { table: string; column: string }) =>
+        isMeasure(field) || !(g.table === field.table && g.column === field.column);
+      const keepV = (x: ValueRef) =>
+        "measure" in x ? !(isMeasure(field) && x.measure === field.measure) : keep(x);
       updateVisual({
         ...selected,
         group: selected.group.filter(keep),
@@ -204,12 +232,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       });
       return;
     }
-    if (selected && !usesColumn(selected, table, column)) {
-      updateVisual(addField(selected, table, column));
+    if (selected && !usesField(selected, field)) {
+      updateVisual(addField(selected, field));
     } else if (!selected) {
-      const c = columnOf(table, column);
-      if (!c) return;
-      insert(addField(createVisual(defaultRole(c) === "values" ? "column" : "table"), table, column));
+      const t = typeFor(field);
+      if (t) insert(addField(createVisual(t), field));
     }
   }
 
@@ -260,9 +287,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           onChange={updateVisual}
           onDelete={deleteVisual}
           onDropField={dropOnCanvas}
-          onDropOnVisual={(id, t, c) => {
+          onDropOnVisual={(id, f) => {
             const v = page.visuals.find((x) => x.id === id);
-            if (v) updateVisual(addField(v, t, c));
+            if (v) updateVisual(addField(v, f));
             setSelectedId(id);
           }}
           dataRev={dataRev}
@@ -323,9 +350,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         visual={selected}
         onPickType={pickType}
         onChange={updateVisual}
-        onDropToWell={(well, t, c) => selected && updateVisual(addField(selected, t, c, well.key, well.slot))}
+        onDropToWell={(well, f) => selected && updateVisual(addField(selected, f, well.key, well.slot))}
       />
-      <FieldsPane tables={tables} visual={selected} onToggle={toggleField} />
+      <FieldsPane tables={tables} visual={selected} onToggle={toggleField} onEditMeasure={host.onEditMeasure} />
     </div>
   );
 }

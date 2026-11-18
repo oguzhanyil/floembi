@@ -399,7 +399,26 @@ export type ModelOp =
       yeni_kime?: string;
     } & Partial<Omit<Relationship, "kimden" | "kime">>)
   | { op: "delete_relationship"; kimden: string; kime: string }
-  | { op: "mark_date_table"; table: string; column: string | null };
+  | { op: "mark_date_table"; table: string; column: string | null }
+  | { op: "add_measure"; table: string; name: string; expression: string; bicim?: string | null; klasor?: string | null; aciklama?: string | null }
+  | {
+      op: "update_measure";
+      name: string;
+      new_name?: string;
+      expression?: string;
+      table?: string;
+      bicim?: string | null;
+      klasor?: string | null;
+      aciklama?: string | null;
+    }
+  | { op: "delete_measure"; name: string }
+  | { op: "create_date_table"; name?: string; start?: string | null; end?: string | null; relate?: string[] };
+
+export interface DaxDiagnostic {
+  message: string;
+  start: number | null;
+  end: number | null;
+}
 
 export interface ColumnProfile {
   rows: number;
@@ -455,6 +474,7 @@ export interface DocumentClient {
   setReport(report: ReportDefinition): Promise<{ ok: boolean; dirty: boolean }>;
   query(q: VisualQuery): Promise<VisualResult>;
   relationshipProfile(kimden: string, kime: string): Promise<RelationshipProfile>;
+  validateDax(expression: string): Promise<{ ok: boolean; errors: DaxDiagnostic[] }>;
   startImport(connectionId: string, database: string | null, items: ImportItem[]): Promise<Job>;
   startRefresh(tables?: string[]): Promise<Job>;
   job(id: string): Promise<Job>;
@@ -515,6 +535,9 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   }
   query(q: VisualQuery) {
     return this.doc.request<VisualResult>("POST", "/document/query", q);
+  }
+  validateDax(expression: string) {
+    return this.doc.request<{ ok: boolean; errors: DaxDiagnostic[] }>("POST", "/document/dax/validate", { expression });
   }
   relationshipProfile(kimden: string, kime: string) {
     return this.doc.request<RelationshipProfile>("POST", "/document/relationship-profile", { kimden, kime });

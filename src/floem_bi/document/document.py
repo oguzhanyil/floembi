@@ -212,6 +212,7 @@ class Document:
             for op in ops:
                 op.apply(ctx)
             self.validate(ctx.tanim)
+            self._check_measures(ctx.tanim, ctx.measure_checks)
             if ctx.checks:
                 cur = self.con.cursor()
                 cur.execute("BEGIN TRANSACTION")
@@ -228,6 +229,42 @@ class Document:
             self.content.diagram = ctx.diagram
             self.content.report = ctx.report
             self._touch()
+
+    @staticmethod
+    def _check_measures(tanim: ModelTanimi, names: list[str]) -> None:
+        """Eklenen/düzenlenen ölçüler derlenebilmeli (söz dizimi, ad çözümleme, desteklenen fonksiyonlar)."""
+        if not names:
+            return
+        from ..compiler import CompileError, MeasureCompiler
+        from ..compiler import ir as _ir
+
+        model = SemanticModel(tanim)
+        for name in names:
+            try:
+                MeasureCompiler(model).measure(name, _ir.Context())
+            except CompileError as e:
+                raise ModelError(f"[{name}] {e.message}") from e
+
+    def validate_dax(self, expression: str, table: str | None = None) -> dict:
+        """Formül çubuğu için: hataları konumlarıyla döndürür (kaydetmeden)."""
+        from ..compiler import CompileError, MeasureCompiler
+        from ..compiler import ir as _ir
+        from ..dax import DaxSyntaxError, parse
+
+        try:
+            parse(expression)
+        except DaxSyntaxError as e:
+            return {"ok": False, "errors": [{"message": e.message, "start": e.span.start, "end": e.span.end}]}
+        with self.lock:
+            model, _ = self._semantic_engine()
+        try:
+            MeasureCompiler(model).expression(expression, _ir.Context())
+        except CompileError as e:
+            span = e.span
+            return {"ok": False, "errors": [{
+                "message": e.message, "start": span.start if span else None, "end": span.end if span else None,
+            }]}
+        return {"ok": True, "errors": []}
 
     def set_diagram(self, tables: dict[str, dict], mark_dirty: bool = True) -> None:
         with self.lock:

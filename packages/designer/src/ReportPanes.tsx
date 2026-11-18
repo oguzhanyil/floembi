@@ -1,18 +1,12 @@
 import type { Agg, FieldRef, ModelTable, ValueRef, Visual, VisualFormat, VisualType } from "@floem/client";
 import {
-  AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, usesColumn, valueLabel, type WellDef, type WellKey,
+  AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, valueLabel, type WellDef, type WellKey,
 } from "@floem/report";
-import { useState, type DragEvent, type ReactNode } from "react";
-import { ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
-import { FIELD_MIME } from "./PageCanvas";
+import { useState, type ReactNode } from "react";
+import { FIELD_MIME, readPayload, usesField, type FieldPayload } from "./fields";
+import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 
-function readField(e: DragEvent) {
-  try {
-    return JSON.parse(e.dataTransfer.getData(FIELD_MIME)) as { table: string; column: string };
-  } catch {
-    return null;
-  }
-}
+const readField = readPayload;
 
 /** Kutudaki öğeler: gruplama kutuları alan, değer kutuları ölçü/toplama tutar. */
 function wellItems(v: Visual, def: WellDef): (FieldRef | ValueRef)[] {
@@ -41,7 +35,7 @@ function Well({
 }: {
   def: WellDef;
   visual: Visual;
-  onDrop: (well: WellDef, table: string, column: string) => void;
+  onDrop: (well: WellDef, field: FieldPayload) => void;
   onChange: (v: Visual) => void;
 }) {
   const [over, setOver] = useState(false);
@@ -64,7 +58,7 @@ function Well({
         const f = readField(e);
         if (f) {
           e.preventDefault();
-          onDrop(def, f.table, f.column);
+          onDrop(def, f);
         }
       }}
     >
@@ -241,7 +235,7 @@ export function VisualizationsPane({
   visual: Visual | null;
   onPickType: (t: VisualType) => void;
   onChange: (v: Visual) => void;
-  onDropToWell: (well: WellDef, table: string, column: string) => void;
+  onDropToWell: (well: WellDef, field: FieldPayload) => void;
 }) {
   const [tab, setTab] = useState<"fields" | "format">("fields");
   return (
@@ -295,11 +289,12 @@ export function VisualizationsPane({
 
 /** Rapor görünümündeki "Veri" bölmesi: alanı işaretle ya da sürükle. Gizli alanlar görünmez (Power BI). */
 export function FieldsPane({
-  tables, visual, onToggle,
+  tables, visual, onToggle, onEditMeasure,
 }: {
   tables: ModelTable[];
   visual: Visual | null;
-  onToggle: (table: string, column: string, checked: boolean) => void;
+  onToggle: (field: FieldPayload, checked: boolean) => void;
+  onEditMeasure?: (name: string) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");
@@ -312,7 +307,8 @@ export function FieldsPane({
       <div className="tree-scroll">
         {visible.map((t) => {
           const cols = t.sutunlar.filter((c) => !c.gizli && (!needle || c.ad.toLocaleLowerCase("tr").includes(needle)));
-          if (needle && !cols.length && !t.ad.toLocaleLowerCase("tr").includes(needle)) return null;
+          const measures = t.olculer.filter((m) => !needle || m.ad.toLocaleLowerCase("tr").includes(needle));
+          if (needle && !cols.length && !measures.length && !t.ad.toLocaleLowerCase("tr").includes(needle)) return null;
           const expanded = needle ? true : !!open[t.ad];
           return (
             <div key={t.ad}>
@@ -326,8 +322,42 @@ export function FieldsPane({
                 </button>
               </div>
               {expanded &&
+                measures.map((m) => {
+                  const field: FieldPayload = { measure: m.ad };
+                  const checked = !!visual && usesField(visual, field);
+                  return (
+                    <label
+                      key={`m:${m.ad}`}
+                      className="dp-col field measure"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(FIELD_MIME, JSON.stringify(field));
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      title={`${m.ifade}\n\nGörsele eklemek için işaretleyin ya da sürükleyin; düzenlemek için ✎`}
+                    >
+                      <input type="checkbox" checked={checked} onChange={(e) => onToggle(field, e.target.checked)} />
+                      <CalcIcon />
+                      <span>{m.ad}</span>
+                      {onEditMeasure && (
+                        <button
+                          className="dp-edit"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onEditMeasure(m.ad);
+                          }}
+                          aria-label={`${m.ad} ölçüsünü düzenle`}
+                          title="Formül çubuğunda düzenle"
+                        >
+                          ✎
+                        </button>
+                      )}
+                    </label>
+                  );
+                })}
+              {expanded &&
                 cols.map((c) => {
-                  const checked = !!visual && usesColumn(visual, t.ad, c.ad);
+                  const checked = !!visual && usesField(visual, { table: t.ad, column: c.ad });
                   return (
                     <label
                       key={c.ad}
@@ -339,7 +369,7 @@ export function FieldsPane({
                       }}
                       title="Görsele eklemek için işaretleyin ya da sürükleyin"
                     >
-                      <input type="checkbox" checked={checked} onChange={(e) => onToggle(t.ad, c.ad, e.target.checked)} />
+                      <input type="checkbox" checked={checked} onChange={(e) => onToggle({ table: t.ad, column: c.ad }, e.target.checked)} />
                       <ColumnTypeIcon c={c} />
                       <span>{c.ad}</span>
                     </label>

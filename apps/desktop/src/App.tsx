@@ -1,7 +1,9 @@
 import type { ConnectResult, Connection, ImportItem } from "@floem/client";
 import { useCallback, useEffect, useState } from "react";
 import { ClientProvider, toUiError, useClient } from "./api";
+import { DateTableDialog } from "./components/DateTableDialog";
 import { ErrorBox } from "./components/ErrorBox";
+import { FormulaBar, type MeasureEdit } from "./components/FormulaBar";
 import { GetDataDialog } from "./components/GetDataDialog";
 import { JobDialog } from "./components/JobDialog";
 import { PublishDialog } from "./components/PublishDialog";
@@ -38,6 +40,14 @@ function Shell() {
   const [getData, setGetData] = useState(false);
   const [navigator, setNavigator] = useState<ConnectResult | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [measureEdit, setMeasureEdit] = useState<MeasureEdit | null>(null);
+  const [dateDialog, setDateDialog] = useState(false);
+  // Yeni ölçünün ana tablosu: olgu tablosu tahmini (en çok satırlı tablo)
+  const defaultMeasureTable = () => {
+    const tables = doc?.model.tablolar ?? [];
+    const rows = (t: string) => doc?.stats[t]?.rows ?? 0;
+    return [...tables].sort((a, b) => rows(b.ad) - rows(a.ad))[0]?.ad ?? "";
+  };
 
   const refreshConnections = useCallback(() => {
     client.listConnections().then(setConnections).catch((e) => setError(toUiError(e)));
@@ -145,6 +155,20 @@ function Shell() {
           <span className="ribbon-label">Paylaş</span>
         </div>
         <div className="ribbon-group">
+          <button
+            className="ribbon-btn"
+            onClick={() => setMeasureEdit({ mode: "new", table: defaultMeasureTable() })}
+            disabled={tableCount === 0}
+            title="Yeni DAX ölçüsü (formül çubuğu)"
+          >
+            <span className="ribbon-ico">ƒx</span>Yeni ölçü
+          </button>
+          <button className="ribbon-btn" onClick={() => setDateDialog(true)} disabled={tableCount === 0} title="Takvim tablosu oluştur">
+            <span className="ribbon-ico">📅</span>Tarih tablosu
+          </button>
+          <span className="ribbon-label">Hesaplamalar</span>
+        </div>
+        <div className="ribbon-group">
           {connections.slice(0, 4).map((c) => (
             <button key={c.id} className="ribbon-btn small" onClick={() => reopen(c)} title="Gezgin'de aç">
               {c.server}
@@ -155,6 +179,16 @@ function Shell() {
           <span className="ribbon-label">Son kaynaklar</span>
         </div>
       </nav>
+
+      <div className="formula-slot">
+        {measureEdit && (
+          <FormulaBar
+            key={measureEdit.mode === "edit" ? `e:${measureEdit.name}` : `n:${measureEdit.table}`}
+            edit={measureEdit}
+            onClose={() => setMeasureEdit(null)}
+          />
+        )}
+      </div>
 
       <div className="workspace">
         <nav className="view-rail" aria-label="Görünümler">
@@ -175,7 +209,9 @@ function Shell() {
               <ErrorBox error={error} onClose={() => setError(null)} />
             </div>
           )}
-          {view === "rapor" && tableCount > 0 && <ReportView key={doc?.id} />}
+          {view === "rapor" && tableCount > 0 && (
+            <ReportView key={doc?.id} onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })} />
+          )}
           {view === "rapor" && tableCount === 0 && (
             <div className="empty-state">
               <h2>Rapora veri ekleyin</h2>
@@ -192,7 +228,14 @@ function Shell() {
               </div>
             </div>
           )}
-          {view === "model" && <ModelView onGetData={() => setGetData(true)} onRefreshTable={(t) => void refresh([t])} />}
+          {view === "model" && (
+            <ModelView
+              onGetData={() => setGetData(true)}
+              onRefreshTable={(t) => void refresh([t])}
+              onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })}
+              onNewMeasure={(table) => setMeasureEdit({ mode: "new", table })}
+            />
+          )}
           {view === "sql" && (
             <SqlView
               connections={connections}
@@ -222,6 +265,15 @@ function Shell() {
       {navigator && <Navigator connection={navigator} onClose={() => setNavigator(null)} onLoad={loadFromNavigator} />}
       {job && <JobDialog onShowModel={() => setView("model")} />}
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
+      {dateDialog && (
+        <DateTableDialog
+          onClose={() => setDateDialog(false)}
+          onDone={() => {
+            setDateDialog(false);
+            setView("model");
+          }}
+        />
+      )}
     </div>
   );
 }

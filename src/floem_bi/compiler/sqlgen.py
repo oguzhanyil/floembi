@@ -81,6 +81,7 @@ class _CteKey:
     grain: tuple[ColKey, ...]
     filters: tuple[tuple[ColKey, tuple[ir.Expr, ...]], ...]
     time: str | None
+    rels: frozenset = frozenset()
 
 
 class SqlGenerator:
@@ -213,6 +214,26 @@ class SqlGenerator:
                 return exp.Upper(this=args[0])
             if e.name == "LOWER":
                 return exp.Lower(this=args[0])
+            if e.name == "DATE":
+                return exp.DateFromParts(year=args[0], month=args[1], day=args[2])
+            if e.name == "TODAY":
+                return exp.CurrentDate()
+            if e.name == "LEN":
+                return exp.Length(this=args[0])
+            if e.name == "LEFT":
+                return exp.Left(this=args[0], expression=args[1])
+            if e.name == "RIGHT":
+                return exp.Right(this=args[0], expression=args[1])
+            if e.name == "MID":
+                return exp.Substring(this=args[0], start=args[1], length=args[2])
+            if e.name == "TRIM":
+                return exp.Trim(this=args[0])
+            if e.name == "INT":
+                return exp.Floor(this=args[0])
+            if e.name == "MOD":
+                return exp.Mod(this=args[0], expression=args[1])
+            if e.name == "CONCATENATE":
+                return exp.Concat(expressions=[args[0], args[1]])
             raise CompileError(f"SQL karşılığı olmayan fonksiyon: {e.name}")
         if isinstance(e, ir.Bin):
             a, b = r(e.left), r(e.right)
@@ -263,12 +284,13 @@ class SqlGenerator:
 
     # ------------------------------------------------------------ planlama
     def _effective(self, slot: ir.Slot, group: list[ColKey]) -> _CteKey:
-        reach = lambda t: self.model.reachable(slot.base, t)  # noqa: E731
+        rels = slot.ctx.rels
+        reach = lambda t: self.model.reachable(slot.base, t, rels)  # noqa: E731
         grain = tuple(g for g in group if g in slot.ctx.group and reach(g.table))
         filters = tuple((c, p) for c, p in slot.ctx.filters if reach(c.table))
         date_table = self.model.date_table()
         time = slot.ctx.time if (slot.ctx.time and date_table and reach(date_table.ad)) else None
-        return _CteKey(slot.base, grain, filters, time)
+        return _CteKey(slot.base, grain, filters, time, rels)
 
     def _collect_slots(self, e: ir.Expr, out: list[ir.Slot]) -> None:
         if isinstance(e, ir.Slot):
@@ -395,10 +417,14 @@ class SqlGenerator:
         dt_name = date_table.ad if (key.time and date_table) else None
 
         filter_map = dict(key.filters)
-        rls = [(t, p) for t, p in self.rls if model.reachable(base, t)]
+        rls = [(t, p) for t, p in self.rls if model.reachable(base, t, key.rels)]
 
         # gereken tablolar
         needed: set[str] = {g.table for g in key.grain} | {c.table for c in filter_map} | {t for t, _ in rls}
+        # FILTER(T, RELATED(...)) gibi koşulların kullandığı diğer tablolar da birleştirilir
+        for preds in filter_map.values():
+            for pr in preds:
+                needed |= {c.table for c in self._cols_in(pr)}
         for s in members:
             needed |= {c.table for c in self._cols_in(s.arg)}
         if dt_name:
@@ -417,8 +443,8 @@ class SqlGenerator:
             return _col(self._physical(k), aliases[k.table])
 
         joined = {base}
-        for t in sorted(needed, key=lambda x: len(model.path(base, x) or [])):
-            path = model.path(base, t)
+        for t in sorted(needed, key=lambda x: len(model.path(base, x, key.rels) or [])):
+            path = model.path(base, t, key.rels)
             if path is None:
                 raise CompileError(f"'{base}' tablosundan '{t}' tablosuna ilişki yolu yok")
             for edge in path:

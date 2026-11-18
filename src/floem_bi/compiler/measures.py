@@ -40,11 +40,15 @@ AGGREGATIONS = {
 ITERATORS = {"SUMX": "SUM", "AVERAGEX": "AVG", "MINX": "MIN", "MAXX": "MAX", "COUNTX": "COUNT"}
 TIME_FUNCS = {"SAMEPERIODLASTYEAR", "DATEADD", "DATESYTD", "DATESQTD", "DATESMTD"}
 TOTAL_FUNCS = {"TOTALYTD": "DATESYTD", "TOTALQTD": "DATESQTD", "TOTALMTD": "DATESMTD"}
-ROW_FUNCS = {"ABS": 1, "ROUND": 2, "YEAR": 1, "MONTH": 1, "DAY": 1, "UPPER": 1, "LOWER": 1}
-UNSUPPORTED_V1 = {
-    "FILTER", "USERELATIONSHIP", "CROSSFILTER", "ALLSELECTED", "VALUES", "SELECTEDVALUE",
-    "HASONEVALUE", "RANKX", "TOPN", "SUMMARIZE", "ADDCOLUMNS", "EARLIER",
+# Satır/skaler fonksiyonlar: ad → (en az, en çok) argüman
+ROW_FUNCS = {
+    "ABS": (1, 1), "ROUND": (1, 2), "YEAR": (1, 1), "MONTH": (1, 1), "DAY": (1, 1),
+    "UPPER": (1, 1), "LOWER": (1, 1), "DATE": (3, 3), "TODAY": (0, 0), "LEN": (1, 1),
+    "LEFT": (2, 2), "RIGHT": (2, 2), "MID": (3, 3), "TRIM": (1, 1), "INT": (1, 1), "MOD": (2, 2),
+    "CONCATENATE": (2, 2),
 }
+REMOVALS = ("ALL", "REMOVEFILTERS", "ALLEXCEPT", "ALLSELECTED")
+UNSUPPORTED_V1 = {"CROSSFILTER", "RANKX", "TOPN", "SUMMARIZE", "ADDCOLUMNS", "EARLIER"}
 
 
 class MeasureCompiler:
@@ -201,13 +205,22 @@ class MeasureCompiler:
             return ir.Slot(AGGREGATIONS[name], ir.Col(col), col.table, ctx)
         if name == "COUNTROWS":
             self._arity(node, 1)
-            table = self.resolve_table(node.args[0])
-            return ir.Slot("COUNTROWS", None, table, ctx)
+            table, ctx2 = self._table_arg(node.args[0], ctx, env)
+            return ir.Slot("COUNTROWS", None, table, ctx2)
         if name in ITERATORS:
             self._arity(node, 2)
-            table = self.resolve_table(node.args[0])
+            table, ctx2 = self._table_arg(node.args[0], ctx, env)
             arg = self.row(node.args[1], table, env)
-            return ir.Slot(ITERATORS[name], arg, table, ctx)
+            return ir.Slot(ITERATORS[name], arg, table, ctx2)
+        if name in ("SELECTEDVALUE", "VALUES", "HASONEVALUE"):
+            # Bağlamda sütunun tek değeri varsa o değer (VALUES skaler bağlamda), yoksa alternatif
+            self._arity(node, 1, 2 if name == "SELECTEDVALUE" else 1)
+            col = self.resolve_column(node.args[0])
+            one = ir.Bin("=", ir.Slot("DISTINCTCOUNT", ir.Col(col), col.table, ctx), ir.Lit(1))
+            if name == "HASONEVALUE":
+                return ir.Case(((one, ir.Lit(True)),), ir.Lit(False))
+            alt = sub(node.args[1]) if len(node.args) == 2 else None
+            return ir.Case(((one, ir.Slot("MIN", ir.Col(col), col.table, ctx)),), alt)
         if name == "CALCULATE":
             if not node.args:
                 raise self.err("CALCULATE en az bir argüman alır", node)
@@ -269,13 +282,72 @@ class MeasureCompiler:
             self._arity(node, 0)
             return ir.Lit(self.user.upn)
         if name in ROW_FUNCS:
-            lo = 1
-            self._arity(node, lo, ROW_FUNCS[name])
+            lo, hi = ROW_FUNCS[name]
+            self._arity(node, lo, hi)
             return ir.Func(name, tuple(sub(a) for a in node.args))
         return None
 
+    def _table_arg(self, node: ast.Node, ctx: ir.Context, env) -> tuple[str, ir.Context]:
+        """COUNTROWS/SUMX'in tablo argümanı: tablo adı ya da FILTER(...). FILTER bağlama eklenir."""
+        if isinstance(node, ast.Call) and node.name == "FILTER":
+            table = self._filter_table_name(node)
+            return table, self._apply_filter(node, ctx, env)
+        return self.resolve_table(node), ctx
+
+    def _filter_table_name(self, node: ast.Call) -> str:
+        self._arity(node, 2)
+        src = node.args[0]
+        if isinstance(src, ast.Call) and src.name in ("ALL", "VALUES", "DISTINCT"):
+            if len(src.args) != 1:
+                raise self.err(f"FILTER içindeki {src.name} tek argüman almalı", src)
+            inner = src.args[0]
+            return self.resolve_column(inner).table if isinstance(inner, ast.ColumnRef) else self.resolve_table(inner)
+        return self.resolve_table(src)
+
+    def _apply_filter(self, node: ast.Call, ctx: ir.Context, env) -> ir.Context:
+        """FILTER(tablo, koşul) → bağlama satır filtresi.
+
+        FILTER(T, koşul)          : T'nin o anki görünür satırları içinde koşul (mevcut filtreler korunur)
+        FILTER(ALL(T), koşul)     : T'deki filtreler kaldırılır, sonra koşul
+        FILTER(ALL(T[c]), koşul)  : c'deki filtre koşulla değişir (CALCULATE'teki boolean filtre gibi)
+        FILTER(VALUES(T[c]), ...) : c'nin görünür değerleri içinde koşul
+        """
+        self._arity(node, 2)
+        src, cond = node.args
+        if self._has_measure(cond):
+            raise self.err(
+                "FILTER koşulunda ölçü kullanımı (bağlam geçişi) henüz desteklenmiyor; koşulu sütunlarla yazın", cond
+            )
+        if isinstance(src, ast.Call) and src.name in ("ALL", "VALUES", "DISTINCT"):
+            self._arity(src, 1)
+            inner = src.args[0]
+            if isinstance(inner, ast.ColumnRef):
+                col = self.resolve_column(inner)
+                pred = self.row(cond, col.table, env, allow_vars_from_scalar=True)
+                if src.name == "ALL":
+                    return ctx.replace_filter(col, (pred,))
+                return ctx.keep_filter(col, (pred,))
+            table = self.resolve_table(inner)
+            if src.name == "ALL":
+                ctx = ctx.remove_columns([c for c in ctx.columns() if c.table == table])
+        else:
+            table = self.resolve_table(src)
+        pred = self.row(cond, table, env, allow_vars_from_scalar=True)
+        return ctx.keep_filter(ir.table_key(table), (pred,))
+
+    def _has_measure(self, node: ast.Node) -> bool:
+        if isinstance(node, ast.BracketRef):
+            return True
+        if isinstance(node, ast.Call) and (node.name in AGGREGATIONS or node.name in ITERATORS or node.name == "CALCULATE"):
+            return True
+        return any(self._has_measure(c) for c in _children(node))
+
     def _unknown(self, node: ast.Call) -> ir.Expr:
-        if node.name in TIME_FUNCS or node.name in ("ALL", "REMOVEFILTERS", "ALLEXCEPT", "KEEPFILTERS"):
+        if node.name == "FILTER":
+            raise self.err("FILTER bir tablo döndürür; CALCULATE, COUNTROWS ya da SUMX gibi bir fonksiyonun içinde kullanın", node)
+        if node.name == "USERELATIONSHIP":
+            raise self.err("USERELATIONSHIP yalnızca CALCULATE filtre argümanı olarak kullanılabilir", node)
+        if node.name in TIME_FUNCS or node.name in REMOVALS or node.name == "KEEPFILTERS":
             raise self.err(f"{node.name} yalnızca CALCULATE filtre argümanı olarak kullanılabilir", node)
         if node.name in UNSUPPORTED_V1:
             raise self.err(f"{node.name} MVP'de desteklenmiyor (v1)", node)
@@ -286,9 +358,18 @@ class MeasureCompiler:
         removals: list[ast.Call] = []
         times: list[ast.Call] = []
         filters: list[tuple[ast.Node, bool]] = []   # (ifade, keep)
+        table_filters: list[ast.Call] = []
         for a in args:
-            if isinstance(a, ast.Call) and a.name in ("ALL", "REMOVEFILTERS", "ALLEXCEPT"):
+            if isinstance(a, ast.Call) and a.name in REMOVALS:
                 removals.append(a)
+            elif isinstance(a, ast.Call) and a.name == "USERELATIONSHIP":
+                self._arity(a, 2)
+                pair = self.model.relationship_between(self.resolve_column(a.args[0]), self.resolve_column(a.args[1]))
+                if pair is None:
+                    raise self.err("USERELATIONSHIP: bu iki sütun arasında modelde ilişki yok", a)
+                ctx = ctx.with_rels([pair])
+            elif isinstance(a, ast.Call) and a.name == "FILTER":
+                table_filters.append(a)
             elif isinstance(a, ast.Call) and a.name in TIME_FUNCS:
                 times.append(a)
             elif isinstance(a, ast.Call) and a.name == "KEEPFILTERS":
@@ -311,22 +392,47 @@ class MeasureCompiler:
         # 3) boolean filtreler: aynı sütundaki filtreler kesişir, sonra bağlamdakinin yerine geçer
         replace: dict[ColKey, list[ir.Expr]] = {}
         keep: dict[ColKey, list[ir.Expr]] = {}
+        multi: list[tuple[str, set[ColKey], ir.Expr, bool]] = []
         for expr, is_keep in filters:
             cols = self._columns_in(expr)
-            if len(cols) != 1:
-                raise self.err(
-                    "CALCULATE filtre ifadesi tam olarak bir sütuna başvurmalı (çok sütunlu FILTER v1'de)", expr
-                )
-            col = next(iter(cols))
-            pred = self.row(expr, col.table, env, allow_vars_from_scalar=True)
-            (keep if is_keep else replace).setdefault(col, []).append(pred)
+            if not cols:
+                raise self.err("CALCULATE filtre ifadesi en az bir sütuna başvurmalı", expr)
+            tables = {c.table for c in cols}
+            if len(tables) != 1:
+                raise self.err("Çok sütunlu filtre koşulu tek bir tablonun sütunlarını kullanmalı", expr)
+            table = next(iter(tables))
+            pred = self.row(expr, table, env, allow_vars_from_scalar=True)
+            if len(cols) == 1:
+                (keep if is_keep else replace).setdefault(next(iter(cols)), []).append(pred)
+            else:
+                # Aynı tablonun birden çok sütunu: FILTER(ALL(T[a], T[b]), koşul) gibi davranır
+                multi.append((table, cols, pred, is_keep))
         for col, preds in replace.items():
             ctx = ctx.replace_filter(col, tuple(preds))
         for col, preds in keep.items():
             ctx = ctx.keep_filter(col, tuple(preds))
+        for table, cols, pred, is_keep in multi:
+            if not is_keep:
+                ctx = ctx.remove_columns(cols)
+            ctx = ctx.keep_filter(ir.table_key(table), (pred,))
+        # 4) FILTER(...) tablo filtreleri
+        for f in table_filters:
+            ctx = self._apply_filter(f, ctx, env)
         return ctx
 
     def _removal(self, node: ast.Call, ctx: ir.Context) -> ir.Context:
+        if node.name == "ALLSELECTED":
+            # Görselin kendi gruplaması kalkar; dilimleyici/görsel filtreleri kalır
+            if not node.args:
+                return ctx.remove_group(ctx.group)
+            cols: list[ColKey] = []
+            for a in node.args:
+                if isinstance(a, ast.ColumnRef):
+                    cols.append(self.resolve_column(a))
+                else:
+                    table = self.resolve_table(a)
+                    cols.extend(g for g in ctx.group if g.table == table)
+            return ctx.remove_group(cols)
         if node.name == "ALLEXCEPT":
             if len(node.args) < 2:
                 raise self.err("ALLEXCEPT bir tablo ve en az bir sütun alır", node)
@@ -335,7 +441,7 @@ class MeasureCompiler:
             drop = [c for c in ctx.columns() if c.table == table and c not in keep]
             return ctx.remove_columns(drop)
         if not node.args:  # ALL() / REMOVEFILTERS(): tüm filtreler
-            return ir.Context(frozenset(), (), ctx.time)
+            return ir.Context(frozenset(), (), ctx.time, ctx.rels)
         drop: list[ColKey] = []
         for a in node.args:
             if isinstance(a, ast.ColumnRef):
@@ -344,7 +450,7 @@ class MeasureCompiler:
                 table = self.resolve_table(a)
                 drop.extend(c for c in ctx.columns() if c.table == table)
                 if self.model.table(table).tarih_tablosu is not None:
-                    ctx = ir.Context(ctx.group, ctx.filters, None)
+                    ctx = ctx.with_time(None)
         return ctx.remove_columns(drop)
 
     def _time_key(self, node: ast.Call) -> str:

@@ -70,3 +70,17 @@ def rename_column(source: str, table: str, old: str, new: str, home_table: str |
         elif not prev_is_table and home_table and home_table.lower() == table.lower():
             edits.append((t.span.start, t.span.end, bracket_token(new)))
     return _apply(source, edits) if edits else source
+
+
+def rename_measure(source: str, old: str, new: str) -> str:
+    """Tablo öneki olmayan `[old]` ölçü referanslarını `[new]` yapar (Tablo[Sütun] referanslarına dokunmaz)."""
+    try:
+        tokens = tokenize(source)
+    except DaxSyntaxError:
+        return source
+    edits = [
+        (t.span.start, t.span.end, bracket_token(new))
+        for i, t in enumerate(tokens)
+        if t.type == T.BRACKET and t.value.lower() == old.lower() and not (i > 0 and _is_table_token(tokens, i - 1))
+    ]
+    return _apply(source, edits) if edits else source

@@ -160,6 +160,23 @@ function createWindow() {
           }
           await new Promise((r) => setTimeout(r, 1200));
         }
+        // Yalnızca geliştirmede: odaklı alana gerçek klavye girişi (editör testleri için)
+        const typed = process.env.FLOEM_SCREENSHOT_TYPE;
+        if (typed && !app.isPackaged) {
+          await win.webContents.insertText(typed);
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        const key = process.env.FLOEM_SCREENSHOT_KEY;
+        if (key && !app.isPackaged) {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: key });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: key });
+          await new Promise((r) => setTimeout(r, 1500));
+          const js2 = process.env.FLOEM_SCREENSHOT_JS2;
+          if (js2) {
+            await win.webContents.executeJavaScript(js2).catch((err) => console.error("FLOEM_SCREENSHOT_JS2:", err));
+            await new Promise((r) => setTimeout(r, 1200));
+          }
+        }
         const img = await win.webContents.capturePage();
         fs.writeFileSync(shot, img.toPNG());
         forceClose = true;                       // duman testinde "Kaydet?" sorusu sorulmaz

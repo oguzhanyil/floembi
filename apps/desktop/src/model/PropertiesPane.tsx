@@ -45,13 +45,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** Power BI model görünümündeki "Özellikler" bölmesi. */
 export function PropertiesPane({
-  selection, onSelect, onPreview, onEditRelationship, onRefresh,
+  selection, onSelect, onPreview, onEditRelationship, onRefresh, onNewMeasure,
 }: {
   selection: Selection;
   onSelect: (s: Selection) => void;
   onPreview: (table: string) => void;
   onEditRelationship: (kimden: string, kime: string) => void;
   onRefresh: (table: string) => void;
+  onNewMeasure: (table: string) => void;
 }) {
   const { doc, apply } = useDocument();
   if (!doc) return null;
@@ -242,6 +243,7 @@ export function PropertiesPane({
         )}
         <div className="prop-actions">
           <button onClick={() => onPreview(t.ad)}>Veriyi önizle</button>
+          <button onClick={() => onNewMeasure(t.ad)}>Yeni ölçü</button>
           {src && <button onClick={() => onRefresh(t.ad)}>Yenile</button>}
           <button
             className="danger"

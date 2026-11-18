@@ -5,7 +5,7 @@ import { toUiError, useClient } from "../api";
 import { useDocument } from "../document";
 
 /** Desktop rapor görünümü: ortak tasarımcıyı yerel servise bağlar. */
-export function ReportView() {
+export function ReportView({ onEditMeasure }: { onEditMeasure?: (name: string) => void }) {
   const client = useClient();
   const { doc, patchDoc, setError, registerFlush } = useDocument();
   const tables = doc!.model.tablolar;
@@ -26,8 +26,8 @@ export function ReportView() {
   const onError = useCallback((e: unknown) => setError(toUiError(e)), [setError]);
 
   const host: DesignerHost = useMemo(
-    () => ({ tables, report: doc!.report, dataRev, run, save, onError, registerFlush }),
-    [tables, doc, dataRev, run, save, onError, registerFlush],
+    () => ({ tables, report: doc!.report, dataRev, run, save, onError, registerFlush, onEditMeasure }),
+    [tables, doc, dataRev, run, save, onError, registerFlush, onEditMeasure],
   );
   return <ReportDesigner host={host} />;
 }

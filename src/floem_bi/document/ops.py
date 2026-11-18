@@ -18,12 +18,15 @@ import duckdb
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..dax.rename import rename_column as dax_rename_column
+from ..dax.rename import rename_measure as dax_rename_measure
 from ..dax.rename import rename_table as dax_rename_table
 from ..importer.loader import qident
 from ..importer.types import DUCKDB_TYPE, tip_family
-from ..model.schema import Iliski, ModelTanimi, Sutun, Tablo, TarihTablosu, parse_column_ref
+from ..model.schema import (
+    Hiyerarsi, Iliski, ModelTanimi, Olcu, Sutun, Tablo, TabloKaynak, TarihTablosu, parse_column_ref,
+)
 from ..model.semantic import ModelError
-from ..report.schema import rename_column_refs, rename_table_refs
+from ..report.schema import rename_column_refs, rename_measure_refs, rename_table_refs
 
 DATA_SCHEMA = "veri"
 _BAD = re.compile(r"[\[\]']")
@@ -62,6 +65,7 @@ class OpContext:
     diagram: dict
     checks: list[Check] = field(default_factory=list)      # sırayla, tek transaction içinde
     report: dict = field(default_factory=dict)             # rapordaki alan referansları da güncellenir
+    measure_checks: list[str] = field(default_factory=list)  # derlenebilirliği denetlenecek ölçüler
 
     def table(self, name: str) -> Tablo:
         for t in self.tanim.tablolar:
@@ -422,10 +426,185 @@ class MarkDateTable(_Op):
         ctx.checks.append(check)
 
 
+# ------------------------------------------------------------------ ölçüler
+def _find_measure(ctx: OpContext, name: str) -> tuple[Tablo, Olcu]:
+    for t in ctx.tanim.tablolar:
+        for m in t.olculer:
+            if m.ad.lower() == name.lower():
+                return t, m
+    raise ModelError(f"Ölçü bulunamadı: [{name}]")
+
+
+class AddMeasure(_Op):
+    """Power BI "Yeni ölçü": ana tabloya ölçü ekler. İfade derlenebilir olmalı."""
+    op: Literal["add_measure"]
+    table: str
+    name: str
+    expression: str = Field(min_length=1)
+    bicim: str | None = None
+    klasor: str | None = None
+    aciklama: str | None = None
+
+    def apply(self, ctx: OpContext) -> None:
+        t = ctx.table(self.table)
+        name = clean_name(self.name, "Ölçü")
+        t.olculer.append(Olcu(
+            ad=name, ifade=self.expression.strip(), bicim=(self.bicim or "").strip() or None,
+            klasor=(self.klasor or "").strip() or None, aciklama=(self.aciklama or "").strip() or None,
+        ))
+        ctx.measure_checks.append(name)
+
+
+class UpdateMeasure(_Op):
+    """Ölçüyü düzenler; yeniden adlandırmada onu kullanan ölçüler ve rapor görselleri güncellenir."""
+    op: Literal["update_measure"]
+    name: str
+    new_name: str | None = None
+    expression: str | None = None
+    table: str | None = None                       # ana tabloyu değiştir
+    bicim: str | None = None
+    klasor: str | None = None
+    aciklama: str | None = None
+
+    def apply(self, ctx: OpContext) -> None:
+        t, m = _find_measure(ctx, self.name)
+        s = self.model_fields_set
+        if "expression" in s and self.expression is not None:
+            if not self.expression.strip():
+                raise ModelError("Ölçü ifadesi boş olamaz")
+            m.ifade = self.expression.strip()
+        for attr in ("bicim", "klasor", "aciklama"):
+            if attr in s:
+                setattr(m, attr, (getattr(self, attr) or "").strip() or None)
+        if self.new_name and self.new_name.strip() != m.ad:
+            old, new = m.ad, clean_name(self.new_name, "Ölçü")
+            m.ad = new
+            for obj, attr, _ in ctx.all_dax():
+                setattr(obj, attr, dax_rename_measure(getattr(obj, attr), old, new))
+            rename_measure_refs(ctx.report, old, new)
+        if self.table and self.table.lower() != t.ad.lower():
+            dest = ctx.table(self.table)
+            t.olculer.remove(m)
+            dest.olculer.append(m)
+        ctx.measure_checks.append(m.ad)
+
+
+class DeleteMeasure(_Op):
+    op: Literal["delete_measure"]
+    name: str
+
+    def apply(self, ctx: OpContext) -> None:
+        t, m = _find_measure(ctx, self.name)
+        t.olculer.remove(m)
+
+
+# ------------------------------------------------------------------ tarih tablosu
+AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+GUNLER = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+
+
+class CreateDateTable(_Op):
+    """Power BI'daki takvim tablosu: Yıl, Çeyrek, Ay, Gün sütunları, sıralamalar, hiyerarşi,
+    "tarih tablosu" işareti ve isteğe bağlı olarak olgu tablolarındaki tarih sütunlarına ilişki.
+
+    Aralık verilmezse ilişkilendirilecek (yoksa modeldeki tüm) tarih sütunlarının en küçük ve
+    en büyük değerinden bulunur ve tam yıllara genişletilir.
+    """
+    op: Literal["create_date_table"]
+    name: str = "Tarih"
+    start: str | None = None                      # "2024-01-01"
+    end: str | None = None
+    relate: list[str] = Field(default_factory=list)   # ["OINV[DocDate]", ...]
+
+    def apply(self, ctx: OpContext) -> None:
+        name = clean_name(self.name, "Tablo")
+        if any(t.ad.lower() == name.lower() for t in ctx.tanim.tablolar):
+            raise ModelError(f"'{name}' adlı bir tablo zaten var")
+        phys = name
+        used = {t.kaynak.tablo.lower() for t in ctx.tanim.tablolar}
+        n = 2
+        while phys.lower() in used:
+            phys = f"{name}_{n}"
+            n += 1
+        sources: list[tuple[Tablo, Sutun]] = []
+        for ref in self.relate:
+            st, sc = ctx.resolve(ref)
+            if sc.tip != "date":
+                raise ModelError(
+                    f"{st.ad}[{sc.ad}] {TIP_ADI[sc.tip]} tipinde; tarih tablosuna bağlamak için önce tipini 'Tarih' yapın"
+                )
+            sources.append((st, sc))
+        scan = sources or [
+            (t, c) for t in ctx.tanim.tablolar for c in t.sutunlar
+            if c.tip in ("date", "datetime") and c.ifade is None and t.kaynak.katman == DATA_SCHEMA
+        ]
+        num = lambda ad, gizli=False: Sutun(ad=ad, tip="int64", ozet="none", gizli=gizli)  # noqa: E731
+        txt = lambda ad, sort=None: Sutun(ad=ad, tip="string", siralama_sutunu=sort)  # noqa: E731
+        table = Tablo(
+            ad=name,
+            kaynak=TabloKaynak(katman=DATA_SCHEMA, tablo=phys),
+            sutunlar=[
+                Sutun(ad="Tarih", tip="date", anahtar=True, bicim="dd.MM.yyyy"),
+                num("Yıl"), num("Çeyrek No", True), txt("Çeyrek", "Çeyrek No"),
+                num("Ay No"), txt("Ay", "Ay No"), txt("Yıl Ay", "Yıl Ay No"), num("Yıl Ay No", True),
+                num("Gün"), num("Haftanın Günü No", True), txt("Haftanın Günü", "Haftanın Günü No"),
+            ],
+            hiyerarsiler=[Hiyerarsi(ad="Takvim", seviyeler=["Yıl", "Çeyrek", "Ay", "Tarih"])],
+            tarih_tablosu=TarihTablosu(anahtar_sutun="Tarih"),
+            aciklama="Floem BI tarafından oluşturulan takvim tablosu",
+        )
+        for o in ctx.tanim.tablolar:
+            o.tarih_tablosu = None                    # MVP: modelde tek tarih tablosu
+        ctx.tanim.tablolar.append(table)
+        for st, sc in sources:
+            ctx.tanim.iliskiler.append(Iliski(kimden=_ref(st.ad, sc.ad), kime=_ref(name, "Tarih")))
+            if sc.ozet is None or sc.ozet == "sum":
+                sc.ozet = "none"
+        ctx.diagram.setdefault("tables", {})
+        target = f"{qident(DATA_SCHEMA)}.{qident(phys)}"
+        bounds = [(phys_table(t), phys_col(c)) for t, c in scan]
+        start, end = self.start, self.end
+        label = name
+
+        def build(cur, target=target, bounds=bounds, start=start, end=end, label=label):
+            lo, hi = start, end
+            if not (lo and hi):
+                found = []
+                for tbl, col in bounds:
+                    found.append(cur.execute(f"SELECT min(CAST({col} AS DATE)), max(CAST({col} AS DATE)) FROM {tbl}").fetchone())
+                mins = [f[0] for f in found if f[0] is not None]
+                maxs = [f[1] for f in found if f[1] is not None]
+                today = cur.execute("SELECT current_date").fetchone()[0]
+                lo = lo or f"{(min(mins) if mins else today).year}-01-01"
+                hi = hi or f"{(max(maxs) if maxs else today).year}-12-31"
+            if str(lo) > str(hi):
+                raise ModelError(f"{label}: başlangıç tarihi bitişten sonra olamaz")
+            aylar = "[" + ", ".join(f"'{a}'" for a in AYLAR) + "]"
+            gunler = "[" + ", ".join(f"'{g}'" for g in GUNLER) + "]"
+            cur.execute(f"""
+                CREATE TABLE {target} AS
+                SELECT CAST(d AS DATE) AS "Tarih",
+                       year(d) AS "Yıl",
+                       quarter(d) AS "Çeyrek No",
+                       'Ç' || quarter(d) AS "Çeyrek",
+                       month(d) AS "Ay No",
+                       {aylar}[month(d)] AS "Ay",
+                       CAST(year(d) AS VARCHAR) || '-' || lpad(CAST(month(d) AS VARCHAR), 2, '0') AS "Yıl Ay",
+                       year(d) * 100 + month(d) AS "Yıl Ay No",
+                       day(d) AS "Gün",
+                       isodow(d) AS "Haftanın Günü No",
+                       {gunler}[isodow(d)] AS "Haftanın Günü"
+                FROM generate_series(DATE '{lo}', DATE '{hi}', INTERVAL 1 DAY) AS t(d)
+            """)
+
+        ctx.checks.append(build)
+
+
 Op = Annotated[
     Union[
         RenameTable, UpdateTable, DeleteTable, RenameColumn, UpdateColumn,
         AddRelationship, UpdateRelationship, DeleteRelationship, MarkDateTable,
+        AddMeasure, UpdateMeasure, DeleteMeasure, CreateDateTable,
     ],
     Field(discriminator="op"),
 ]

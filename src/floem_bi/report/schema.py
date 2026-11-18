@@ -121,3 +121,12 @@ def rename_column_refs(report: dict, table: str, old: str, new: str) -> None:
     for ref in _refs(report):
         if (ref.get("table") or "").lower() == table.lower() and (ref.get("column") or "").lower() == old.lower():
             ref["column"] = new
+
+
+def rename_measure_refs(report: dict, old: str, new: str) -> None:
+    for page in report.get("pages", []):
+        for v in page.get("visuals", []):
+            for key in ("values", "target"):
+                for ref in v.get(key, []):
+                    if (ref.get("measure") or "").lower() == old.lower():
+                        ref["measure"] = new

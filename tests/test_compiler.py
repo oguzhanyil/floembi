@@ -163,8 +163,8 @@ def test_tsql_output_is_valid_tsql(model):
 def test_unsupported_function_is_reported_with_position(model):
     mc = MeasureCompiler(model)
     with pytest.raises(CompileError) as ei:
-        mc.expression("CALCULATE([Toplam Satış], FILTER(Urun, Urun[Kategori] = \"A\"))", ir.Context())
-    assert "FILTER" in str(ei.value) and "v1" in str(ei.value)
+        mc.expression("RANKX(Urun, [Toplam Satış])", ir.Context())
+    assert "RANKX" in str(ei.value) and "v1" in str(ei.value)
     assert ei.value.span is not None
 
 

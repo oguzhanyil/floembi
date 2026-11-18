@@ -43,3 +43,21 @@ a.button { display: inline-block; padding: 7px 14px; border-radius: var(--radius
 a.button.primary { background: var(--accent); color: var(--accent-text); }
 .inline-link { padding: 0; font-size: inherit; }
 code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 0 3px; border-radius: 3px; }
+
+/* Formül çubuğu (ölçü düzenleme) */
+.formula-slot { min-height: 0; }   /* ızgarada yeri sabit kalsın diye gizlenmez; boşken yüksekliği 0 */
+.formula-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 6px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
+.fb-row { display: flex; align-items: flex-start; gap: 6px; }
+.fb-fx { font-style: italic; font-weight: 600; color: var(--muted); width: 22px; text-align: center; padding-top: 5px; }
+.fb-editor { flex: 1; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; min-width: 0; }
+.fb-editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.fb-ok, .fb-cancel { width: 30px; height: 30px; padding: 0; font-size: 14px; }
+.fb-ok:not(:disabled) { color: #0b6a0b; }
+.fb-cancel { color: var(--danger); }
+.fb-meta { display: flex; align-items: center; gap: 14px; padding-left: 28px; font-size: 12px; }
+.fb-meta label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.fb-meta select { font-size: 12px; padding: 2px 4px; color: var(--text); }
+.fb-diag { color: var(--danger); }
+.fb-hint { color: var(--muted); }
+.danger-link { color: var(--danger) !important; }
+.formula-bar .error-box { margin: 4px 0 2px 28px; }

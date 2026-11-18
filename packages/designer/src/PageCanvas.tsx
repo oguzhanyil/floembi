@@ -1,8 +1,10 @@
 import type { ModelColumn, ReportPage, Visual } from "@floem/client";
 import { VisualBody, crossFiltersFor, slicerFilters, snap, toggleCross, visualTitle, type CrossFilter, type QueryFn } from "@floem/report";
-import { useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as RPointerEvent } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 
-export const FIELD_MIME = "application/x-floem-field";
+import { FIELD_MIME, readPayload, type FieldPayload } from "./fields";
+
+export { FIELD_MIME };
 
 type Drag = { id: string; mode: "move" | "resize"; sx: number; sy: number; orig: Visual; moved: boolean };
 
@@ -15,8 +17,8 @@ export function PageCanvas({
   onSelect: (id: string | null) => void;
   onChange: (v: Visual) => void;
   onDelete: (id: string) => void;
-  onDropField: (table: string, column: string, x: number, y: number) => void;
-  onDropOnVisual: (visualId: string, table: string, column: string) => void;
+  onDropField: (field: FieldPayload, x: number, y: number) => void;
+  onDropOnVisual: (visualId: string, field: FieldPayload) => void;
   dataRev: string;
   cross: CrossFilter | null;
   setCross: (c: CrossFilter | null) => void;
@@ -72,13 +74,7 @@ export function PageCanvas({
     onChange(next);
   }
 
-  function readField(e: DragEvent) {
-    try {
-      return JSON.parse(e.dataTransfer.getData(FIELD_MIME)) as { table: string; column: string };
-    } catch {
-      return null;
-    }
-  }
+  const readField = readPayload;
 
 
   return (
@@ -94,7 +90,7 @@ export function PageCanvas({
           if (!f) return;
           e.preventDefault();
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          onDropField(f.table, f.column, (e.clientX - r.left) / scale, (e.clientY - r.top) / scale);
+          onDropField(f, (e.clientX - r.left) / scale, (e.clientY - r.top) / scale);
         }}
       >
         {page.visuals.length === 0 && (
@@ -129,7 +125,7 @@ export function PageCanvas({
                 if (!f) return;
                 e.preventDefault();
                 e.stopPropagation();
-                onDropOnVisual(v.id, f.table, f.column);
+                onDropOnVisual(v.id, f);
               }}
             >
               <div

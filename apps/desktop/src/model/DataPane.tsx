@@ -1,15 +1,16 @@
 import type { ModelTable } from "@floem/client";
 import { useState } from "react";
-import { ColumnTypeIcon, DateTableIcon, HiddenIcon, TableIcon } from "@floem/designer";
+import { CalcIcon, ColumnTypeIcon, DateTableIcon, HiddenIcon, TableIcon } from "@floem/designer";
 import type { Selection } from "./modelUtils";
 
 /** Power BI'daki "Veri" bölmesi: tablolar ve alanlar ağacı, arama. */
 export function DataPane({
-  tables, selection, onSelect,
+  tables, selection, onSelect, onEditMeasure,
 }: {
   tables: ModelTable[];
   selection: Selection;
   onSelect: (s: Selection) => void;
+  onEditMeasure?: (name: string) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");
@@ -54,6 +55,20 @@ export function DataPane({
                     </button>
                   );
                 })}
+              {expanded &&
+                t.olculer
+                  .filter((m) => !needle || m.ad.toLocaleLowerCase("tr").includes(needle))
+                  .map((m) => (
+                    <button
+                      key={`m:${m.ad}`}
+                      className="dp-col measure"
+                      title={`${m.ifade}\n\nDüzenlemek için tıklayın`}
+                      onClick={() => onEditMeasure?.(m.ad)}
+                    >
+                      <CalcIcon />
+                      <span>{m.ad}</span>
+                    </button>
+                  ))}
             </div>
           );
         })}

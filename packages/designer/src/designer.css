@@ -59,3 +59,9 @@
 .fmt-color input { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 4px; background: none; cursor: pointer; }
 
 .well-opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* Ölçüler (Veri bölmesi) */
+.dp-col.measure .ico-measure { color: #6b4fbb; }
+.dp-col.measure { position: relative; }
+.dp-edit { visibility: hidden; margin-left: auto; border: none; background: none; padding: 0 4px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.dp-col.measure:hover .dp-edit { visibility: visible; }
