@@ -721,6 +721,7 @@ export interface WorkspaceContent {
   workspace: WorkspaceInfo;
   datasets: (PublishedItem & { size_bytes: number })[];
   reports: (PublishedItem & { dataset_id: number })[];
+  app: AppSummary | null;
 }
 
 export interface SharedReport {
@@ -746,6 +747,76 @@ export interface PublishedReport {
   can_share?: boolean;
   /** Bu kullanıcıya uygulanan RLS rolleri; null = kısıtlama yok */
   rls_roles?: string[] | null;
+}
+
+/** Anlık güncelleme olayları (SSE) */
+export type LiveEvent =
+  | { type: "report"; report_id: number; version: number; dataset_id: number; dataset_version: number }
+  | { type: "app"; app_id: number; version?: number; removed: boolean };
+
+// ------------------------------------------------------------------ App (uygulama)
+export interface AppSummary {
+  id: number;
+  name: string;
+  version: number;
+  published_at: string;
+  /** Çalışma alanındaki raporlardan biri App'teki dondurulmuş sürümden yeni */
+  outdated: boolean;
+}
+
+export interface AppListItem {
+  id: number;
+  name: string;
+  description: string | null;
+  color: string;
+  version: number;
+  published_at: string;
+  published_by: string;
+  workspace: { id: number; name: string };
+  items: number;
+}
+
+export interface AppInfo extends Omit<AppListItem, "items"> {
+  role: string;
+  role_label: string;
+  can_manage: boolean;
+  items: { id: number; title: string; section: string | null; report_id: number }[];
+}
+
+export interface AppItemView {
+  id: number;
+  title: string;
+  report_version: number;
+  rls_roles: string[] | null;
+  dataset: { id: number; name: string; version: number };
+  definition: ReportDefinition;
+}
+
+export interface AppItemInput {
+  report_id: number;
+  title?: string | null;
+  section?: string | null;
+}
+
+export interface AppInput {
+  name: string;
+  description?: string | null;
+  color: string;
+  items: AppItemInput[];
+}
+
+/** Çalışma alanı → App kurulumu (Yönetici/Üye) */
+export interface AppAdminView {
+  app: (AppInfo & AppSummary) | null;
+  items: { report_id: number; title: string; section: string | null; report_version: number; current_version: number | null }[];
+  reports: { id: number; name: string; version: number }[];
+  access: { id: number; email: string; name: string; granted_by: string; granted_at: string }[];
+  pending: { id: number; email: string; granted_by: string; granted_at: string }[];
+}
+
+export interface AppAccessResult extends AppAdminView {
+  results: ShareResult[];
+  mail_mode: MailMode;
 }
 
 export interface RoleMember {
@@ -918,6 +989,40 @@ export class WebClient {
   }
   reportQuery(id: number, q: VisualQuery) {
     return this.http.request<VisualResult>("POST", `/api/reports/${id}/query`, q);
+  }
+  /** Anlık güncelleme bağlantısı için tek kullanımlık bilet (EventSource başlık gönderemez) */
+  eventsTicket() {
+    return this.http.request<{ ticket: string }>("POST", "/api/events/ticket", {});
+  }
+  workspaceApp(workspaceId: number) {
+    return this.http.request<AppAdminView>("GET", `/api/workspaces/${workspaceId}/app`);
+  }
+  publishApp(workspaceId: number, app: AppInput) {
+    return this.http.request<AppAdminView>("PUT", `/api/workspaces/${workspaceId}/app`, app);
+  }
+  unpublishApp(workspaceId: number) {
+    return this.http.request<AppAdminView>("DELETE", `/api/workspaces/${workspaceId}/app`);
+  }
+  grantApp(appId: number, emails: string[], message: string | null, notify = true) {
+    return this.http.request<AppAccessResult>("POST", `/api/apps/${appId}/access`, { emails, message, notify });
+  }
+  revokeApp(appId: number, userId: number) {
+    return this.http.request<AppAdminView>("DELETE", `/api/apps/${appId}/access/${userId}`);
+  }
+  cancelAppPending(appId: number, grantId: number) {
+    return this.http.request<AppAdminView>("DELETE", `/api/apps/${appId}/pending/${grantId}`);
+  }
+  apps() {
+    return this.http.request<AppListItem[]>("GET", "/api/apps");
+  }
+  app(appId: number) {
+    return this.http.request<AppInfo>("GET", `/api/apps/${appId}`);
+  }
+  appItem(appId: number, itemId: number) {
+    return this.http.request<AppItemView>("GET", `/api/apps/${appId}/items/${itemId}`);
+  }
+  appItemQuery(appId: number, itemId: number, q: VisualQuery) {
+    return this.http.request<VisualResult>("POST", `/api/apps/${appId}/items/${itemId}/query`, q);
   }
   datasetSecurity(id: number) {
     return this.http.request<DatasetSecurity>("GET", `/api/datasets/${id}/security`);

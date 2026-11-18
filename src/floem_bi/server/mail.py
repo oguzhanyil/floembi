@@ -260,6 +260,27 @@ def share_mail(*, to: str, sender_name: str, report_name: str, workspace: str, u
     return Mail(to=to, subject=subject, text=text, html=html)
 
 
+def app_mail(*, to: str, sender_name: str, app_name: str, description: str | None, url: str,
+             message: str | None) -> Mail:
+    """App'e erişim verildi (Power BI: uygulama yüklendi bildirimi)."""
+    subject = f"{sender_name} size '{app_name}' uygulamasını açtı"
+    note = (message or "").strip()
+    text = (
+        f"{sender_name} size floembi.app'te '{app_name}' uygulamasına erişim verdi.\n\n"
+        + (f"{description.strip()}\n\n" if (description or "").strip() else "")
+        + (f"Mesaj:\n{note}\n\n" if note else "")
+        + f"Uygulamayı açın: {url}\n\n"
+        "Bu e-postayı floembi.app gönderdi. Uygulamaya erişmek için floembi.app hesabınızla oturum açmanız gerekir."
+    )
+    html = _layout(
+        intro=f"<strong>{escape(sender_name)}</strong> size bir uygulama açtı", title=escape(app_name),
+        subtitle=escape(description.strip()) if (description or "").strip() else "floembi.app uygulaması",
+        quote=escape(note) if note else None, button="Uygulamayı aç", url=url,
+        footer="Uygulamaya erişmek için floembi.app hesabınızla oturum açmanız gerekir.",
+    )
+    return Mail(to=to, subject=subject, text=text, html=html)
+
+
 def invite_mail(*, to: str, inviter: str, grants: list[str], url: str, days: int, message: str | None = None) -> Mail:
     """Hesabı olmayan adrese davet: bağlantıdan ad ve şifre belirleyip hesabını açar."""
     subject = f"{inviter} sizi floembi.app'e davet etti"

@@ -4,9 +4,11 @@ import {
 import { InboxPage, ShareDialog } from "./share";
 import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
 import { SecurityPage } from "./security";
+import { AppSetupPage, AppTiles, AppViewerPage, AppsPage } from "./apps";
+import type { AppListItem } from "@floem/client";
 import { ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, SessionProvider, navigate, usePath, useSession } from "./session";
+import { Link, SessionProvider, navigate, useLive, usePath, useSession } from "./session";
 
 export function App() {
   return (
@@ -56,6 +58,11 @@ function Router() {
   let page = <Home />;
   let m: RegExpExecArray | null;
   if ((m = /^\/reports\/(\d+)/.exec(path))) page = <ReportPage id={Number(m[1])} key={m[1]} />;
+  else if (path === "/apps") page = <AppsPage />;
+  else if ((m = /^\/apps\/(\d+)(?:\/(\d+))?$/.exec(path))) {
+    return <Shell><AppViewerPage id={Number(m[1])} itemId={m[2] ? Number(m[2]) : null} key={m[1]} /></Shell>;
+  }
+  else if ((m = /^\/workspaces\/(\d+)\/app$/.exec(path))) page = <AppSetupPage workspaceId={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/datasets\/(\d+)\/security$/.exec(path))) page = <SecurityPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
   else if (path === "/inbox") page = <InboxPage />;
@@ -133,6 +140,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </header>
       <nav className="sidenav" aria-label="Gezinti">
         <Link to="/" className={path === "/" ? "active" : ""}>⌂ Giriş</Link>
+        <Link to="/apps" className={path.startsWith("/apps") ? "active" : ""}>▦ Uygulamalar</Link>
         {mailMode === "outbox" && (
           <Link to="/inbox" className={path === "/inbox" ? "active" : ""}>✉ Gelen e-postalar</Link>
         )}
@@ -160,14 +168,22 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Home() {
   const { client, guard, workspaces, user } = useSession();
   const [shared, setShared] = useState<SharedReport[] | null>(null);
+  const [apps, setApps] = useState<AppListItem[]>([]);
   const [error, setError] = useState<UiError | null>(null);
   useEffect(() => {
     guard(client.sharedWithMe()).then(setShared).catch((e) => setError(toUiError(e)));
+    guard(client.apps()).then(setApps).catch((e) => setError(toUiError(e)));
   }, [client, guard]);
   return (
     <div className="page-wrap">
       <h1>Merhaba, {user?.name}</h1>
       {error && <ErrorPanel error={error} />}
+      {apps.length > 0 && (
+        <section>
+          <h2>Uygulamalar</h2>
+          <AppTiles apps={apps} />
+        </section>
+      )}
       <section>
         <h2>Benimle paylaşılanlar</h2>
         {shared && shared.length === 0 && <p className="muted">Henüz sizinle paylaşılan bir rapor yok.</p>}
@@ -229,8 +245,23 @@ function WorkspacePage({ id }: { id: number }) {
   };
   return (
     <div className="page-wrap">
-      <h1>{data.workspace.name}</h1>
-      <p className="muted">Rolünüz: {data.workspace.role_label}</p>
+      <div className="ws-head">
+        <h1>{data.workspace.name}</h1>
+        <span className="spacer" />
+        {data.app && (
+          <Link to={`/apps/${data.app.id}`} className="button">▦ Uygulamayı aç</Link>
+        )}
+        {canManage && data.reports.length > 0 && (
+          <Link to={`/workspaces/${data.workspace.id}/app`} className={`button${data.app?.outdated ? " primary" : ""}`}>
+            {data.app ? (data.app.outdated ? "⟳ Uygulamayı güncelle" : "✎ Uygulamayı düzenle") : "＋ Uygulama oluştur"}
+          </Link>
+        )}
+      </div>
+      <p className="muted">
+        Rolünüz: {data.workspace.role_label}
+        {data.app && <> · Uygulama yayında: <strong>{data.app.name}</strong> (sürüm {data.app.version})
+          {data.app.outdated && <span className="warn-text"> · raporlarda yayımlanmamış değişiklik var</span>}</>}
+      </p>
       {items.length === 0 ? (
         <div className="empty">
           <p>Bu çalışma alanında henüz içerik yok.</p>
@@ -286,6 +317,19 @@ function ReportPage({ id }: { id: number }) {
 
   const run = useCallback((q: VisualQuery) => guard(client.reportQuery(id, q)), [client, guard, id]);
 
+  // Anlık güncelleme: rapor yeniden yayımlanınca açık ekran kendiliğinden yenilenir
+  const [notice, setNotice] = useState<string | null>(null);
+  useLive((e) => {
+    if (e.type !== "report" || e.report_id !== id) return;
+    load();
+    setNotice(`Rapor güncellendi (sürüm ${e.version})`);
+  });
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   if (error) {
     return (
       <div className="page-wrap">
@@ -305,6 +349,7 @@ function ReportPage({ id }: { id: number }) {
           </span>
         </div>
         <span className="spacer" />
+        {notice && <span className="live-note" role="status">⟳ {notice}</span>}
         {report.rls_roles && (
           <span className="role rls" title="Satır düzeyi güvenlik: yalnızca bu rollerin görebildiği veriyi görüyorsunuz">
             🔒 {report.rls_roles.join(", ")}

@@ -136,6 +136,26 @@ Filtreler yalnızca **İzleyicilere** ve raporu paylaşımla görenlere uygulan�
 Katkıda bulunan tüm veriyi görür. Modelde rol varsa ve izleyici hiçbir role atanmamışsa rapor
 açılmaz, nedeni ekranda yazar. `USERPRINCIPALNAME()` web'de oturum açan kişinin e-postasıdır.
 
+**Uygulama (App):** Power BI App karşılığı; çalışma alanı başına bir tane.
+
+- Çalışma alanında **＋ Uygulama oluştur** (Yönetici/Üye): ad, açıklama, tema rengi; içerik olarak
+  raporlar seçilir, menü başlığı, bölüm ve sıra verilir. **Uygulamayı yayımla**, raporların o anki
+  tasarımını dondurur. Çalışma alanında rapor yeniden yayımlansa da izleyiciler **Uygulamayı
+  güncelle**ye kadar eski tasarımı görür; veri her zaman günceldir. Güncelleme gerektiğinde
+  çalışma alanı sayfası uyarır.
+- **Erişim:** e-posta ile kişi eklenir, kişiye "uygulama açıldı" e-postası gider. Hesabı olmayana
+  davet gider; hesap açılınca uygulama görünür. Erişim verilen kişi **İzleyici**dir: çalışma
+  alanını ve App dışındaki raporları görmez. RLS App'te de uygulanır.
+- İzleyici sol menüdeki **▦ Uygulamalar**dan ya da giriş sayfasındaki karttan açar; solda bölümlere
+  ayrılmış rapor menüsü, sağda rapor.
+
+**Anlık güncelleme (SSE):** açık rapor ekranı, rapor yeniden yayımlanınca; açık App ekranı, App
+güncellenince ya da altındaki veri yenilenince kendiliğinden yenilenir ve kısa bir bildirim
+gösterir. Olaylar yalnızca içeriğe erişimi olanlara gider ve yalnızca kimlik/sürüm taşır. Tarayıcı
+bağlantıyı oturumla alınan 60 saniyelik, tek kullanımlık bir biletle açar; oturum anahtarı adres
+satırına ve sunucu günlüğüne düşmez. Ters vekil (nginx) arkasında `/api/events` için tamponlama
+kapalı olmalı (`X-Accel-Buffering: no` başlığı gönderiliyor).
+
 **Yönetim (sistem yöneticisi):** web'de sol menüdeki *Yönetim* bölümü yalnızca sistem
 yöneticilerine görünür (sahte kullanıcılardan `yonetici@floembi.test`). Mevcut bir metadata
 veritabanı açılınca çalışma alanı Yöneticileri otomatik olarak sistem yöneticisi yapılır.

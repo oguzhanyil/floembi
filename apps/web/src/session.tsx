@@ -1,5 +1,5 @@
-import { FloemApiError, WebClient, type MailMode, type WebUser, type WorkspaceInfo } from "@floem/client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FloemApiError, WebClient, type LiveEvent, type MailMode, type WebUser, type WorkspaceInfo } from "@floem/client";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const KEY = "floem.session";
 
@@ -42,6 +42,8 @@ interface SessionApi {
   logout(): void;
   /** 401 gelirse oturumu kapatır; diğer hataları olduğu gibi fırlatır */
   guard<T>(p: Promise<T>): Promise<T>;
+  /** Anlık güncelleme olaylarına abone ol; dönüş aboneliği bitirir */
+  onLive(fn: (e: LiveEvent) => void): () => void;
 }
 
 const Ctx = createContext<SessionApi | null>(null);
@@ -90,6 +92,54 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined);
   }, [stored, client, guard, rev]);
 
+  // Anlık güncelleme: oturum açıkken tek SSE bağlantısı; koparsa yeni biletle yeniden bağlanır
+  const listeners = useRef(new Set<(e: LiveEvent) => void>());
+  const onLive = useCallback((fn: (e: LiveEvent) => void) => {
+    listeners.current.add(fn);
+    return () => {
+      listeners.current.delete(fn);
+    };
+  }, []);
+  useEffect(() => {
+    if (!stored || typeof EventSource === "undefined") return;
+    let es: EventSource | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+    const dispatch = (raw: MessageEvent) => {
+      try {
+        const ev = JSON.parse(raw.data) as LiveEvent;
+        listeners.current.forEach((fn) => fn(ev));
+      } catch {
+        /* bozuk olay: yok say */
+      }
+    };
+    const retry = (ms: number) => {
+      if (!closed) timer = setTimeout(connect, ms);
+    };
+    async function connect() {
+      try {
+        const { ticket } = await client.eventsTicket();
+        if (closed) return;
+        es = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+        es.addEventListener("report", dispatch as EventListener);
+        es.addEventListener("app", dispatch as EventListener);
+        es.onerror = () => {
+          es?.close();             // bilet tek kullanımlık: tarayıcının kendi yeniden bağlanması işe yaramaz
+          retry(5000);
+        };
+      } catch (e) {
+        if (e instanceof FloemApiError && e.status === 401) return;
+        retry(15000);
+      }
+    }
+    void connect();
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      es?.close();
+    };
+  }, [stored, client]);
+
   const adopt = useCallback((token: string, user: WebUser) => {
     const s = { token, user };
     writeStored(s);
@@ -106,7 +156,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user: stored?.user ?? null, workspaces, mailMode, isAdmin, client, login, logout, adopt, reload, guard }}
+      value={{ user: stored?.user ?? null, workspaces, mailMode, isAdmin, client, login, logout, adopt, reload, guard, onLive }}
     >
       {children}
     </Ctx.Provider>
@@ -143,4 +193,12 @@ export function Link({ to, children, className }: { to: string; children: ReactN
       {children}
     </a>
   );
+}
+
+/** Bileşen açıkken anlık güncelleme olaylarını dinler. */
+export function useLive(fn: (e: LiveEvent) => void) {
+  const { onLive } = useSession();
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => onLive((e) => ref.current(e)), [onLive]);
 }

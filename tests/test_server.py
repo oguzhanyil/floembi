@@ -552,3 +552,112 @@ def test_row_level_security(server, floem_file):
     assert len(server.post(f"/api/reports/{rid}/query", headers=hi, json=q).json()["rows"]) == 2
     mid = sec["orphans"][0]["id"]
     assert server.delete(f"/api/datasets/{dsid}/security/members/{mid}", headers=hy).json()["orphans"] == []
+
+
+def test_app_publish_access_and_frozen_version(server, floem_file):
+    """Power BI App: seçili raporlar dondurulur, izleyici çalışma alanını görmeden App'i görür; RLS geçerli."""
+    hy, hi = login(server, YON), login(server, IZL)
+    p = publish(server, hy, floem_file.path).json()
+    rid = p["report_id"]
+    assert server.get("/api/workspaces/1/app", headers=hi).status_code == 403
+    assert server.get("/api/workspaces/1/app", headers=hy).json()["app"] is None
+    bad = server.put("/api/workspaces/1/app", headers=hy, json={"name": "Satış", "items": [{"report_id": 999}]})
+    assert bad.status_code == 400
+
+    v = server.put("/api/workspaces/1/app", headers=hy, json={
+        "name": "Satış Uygulaması", "description": "Bölge satışları", "color": "#107c10",
+        "items": [{"report_id": rid, "title": "Genel Bakış", "section": "Satış"}]}).json()
+    aid = v["app"]["id"]
+    assert v["app"]["version"] == 1 and v["items"][0]["title"] == "Genel Bakış" and v["app"]["outdated"] is False
+    assert server.get("/api/workspaces/1/content", headers=hy).json()["app"]["name"] == "Satış Uygulaması"
+
+    # İzleyicinin erişimi yok → ver; hesabı olmayan adrese davet bekletilir
+    assert server.get(f"/api/apps/{aid}", headers=hi).status_code == 403
+    assert server.get("/api/apps", headers=hi).json() == []
+    r = server.post(f"/api/apps/{aid}/access", headers=hy,
+                    json={"emails": ["izleyici@floembi.test", "yeni@ornek.com", "bozuk"]}).json()
+    assert [x["status"] for x in r["results"]] == ["shared", "invited", "invalid"]
+    assert r["results"][0]["mail"] == "outbox" and [a["email"] for a in r["access"]] == ["izleyici@floembi.test"]
+    assert [g["email"] for g in r["pending"]] == ["yeni@ornek.com"]
+
+    apps = server.get("/api/apps", headers=hi).json()
+    assert [(a["name"], a["items"]) for a in apps] == [("Satış Uygulaması", 1)]
+    info = server.get(f"/api/apps/{aid}", headers=hi).json()
+    assert info["role_label"] == "İzleyici" and info["can_manage"] is False
+    iid = info["items"][0]["id"]
+    item = server.get(f"/api/apps/{aid}/items/{iid}", headers=hi).json()
+    assert item["definition"]["pages"][0]["name"] == "Özet" and item["rls_roles"] is None
+    q = {"values": [{"table": "INV1", "column": "LineTotal"}]}
+    assert server.post(f"/api/apps/{aid}/items/{iid}/query", headers=hi, json=q).json()["rows"] == [[272.75]]
+    # App erişimi rapora doğrudan erişim ya da çalışma alanı vermez
+    assert server.get(f"/api/reports/{rid}", headers=hi).status_code == 403
+    assert server.get("/api/workspaces/1/content", headers=hi).status_code == 403
+    assert server.post(f"/api/apps/{aid}/access", headers=hi, json={"emails": ["a@b.co"]}).status_code == 403
+
+    # Rapor yeniden yayımlanınca App eski tanımı gösterir; "güncelle" ile yeni sürüm dondurulur
+    new_report = {**REPORT, "pages": [{**REPORT["pages"][0], "name": "Yeni Sayfa"}]}
+    floem_file.put("/document/report", headers=td.H, json=new_report)
+    floem_file.post("/document/save", headers=td.H, json={})
+    publish(server, hy, floem_file.path)
+    v = server.get("/api/workspaces/1/app", headers=hy).json()
+    assert v["app"]["outdated"] is True and v["items"][0]["current_version"] == 2
+    assert server.get(f"/api/apps/{aid}/items/{iid}", headers=hi).json()["definition"]["pages"][0]["name"] == "Özet"
+    v = server.put("/api/workspaces/1/app", headers=hy, json={
+        "name": "Satış Uygulaması", "items": [{"report_id": rid, "title": "Genel Bakış", "section": "Satış"}]}).json()
+    assert v["app"]["version"] == 2 and v["app"]["outdated"] is False
+    iid = server.get(f"/api/apps/{aid}", headers=hi).json()["items"][0]["id"]
+    assert server.get(f"/api/apps/{aid}/items/{iid}", headers=hi).json()["definition"]["pages"][0]["name"] == "Yeni Sayfa"
+
+    # Davet kabul edilince App erişimi açılır
+    tok = _invite_token(server, hy, "yeni@ornek.com")
+    acc = server.post(f"/api/invitations/{tok}/accept", json={"name": "Yeni Kişi", "password": "Sifre.1234"}).json()
+    hn = {"Authorization": f"Bearer {acc['token']}"}
+    assert [a["id"] for a in server.get("/api/apps", headers=hn).json()] == [aid]
+
+    # Erişim kaldırılınca ve App yayından kalkınca görünmez
+    uid = server.get("/api/me", headers=hi).json()["id"]
+    v = server.delete(f"/api/apps/{aid}/access/{uid}", headers=hy).json()
+    assert [a["email"] for a in v["access"]] == ["yeni@ornek.com"]
+    assert server.get(f"/api/apps/{aid}", headers=hi).status_code == 403
+    assert server.delete("/api/workspaces/1/app", headers=hy).json()["app"] is None
+    assert server.get("/api/apps", headers=hn).json() == []
+
+
+def test_live_update_events(server, floem_file):
+    """SSE: yeniden yayımlama ve App güncellemesi yalnızca erişimi olanların açık ekranlarına bildirilir."""
+    import asyncio
+
+    hy, hi = login(server, YON), login(server, IZL)
+    hub = server.app_.state.events
+    assert server.get("/api/events?ticket=bozuk").status_code == 401
+    t = server.post("/api/events/ticket", headers=hy).json()["ticket"]
+    assert hub.redeem(t) == 1 and hub.redeem(t) is None              # tek kullanımlık
+
+    rid = publish(server, hy, floem_file.path).json()["report_id"]
+
+    async def scenario():
+        yon, izl = hub.subscribe(1), hub.subscribe(2)
+        try:
+            await asyncio.to_thread(publish, server, hy, floem_file.path)
+            ev = await asyncio.wait_for(yon.queue.get(), 10)
+            assert ev["type"] == "report" and ev["report_id"] == rid and ev["version"] == 2
+            assert izl.queue.empty()                                    # erişimi yok: bildirim gitmez
+            # App'e erişim verilince izleyici App ve rapor olaylarını alır
+            v = await asyncio.to_thread(server.put, "/api/workspaces/1/app", headers=hy,
+                                        json={"name": "Satış", "items": [{"report_id": rid}]})
+            aid = v.json()["app"]["id"]
+            await asyncio.to_thread(server.post, f"/api/apps/{aid}/access", headers=hy,
+                                    json={"emails": ["izleyici@floembi.test"], "notify": False})
+            assert (await asyncio.wait_for(yon.queue.get(), 10))["type"] == "app"
+            await asyncio.to_thread(publish, server, hy, floem_file.path)
+            ev = await asyncio.wait_for(izl.queue.get(), 10)
+            assert ev["type"] == "report" and ev["dataset_version"] == 3
+            await asyncio.to_thread(server.delete, "/api/workspaces/1/app", headers=hy)
+            ev = await asyncio.wait_for(izl.queue.get(), 10)
+            assert ev == {"type": "app", "app_id": aid, "removed": True}
+        finally:
+            hub.unsubscribe(yon)
+            hub.unsubscribe(izl)
+
+    asyncio.run(scenario())
+    assert hub.count == 0

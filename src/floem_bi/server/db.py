@@ -84,6 +84,40 @@ shares = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, default=now),
 )
 
+# App (Power BI "uygulama"): çalışma alanı başına bir tane. Yayımlanınca içerdiği raporların tanımı
+# dondurulur (app_items.definition); veri anlam modelinden canlı gelir. İzleyici çalışma alanını görmez.
+apps = Table(
+    "apps", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, unique=True),
+    Column("name", String(120), nullable=False),
+    Column("description", Text),
+    Column("color", String(16), nullable=False, default="#1f6feb"),
+    Column("version", Integer, nullable=False, default=1),
+    Column("published_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("published_at", DateTime(timezone=True), nullable=False, default=now),
+)
+
+app_items = Table(
+    "app_items", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("app_id", Integer, ForeignKey("apps.id", ondelete="CASCADE"), nullable=False),
+    Column("position", Integer, nullable=False),
+    Column("section", String(120)),                               # menüde başlık (ör. "Satış")
+    Column("title", String(200), nullable=False),
+    Column("report_id", Integer, ForeignKey("reports.id", ondelete="CASCADE"), nullable=False),
+    Column("report_version", Integer, nullable=False),             # dondurulan rapor sürümü
+    Column("definition", Text, nullable=False),                    # o sürümün report.json'u
+)
+
+app_access = Table(
+    "app_access", metadata,
+    Column("app_id", Integer, ForeignKey("apps.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("granted_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+)
+
 # Satır düzeyi güvenlik üyelikleri (Power BI: anlam modeli → Güvenlik). Roller ve filtreleri modelde
 # (Desktop'ta tanımlanır); burada yalnızca hangi kullanıcının hangi role atandığı durur. Rol adına
 # bağlıdır: yeniden yayımlamada rol modelde kalırsa atama korunur.
@@ -151,6 +185,7 @@ pending_grants = Table(
     Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="CASCADE")),
     Column("role", String(16)),                                   # çalışma alanı rolü
     Column("report_id", Integer, ForeignKey("reports.id", ondelete="CASCADE")),  # ya da tek rapor paylaşımı
+    Column("app_id", Integer, ForeignKey("apps.id", ondelete="CASCADE")),        # ya da App erişimi
     Column("granted_by", Integer, ForeignKey("users.id", ondelete="SET NULL")),
     Column("created_at", DateTime(timezone=True), nullable=False, default=now),
 )
@@ -164,6 +199,9 @@ def _migrate(engine: Engine) -> None:
             c.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
             # Mevcut kurulum: herhangi bir çalışma alanının Yöneticisi olanlar sistem yöneticisi olur
             c.execute(text("UPDATE users SET is_admin = 1 WHERE id IN (SELECT user_id FROM members WHERE role = 'admin')"))
+    if "app_id" not in {c["name"] for c in inspect(engine).get_columns("pending_grants")}:
+        with engine.begin() as c:
+            c.execute(text("ALTER TABLE pending_grants ADD COLUMN app_id INTEGER REFERENCES apps(id) ON DELETE CASCADE"))
 
 
 def make_engine(url: str) -> Engine:

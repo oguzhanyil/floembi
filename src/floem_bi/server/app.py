@@ -22,6 +22,7 @@ Web arayüzü (apps/web/dist) varsa kökten sunulur.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -38,7 +39,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import Depends, FastAPI, File, Header, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
@@ -53,9 +54,11 @@ from ..model.schema import ModelTanimi
 from ..report import QueryError, Report, VisualQuery, run_visual_query
 from . import db
 from .mail import (
-    SECURITY, Mail, MailError, MailSettings, SecretBox, SmtpSettings, access_mail, invite_mail, load_mail_settings,
+    SECURITY, Mail, MailError, MailSettings, SecretBox, SmtpSettings, access_mail, app_mail, invite_mail,
+    load_mail_settings,
     login_hint, send, sender_display, settings_from_row, share_mail, test_mail,
 )
+from .events import EventHub
 from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
@@ -88,6 +91,7 @@ class ServerSettings:
     seed_passwords: dict[str, str] = field(default_factory=dict)
     mail: MailSettings = field(default_factory=MailSettings)   # ortam değişkenlerinden; ekran ayarı önceliklidir
     invite_days: int = 7
+    events_keepalive: float = 20.0                             # SSE: boşta yorum satırı aralığı (sn)
 
 
 # Geliştirme için iki sahte kullanıcı (gerçek kullanıcı yönetimi/SSO sonraki aşamada)
@@ -167,6 +171,25 @@ class RoleIn(BaseModel):
     role: str
 
 
+class AppItemIn(BaseModel):
+    report_id: int
+    title: str | None = Field(default=None, max_length=200)
+    section: str | None = Field(default=None, max_length=120)
+
+
+class AppIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    color: str = Field(default="#1f6feb", pattern=r"^#[0-9a-fA-F]{6}$")
+    items: list[AppItemIn] = Field(min_length=1, max_length=100)
+
+
+class AppAccessIn(BaseModel):
+    emails: list[str] = Field(min_length=1, max_length=50)
+    message: str | None = Field(default=None, max_length=1000)
+    notify: bool = True
+
+
 class RoleMemberIn(BaseModel):
     role: str = Field(min_length=1)
     email: str = Field(min_length=3)
@@ -237,6 +260,8 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = engine
     app.state.engines = engines
+    hub = EventHub()
+    app.state.events = hub
 
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, e: ApiError):
@@ -298,6 +323,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             elif g.report_id:
                 rn = c.execute(select(db.reports.c.name).where(db.reports.c.id == g.report_id)).scalar()
                 out.append(f"'{rn}' raporu (görüntüleme)")
+            elif g.app_id:
+                an = c.execute(select(db.apps.c.name).where(db.apps.c.id == g.app_id)).scalar()
+                out.append(f"'{an}' uygulaması (görüntüleme)")
         return out
 
     def send_invite(email: str, inviter: dict, message: str | None = None) -> tuple[str, str | None, str | None]:
@@ -426,6 +454,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             ds = c.execute(select(db.datasets).where(db.datasets.c.workspace_id == wid).order_by(db.datasets.c.name)).all()
             rp = c.execute(select(db.reports).where(db.reports.c.workspace_id == wid).order_by(db.reports.c.name)).all()
             names = {r.published_by: user_name(c, r.published_by) for r in [*ds, *rp]}
+            app_sum = app_summary(c, wid)
         return {
             "workspace": {"id": ws.id, "name": ws.name, "role": role, "role_label": ROLE_LABEL[role]},
             "datasets": [{
@@ -436,6 +465,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 "id": r.id, "name": r.name, "version": r.version, "dataset_id": r.dataset_id,
                 "published_at": iso(r.published_at), "published_by": names[r.published_by],
             } for r in rp],
+            "app": app_sum,
         }
 
     @app.get("/api/shared-with-me")
@@ -531,6 +561,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                         shutil.rmtree(old, ignore_errors=True)
                 except ValueError:
                     pass
+            notify_report(rid, rversion, ds_id, version)
             return {
                 "dataset_id": ds_id, "report_id": rid, "name": name, "version": version, "report_version": rversion,
                 "replaced": ds is not None, "url": f"{settings.public_url}/reports/{rid}",
@@ -569,7 +600,12 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     def report_query(rid: int, q: VisualQuery, user: dict = Depends(current_user)):
         with engine.connect() as c:
             rp, role = load_report(c, rid, user)
-            ds = c.execute(select(db.datasets).where(db.datasets.c.id == rp.dataset_id)).first()
+        return dataset_query(user, rp.dataset_id, role, q)
+
+    def dataset_query(user: dict, dataset_id: int, role: str, q: VisualQuery) -> dict:
+        """Görsel sorgusu; İzleyiciye RLS rolleri uygulanır (rapor ve App ortak)."""
+        with engine.connect() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dataset_id)).first()
             model, eng, lock = engines.get(ds.id, ds.version, ds.model_yaml, ds.snapshot)
             roles = rls_roles(c, user, ds, role, [r.ad for r in model.tanim.roller])
         try:
@@ -1000,6 +1036,11 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                     if rp and report_access(c, uid, rp) is None:
                         c.execute(db.shares.insert().values(report_id=rp.id, user_id=uid,
                                                             shared_by=g.granted_by or uid))
+                elif g.app_id:
+                    a = c.execute(select(db.apps).where(db.apps.c.id == g.app_id)).first()
+                    if a and app_role(c, uid, a) is None:
+                        c.execute(db.app_access.insert().values(app_id=a.id, user_id=uid,
+                                                                granted_by=g.granted_by or uid))
             c.execute(db.pending_grants.delete().where(db.pending_grants.c.email == inv.email))
             c.execute(db.invitations.delete().where(db.invitations.c.id == inv.id))
         return {
@@ -1023,6 +1064,318 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             "relationships": [r.model_dump() for r in tanim.iliskiler],
             "sources": [{"sunucu": k.sunucu, "veritabani": k.veritabani} for k in tanim.veri_kaynaklari],
         }
+
+    # -------------------------------------------------------------- anlık güncelleme (SSE)
+    def notify_report(rid: int, version: int, dataset_id: int, dataset_version: int) -> None:
+        """Rapor yeniden yayımlandı: raporu ya da onu içeren App'i açabilenlere bildir."""
+        def allowed(uid: int) -> bool:
+            with engine.connect() as c:
+                rp = c.execute(select(db.reports).where(db.reports.c.id == rid)).first()
+                if rp is None:
+                    return False
+                if report_access(c, uid, rp):
+                    return True
+                for a in c.execute(select(db.apps).join(db.app_items, db.app_items.c.app_id == db.apps.c.id)
+                                   .where(db.app_items.c.report_id == rid)).all():
+                    if app_role(c, uid, a):
+                        return True
+                return False
+        hub.emit({"type": "report", "report_id": rid, "version": version, "dataset_id": dataset_id,
+                  "dataset_version": dataset_version}, allowed)
+
+    def notify_app(aid: int, version: int) -> None:
+        def allowed(uid: int) -> bool:
+            with engine.connect() as c:
+                a = c.execute(select(db.apps).where(db.apps.c.id == aid)).first()
+                return a is not None and app_role(c, uid, a) is not None
+        hub.emit({"type": "app", "app_id": aid, "version": version, "removed": False}, allowed)
+
+    @app.post("/api/events/ticket")
+    def events_ticket(user: dict = Depends(current_user)):
+        return {"ticket": hub.ticket(user["id"])}
+
+    @app.get("/api/events")
+    async def events(request: Request, ticket: str = ""):
+        uid = hub.redeem(ticket)
+        if uid is None:
+            raise ApiError(401, "unauthorized", "Bildirim bileti geçersiz ya da süresi dolmuş")
+        sub = hub.subscribe(uid)
+
+        async def stream():
+            try:
+                yield "retry: 5000\n\n"
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        ev = await asyncio.wait_for(sub.queue.get(), timeout=settings.events_keepalive)
+                    except asyncio.TimeoutError:
+                        yield ": canlı\n\n"          # vekil sunucular bağlantıyı kapatmasın
+                        continue
+                    yield f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
+            finally:
+                hub.unsubscribe(sub)
+
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # -------------------------------------------------------------- App (uygulama)
+    def app_summary(c, wid: int) -> dict | None:
+        a = c.execute(select(db.apps).where(db.apps.c.workspace_id == wid)).first()
+        if a is None:
+            return None
+        items = c.execute(select(db.app_items.c.report_version, db.reports.c.version)
+                          .join(db.reports, db.reports.c.id == db.app_items.c.report_id)
+                          .where(db.app_items.c.app_id == a.id)).all()
+        return {
+            "id": a.id, "name": a.name, "version": a.version, "published_at": iso(a.published_at),
+            # Çalışma alanındaki rapor App'teki dondurulmuş sürümden yeni: "App'i güncelle" gerekir
+            "outdated": any(frozen < current for frozen, current in items),
+        }
+
+    def app_role(c, user_id: int, a) -> str | None:
+        """Çalışma alanı üyesi kendi rolüyle; App erişimi verilen kişi İzleyici olarak görür."""
+        role = role_in(c, user_id, a.workspace_id)
+        if role:
+            return role
+        ok = c.execute(select(db.app_access.c.user_id).where(and_(
+            db.app_access.c.app_id == a.id, db.app_access.c.user_id == user_id))).first()
+        return "viewer" if ok else None
+
+    def load_app(c, aid: int, user: dict):
+        a = c.execute(select(db.apps).where(db.apps.c.id == aid)).first()
+        if a is None:
+            raise NOT_FOUND("Uygulama")
+        role = app_role(c, user["id"], a)
+        if role is None:
+            raise FORBIDDEN("Bu uygulamaya erişiminiz yok")
+        return a, role
+
+    def managed_app(c, aid: int, user: dict):
+        a = c.execute(select(db.apps).where(db.apps.c.id == aid)).first()
+        if a is None:
+            raise NOT_FOUND("Uygulama")
+        if role_in(c, user["id"], a.workspace_id) not in SHARE_ROLES:
+            raise FORBIDDEN("Uygulamayı yalnızca çalışma alanı Yöneticisi ve Üyeleri yönetebilir")
+        return a
+
+    def app_info(c, a, role: str) -> dict:
+        ws = c.execute(select(db.workspaces.c.name).where(db.workspaces.c.id == a.workspace_id)).scalar_one()
+        items = c.execute(select(db.app_items).where(db.app_items.c.app_id == a.id)
+                          .order_by(db.app_items.c.position)).all()
+        return {
+            "id": a.id, "name": a.name, "description": a.description, "color": a.color, "version": a.version,
+            "published_at": iso(a.published_at), "published_by": user_name(c, a.published_by),
+            "workspace": {"id": a.workspace_id, "name": ws}, "role": role, "role_label": ROLE_LABEL[role],
+            "can_manage": role in SHARE_ROLES,
+            "items": [{"id": i.id, "title": i.title, "section": i.section, "report_id": i.report_id} for i in items],
+        }
+
+    def app_admin_view(c, wid: int) -> dict:
+        a = c.execute(select(db.apps).where(db.apps.c.workspace_id == wid)).first()
+        reports = c.execute(select(db.reports.c.id, db.reports.c.name, db.reports.c.version)
+                            .where(db.reports.c.workspace_id == wid).order_by(db.reports.c.name)).all()
+        out: dict = {"app": None, "items": [], "access": [], "pending": [],
+                     "reports": [{"id": r.id, "name": r.name, "version": r.version} for r in reports]}
+        if a is None:
+            return out
+        out["app"] = {**app_info(c, a, "admin"), **(app_summary(c, wid) or {})}
+        current = {r.id: r.version for r in reports}
+        out["items"] = [{
+            "report_id": i.report_id, "title": i.title, "section": i.section, "report_version": i.report_version,
+            "current_version": current.get(i.report_id),
+        } for i in c.execute(select(db.app_items).where(db.app_items.c.app_id == a.id)
+                             .order_by(db.app_items.c.position)).all()]
+        out["access"] = [{
+            "id": r.id, "email": r.email, "name": r.name, "granted_by": user_name(c, r.granted_by),
+            "granted_at": iso(r.created_at),
+        } for r in c.execute(
+            select(db.users.c.id, db.users.c.email, db.users.c.name, db.app_access.c.granted_by, db.app_access.c.created_at)
+            .join(db.app_access, db.app_access.c.user_id == db.users.c.id)
+            .where(db.app_access.c.app_id == a.id).order_by(db.users.c.name)).all()]
+        out["pending"] = [{
+            "id": g.id, "email": g.email, "granted_by": user_name(c, g.granted_by) if g.granted_by else "",
+            "granted_at": iso(g.created_at),
+        } for g in c.execute(select(db.pending_grants).where(db.pending_grants.c.app_id == a.id)
+                             .order_by(db.pending_grants.c.email)).all()]
+        return out
+
+    def manage_workspace(c, wid: int, user: dict) -> None:
+        if c.execute(select(db.workspaces.c.id).where(db.workspaces.c.id == wid)).first() is None:
+            raise NOT_FOUND("Çalışma alanı")
+        if role_in(c, user["id"], wid) not in SHARE_ROLES:
+            raise FORBIDDEN("Uygulamayı yalnızca çalışma alanı Yöneticisi ve Üyeleri yönetebilir")
+
+    @app.get("/api/workspaces/{wid}/app")
+    def get_workspace_app(wid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            manage_workspace(c, wid, user)
+            return app_admin_view(c, wid)
+
+    @app.put("/api/workspaces/{wid}/app")
+    def publish_app(wid: int, body: AppIn, user: dict = Depends(current_user)):
+        """Power BI "Uygulamayı yayımla / güncelle": seçili raporların o anki tanımı dondurulur."""
+        name = " ".join(body.name.split())
+        if not name:
+            raise ApiError(400, "invalid", "Uygulama adı boş olamaz")
+        with engine.begin() as c:
+            manage_workspace(c, wid, user)
+            ids = [it.report_id for it in body.items]
+            if len(set(ids)) != len(ids):
+                raise ApiError(400, "invalid", "Aynı rapor uygulamaya iki kez eklenemez")
+            reports = {r.id: r for r in c.execute(select(db.reports).where(and_(
+                db.reports.c.workspace_id == wid, db.reports.c.id.in_(ids)))).all()}
+            missing = [i for i in ids if i not in reports]
+            if missing:
+                raise ApiError(400, "invalid", "Uygulamaya yalnızca bu çalışma alanının raporları eklenebilir")
+            a = c.execute(select(db.apps).where(db.apps.c.workspace_id == wid)).first()
+            values = dict(name=name, description=(body.description or "").strip() or None, color=body.color,
+                          published_by=user["id"], published_at=db.now())
+            if a is None:
+                aid = c.execute(db.apps.insert().values(workspace_id=wid, version=1, **values)).inserted_primary_key[0]
+            else:
+                aid = a.id
+                c.execute(db.apps.update().where(db.apps.c.id == aid).values(version=a.version + 1, **values))
+                c.execute(db.app_items.delete().where(db.app_items.c.app_id == aid))
+            for pos, it in enumerate(body.items):
+                rp = reports[it.report_id]
+                c.execute(db.app_items.insert().values(
+                    app_id=aid, position=pos, section=(it.section or "").strip() or None,
+                    title=(it.title or "").strip() or rp.name, report_id=rp.id, report_version=rp.version,
+                    definition=rp.definition,
+                ))
+            view = app_admin_view(c, wid)
+        notify_app(aid, view["app"]["version"])
+        return view
+
+    @app.delete("/api/workspaces/{wid}/app")
+    def unpublish_app(wid: int, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            manage_workspace(c, wid, user)
+            a = c.execute(select(db.apps).where(db.apps.c.workspace_id == wid)).first()
+            audience: set[int] = set()
+            if a is not None:
+                audience = {r.user_id for r in c.execute(select(db.app_access.c.user_id)
+                                                         .where(db.app_access.c.app_id == a.id)).all()}
+                audience |= {r.user_id for r in c.execute(select(db.members.c.user_id)
+                                                          .where(db.members.c.workspace_id == wid)).all()}
+                emails = [g.email for g in c.execute(select(db.pending_grants.c.email)
+                                                     .where(db.pending_grants.c.app_id == a.id)).all()]
+                c.execute(db.pending_grants.delete().where(db.pending_grants.c.app_id == a.id))
+                c.execute(db.app_access.delete().where(db.app_access.c.app_id == a.id))
+                c.execute(db.app_items.delete().where(db.app_items.c.app_id == a.id))
+                c.execute(db.apps.delete().where(db.apps.c.id == a.id))
+                for e in emails:
+                    drop_orphan_invitation(c, e)
+            view = app_admin_view(c, wid)
+        if a is not None:
+            hub.emit({"type": "app", "app_id": a.id, "removed": True}, lambda uid: uid in audience)
+        return view
+
+    @app.post("/api/apps/{aid}/access")
+    def grant_app_access(aid: int, body: AppAccessIn, user: dict = Depends(current_user)):
+        results = []
+        with engine.begin() as c:
+            a = managed_app(c, aid, user)
+            for raw in dict.fromkeys(e.strip().lower() for e in body.emails if e.strip()):
+                item = {"email": raw, "status": "", "mail": "skipped", "message": ""}
+                results.append(item)
+                if not valid_email(raw):
+                    item.update(status="invalid", message="Geçerli bir e-posta adresi değil")
+                    continue
+                target = c.execute(select(db.users.c.id, db.users.c.name).where(db.users.c.email == raw)).first()
+                if target is None:
+                    if not c.execute(select(db.pending_grants.c.id).where(and_(
+                            db.pending_grants.c.email == raw, db.pending_grants.c.app_id == aid))).first():
+                        c.execute(db.pending_grants.insert().values(email=raw, app_id=aid, granted_by=user["id"]))
+                    item.update(status="invited", message="floembi.app hesabı yok; davet gönderilir, hesabını "
+                                                         "açınca uygulamayı görür")
+                    continue
+                item["name"] = target.name
+                if role_in(c, target.id, a.workspace_id):
+                    item.update(status="member", message="Çalışma alanının üyesi; uygulamayı zaten görüyor")
+                elif c.execute(select(db.app_access.c.user_id).where(and_(
+                        db.app_access.c.app_id == aid, db.app_access.c.user_id == target.id))).first():
+                    item.update(status="already", message="Bu kişinin zaten erişimi var")
+                else:
+                    c.execute(db.app_access.insert().values(app_id=aid, user_id=target.id, granted_by=user["id"]))
+                    item.update(status="shared", message="Erişim verildi")
+        url = f"{settings.public_url}/apps/{aid}"
+        for item in results:
+            if item["status"] == "invited":
+                deliver_result(item, send_invite(item["email"], user, body.message))
+            elif body.notify and item["status"] == "shared":
+                mail = app_mail(to=item["email"], sender_name=user["name"], app_name=a.name,
+                                description=a.description, url=url, message=body.message)
+                deliver_result(item, deliver("app", mail, user))
+        with engine.connect() as c:
+            view = app_admin_view(c, a.workspace_id)
+        return {"results": results, "mail_mode": mail_mode(), **view}
+
+    @app.delete("/api/apps/{aid}/access/{uid}")
+    def revoke_app_access(aid: int, uid: int, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            a = managed_app(c, aid, user)
+            c.execute(db.app_access.delete().where(and_(db.app_access.c.app_id == aid, db.app_access.c.user_id == uid)))
+            return app_admin_view(c, a.workspace_id)
+
+    @app.delete("/api/apps/{aid}/pending/{gid}")
+    def cancel_app_pending(aid: int, gid: int, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            a = managed_app(c, aid, user)
+            g = c.execute(select(db.pending_grants).where(and_(
+                db.pending_grants.c.id == gid, db.pending_grants.c.app_id == aid))).first()
+            if g is not None:
+                c.execute(db.pending_grants.delete().where(db.pending_grants.c.id == gid))
+                drop_orphan_invitation(c, g.email)
+            return app_admin_view(c, a.workspace_id)
+
+    @app.get("/api/apps")
+    def list_apps(user: dict = Depends(current_user)):
+        """Power BI "Uygulamalar": erişim verilen ve üyesi olunan çalışma alanlarının uygulamaları."""
+        with engine.connect() as c:
+            rows = c.execute(select(db.apps).order_by(db.apps.c.name)).all()
+            out = []
+            for a in rows:
+                role = app_role(c, user["id"], a)
+                if role is None:
+                    continue
+                info = app_info(c, a, role)
+                out.append({k: info[k] for k in ("id", "name", "description", "color", "version", "published_at",
+                                                 "published_by", "workspace")} | {"items": len(info["items"])})
+            return out
+
+    @app.get("/api/apps/{aid}")
+    def get_app(aid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            a, role = load_app(c, aid, user)
+            return app_info(c, a, role)
+
+    def load_item(c, aid: int, iid: int, user: dict):
+        a, role = load_app(c, aid, user)
+        it = c.execute(select(db.app_items).where(and_(db.app_items.c.id == iid, db.app_items.c.app_id == aid))).first()
+        if it is None:
+            raise NOT_FOUND("Uygulamadaki rapor")
+        rp = c.execute(select(db.reports.c.dataset_id).where(db.reports.c.id == it.report_id)).first()
+        return a, role, it, rp.dataset_id
+
+    @app.get("/api/apps/{aid}/items/{iid}")
+    def get_app_item(aid: int, iid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            a, role, it, dsid = load_item(c, aid, iid, user)
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            rls = rls_roles(c, user, ds, role, model_role_names(ds))
+        return {
+            "id": it.id, "title": it.title, "report_version": it.report_version, "rls_roles": rls,
+            "dataset": {"id": ds.id, "name": ds.name, "version": ds.version},
+            "definition": json.loads(it.definition),
+        }
+
+    @app.post("/api/apps/{aid}/items/{iid}/query")
+    def app_item_query(aid: int, iid: int, q: VisualQuery, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            _, role, _, dsid = load_item(c, aid, iid, user)
+        return dataset_query(user, dsid, role, q)
 
     # -------------------------------------------------------------- satır düzeyi güvenlik (RLS)
     def security_dataset(c, dsid: int, user: dict):
