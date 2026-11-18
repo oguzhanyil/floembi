@@ -148,3 +148,16 @@ class Slot(Expr):
     arg: Expr | None
     base: str              # tablo adı (modeldeki yazımıyla)
     ctx: Context = field(compare=True)
+
+
+@dataclass(frozen=True)
+class Nested(Expr):
+    """Bağlam geçişi: `inner` her satır anahtarı (`keys`) için hesaplanır, sonra `agg` ile toplanır.
+
+    SUMX(VALUES(Tarih[Ay]), [Satış]) → her ay için [Satış], sonra toplam.
+    `ctx`, iteratörün dış bağlamıdır (görsel gruplamasından hangilerinin geçerli olduğu buradan çıkar).
+    """
+    agg: str
+    inner: Expr
+    keys: tuple[ColKey, ...]
+    ctx: Context

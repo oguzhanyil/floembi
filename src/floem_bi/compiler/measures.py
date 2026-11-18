@@ -57,6 +57,7 @@ class MeasureCompiler:
         self.user = user or UserInfo()
         self._source = ""            # hata mesajları için o an derlenen metin
         self._stack: list[str] = []  # döngü koruması
+        self._row_tables: list[str] = []  # bağlam geçişinde satırı yinelenen tablolar
 
     # ------------------------------------------------------------------ giriş
     def measure(self, name: str, ctx: ir.Context) -> ir.Expr:
@@ -153,6 +154,10 @@ class MeasureCompiler:
                 return env[node.name.lower()]
             raise self.err(f"'{node.name}' burada kullanılamaz (değişken değil; tablo skaler değer vermez)", node)
         if isinstance(node, ast.ColumnRef):
+            key = self.resolve_column(node)
+            if key.table in self._row_tables:
+                # Bağlam geçişinde satırın kendi değeri: bu ayrıntıda sütun gruplamada olduğundan MIN = değerin kendisi
+                return ir.Slot("MIN", ir.Col(key), key.table, ctx)
             raise self.err(
                 f"{node.table}[{node.column}] satır bağlamı olmadan kullanılamaz; SUM, MIN gibi bir toplama kullanın",
                 node,
@@ -209,6 +214,8 @@ class MeasureCompiler:
             return ir.Slot("COUNTROWS", None, table, ctx2)
         if name in ITERATORS:
             self._arity(node, 2)
+            if self._has_measure(node.args[1]):
+                return self._nested_iterator(node, ctx, env)
             table, ctx2 = self._table_arg(node.args[0], ctx, env)
             arg = self.row(node.args[1], table, env)
             return ir.Slot(ITERATORS[name], arg, table, ctx2)
@@ -286,6 +293,57 @@ class MeasureCompiler:
             self._arity(node, lo, hi)
             return ir.Func(name, tuple(sub(a) for a in node.args))
         return None
+
+    def _nested_iterator(self, node: ast.Call, ctx: ir.Context, env) -> ir.Expr:
+        """SUMX(VALUES(T[c]) | T | FILTER(T, ...), <ölçü içeren ifade>): bağlam geçişi.
+
+        Her satır (VALUES'ta sütun değeri, tabloda anahtar sütunu) için ifade o satırın
+        filtresiyle hesaplanır, sonra toplanır.
+        """
+        src, body = node.args
+        if isinstance(src, ast.Call) and src.name in ("VALUES", "DISTINCT", "ALL") and len(src.args) == 1 \
+                and isinstance(src.args[0], ast.ColumnRef):
+            key = self.resolve_column(src.args[0])
+            table = key.table
+            ctx2 = ctx.remove_columns([key]) if src.name == "ALL" else ctx
+            keys = [key]
+        else:
+            table, ctx2 = self._table_arg(src, ctx, env)
+            keys = [self._row_key(table, src)]
+        # Satır ifadesinde kullanılan yinelenen tablo sütunları da o ayrıntıda gruplanır
+        keys += [c for c in self._table_columns_in(body, table) if c not in keys]
+        inner_ctx = ir.Context(frozenset(ctx2.group | set(keys)), ctx2.filters, ctx2.time, ctx2.rels)
+        self._row_tables.append(table)
+        try:
+            inner = self.scalar(body, inner_ctx, env)
+        finally:
+            self._row_tables.pop()
+        return ir.Nested(ITERATORS[node.name], inner, tuple(keys), ctx2)
+
+    def _row_key(self, table: str, node: ast.Node) -> ColKey:
+        t = self.model.table(table)
+        keys = [c for c in t.sutunlar if c.anahtar and not c.ifade]
+        if len(keys) == 1:
+            return ColKey(t.ad, keys[0].ad)
+        if t.tarih_tablosu is not None:
+            return self.model.column(t.ad, t.tarih_tablosu.anahtar_sutun)[0]
+        raise self.err(
+            f"'{t.ad}' tablosunun satırları için tek bir anahtar sütun gerekli; "
+            f"VALUES({t.ad}[Sütun]) ile yineleyin ya da tabloda bir sütunu anahtar yapın",
+            node,
+        )
+
+    def _table_columns_in(self, node: ast.Node, table: str) -> list[ColKey]:
+        out: list[ColKey] = []
+        if isinstance(node, ast.ColumnRef):
+            key = self.resolve_column(node)
+            if key.table == table:
+                out.append(key)
+        for child in _children(node):
+            for c in self._table_columns_in(child, table):
+                if c not in out:
+                    out.append(c)
+        return out
 
     def _table_arg(self, node: ast.Node, ctx: ir.Context, env) -> tuple[str, ir.Context]:
         """COUNTROWS/SUMX'in tablo argümanı: tablo adı ya da FILTER(...). FILTER bağlama eklenir."""
@@ -514,7 +572,8 @@ class MeasureCompiler:
             raise self.err(f"'{node.name}' burada kullanılamaz", node)
         if isinstance(node, ast.BracketRef):
             raise self.err(
-                f"[{node.name}] satır bağlamında kullanılamaz (bağlam geçişi MVP'de desteklenmiyor)", node
+                f"[{node.name}] burada kullanılamaz: ölçüler hesaplanmış sütunlarda ve filtre koşullarında "
+                "henüz desteklenmiyor; SUMX/AVERAGEX içinde kullanılabilir", node
             )
         if isinstance(node, ast.Unary):
             inner = sub(node.operand)
@@ -534,7 +593,10 @@ class MeasureCompiler:
             if common is not None:
                 return common
             if node.name in AGGREGATIONS or node.name in ITERATORS or node.name == "CALCULATE":
-                raise self.err(f"{node.name} satır bağlamında MVP'de desteklenmiyor", node)
+                raise self.err(
+                    f"{node.name} bu satır bağlamında kullanılamaz; ölçü içeren ifadeleri SUMX/AVERAGEX gibi "
+                    "bir iteratörün içinde yazın (bağlam geçişi)", node,
+                )
             return self._unknown(node)
         raise self.err("Desteklenmeyen ifade", node)
 

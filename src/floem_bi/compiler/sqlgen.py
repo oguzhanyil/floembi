@@ -155,7 +155,7 @@ class SqlGenerator:
             else:
                 self._cols_in(calc, out)
             return out
-        if isinstance(e, ir.Slot):
+        if isinstance(e, (ir.Slot, ir.Nested)):
             return out
         for v in vars(e).values():
             if isinstance(v, ir.Expr):
@@ -178,7 +178,7 @@ class SqlGenerator:
         if isinstance(e, ir.Col):
             calc = self._calc(e.key)
             return exp.Paren(this=r(calc)) if calc is not None else col_fn(e.key)
-        if isinstance(e, ir.Slot):
+        if isinstance(e, (ir.Slot, ir.Nested)):
             if slot_fn is None:
                 raise CompileError("Satır ifadesinde toplama kullanılamaz")
             return slot_fn(e)
@@ -292,23 +292,6 @@ class SqlGenerator:
         time = slot.ctx.time if (slot.ctx.time and date_table and reach(date_table.ad)) else None
         return _CteKey(slot.base, grain, filters, time, rels)
 
-    def _collect_slots(self, e: ir.Expr, out: list[ir.Slot]) -> None:
-        if isinstance(e, ir.Slot):
-            if e not in out:
-                out.append(e)
-            return
-        for v in vars(e).values():
-            if isinstance(v, ir.Expr):
-                self._collect_slots(v, out)
-            elif isinstance(v, tuple):
-                for x in v:
-                    if isinstance(x, ir.Expr):
-                        self._collect_slots(x, out)
-                    elif isinstance(x, tuple):
-                        for y in x:
-                            if isinstance(y, ir.Expr):
-                                self._collect_slots(y, out)
-
     def compile(self, req: QueryRequest) -> CompiledQuery:
         group = list(dict.fromkeys(req.group_by))
         gidx = {g: i for i, g in enumerate(group)}
@@ -326,62 +309,10 @@ class SqlGenerator:
         for alias, text in req.expressions:
             measure_exprs.append((alias, self.compiler.expression(text, base_ctx)))
 
-        slots: list[ir.Slot] = []
-        for _, e in measure_exprs:
-            self._collect_slots(e, slots)
-
-        # slotları CTE'lere grupla
-        ctes: dict[_CteKey, list[ir.Slot]] = {}
-        for s in slots:
-            ctes.setdefault(self._effective(s, group), []).append(s)
-        cte_names: dict[_CteKey, str] = {}
-        slot_ref: dict[ir.Slot, tuple[str, str]] = {}
-        n = 0
-        for i, (key, members) in enumerate(ctes.items()):
-            cte_names[key] = f"q{i}"
-            for s in members:
-                slot_ref[s] = (f"q{i}", f"s{n}")
-                n += 1
-
-        with_parts: list[tuple[str, exp.Expression]] = []
         time_keys: set[str] = set()
-        for key, members in ctes.items():
-            if key.time:
-                time_keys.add(key.time)
-            with_parts.append((cte_names[key], self._cte_select(key, members, gidx, slot_ref)))
+        with_parts = self._plan(group, measure_exprs, base_ctx, "", time_keys)
 
-        # eksen: görünen satırlar
-        if group:
-            full = [k for k in ctes if k.grain == tuple(group)]
-            if full:
-                axis = None
-                for k in full:
-                    part = exp.select(*[_col(f"g{gidx[g]}") for g in group]).from_(cte_names[k])
-                    axis = part if axis is None else exp.union(axis, part, distinct=True)
-            else:
-                axis = self._fallback_axis(group, base_ctx, gidx)
-            with_parts.append(("eksen", axis))
-        else:
-            with_parts.append(("eksen", exp.select(exp.alias_(_lit(1), "bir"))))
-
-        # sonuç: eksen + CTE'ler
         out_names = [str(g) for g in group] + [name for name, _ in measure_exprs]
-        sonuc = exp.select(
-            *[exp.alias_(_col(f"g{gidx[g]}", "e"), f"g{gidx[g]}") for g in group],
-            *[
-                exp.alias_(self.render(e, lambda k: None, lambda s: _col(slot_ref[s][1], slot_ref[s][0])), f"m{i}")
-                for i, (_, e) in enumerate(measure_exprs)
-            ],
-        ).from_(exp.Table(this=_ident("eksen"), alias=exp.TableAlias(this=_ident("e"))))
-        for key in ctes:
-            name = cte_names[key]
-            if key.grain:
-                on = _and_all([_null_safe_eq(_col(f"g{gidx[g]}", "e"), _col(f"g{gidx[g]}", name)) for g in key.grain])
-            else:
-                on = exp.EQ(this=_lit(1), expression=_lit(1))
-            sonuc = sonuc.join(exp.Table(this=_ident(name)), on=on, join_type="left")
-        with_parts.append(("sonuc", sonuc))
-
         final = exp.select(
             *[exp.alias_(_col(f"g{gidx[g]}"), str(g)) for g in group],
             *[exp.alias_(_col(f"m{i}"), name) for i, (name, _) in enumerate(measure_exprs)],
@@ -408,6 +339,116 @@ class SqlGenerator:
 
         sql = final.sql(dialect=DIALECTS[self.dialect], pretty=True, unsupported_level=ErrorLevel.RAISE)
         return CompiledQuery(sql=sql, dialect=self.dialect, columns=out_names, time_keys=time_keys)
+
+    def _plan(
+        self, group: list[ColKey], measure_exprs: list[tuple[str, ir.Expr]], base_ctx: ir.Context,
+        prefix: str, time_keys: set[str],
+    ) -> list[tuple[str, exp.Expression]]:
+        """Ölçüleri `group` ayrıntısında hesaplayan CTE'leri üretir; son CTE `{prefix}sonuc`
+        (g0..gN gruplama, m0..mK ölçü sütunları).
+
+        Bağlam geçişi (ir.Nested) için kendini iç ayrıntıda (`group` + satır anahtarı) yeniden
+        çağırır; iç planın CTE'leri önekle en üst düzeye taşınır (T-SQL iç içe WITH desteklemez).
+        """
+        gidx = {g: i for i, g in enumerate(group)}
+        slots: list[ir.Slot] = []
+        nesteds: list[ir.Nested] = []
+        for _, e in measure_exprs:
+            self._collect(e, slots, nesteds)
+
+        with_parts: list[tuple[str, exp.Expression]] = []
+        slot_ref: dict[ir.Expr, tuple[str, str]] = {}
+        joins: list[tuple[str, tuple[ColKey, ...]]] = []
+
+        # 1) bağlam geçişi: iç düzeyde hesapla, dış ayrıntıda topla
+        for i, n in enumerate(nesteds):
+            outer = tuple(g for g in group if g in n.ctx.group)
+            sub_group = list(outer) + [k for k in n.keys if k not in outer]
+            sub_ctx = ir.Context.make(sub_group, n.ctx.filter_map(), n.ctx.time, n.ctx.rels)
+            sub_prefix = f"{prefix}n{i}_"
+            with_parts.extend(self._plan(sub_group, [("v", n.inner)], sub_ctx, sub_prefix, time_keys))
+            sub_gidx = {g: j for j, g in enumerate(sub_group)}
+            value = _col("m0", "x")
+            agg = {
+                "SUM": exp.Sum, "AVG": exp.Avg, "MIN": exp.Min, "MAX": exp.Max,
+            }.get(n.agg)
+            agg_expr = agg(this=value) if agg else exp.Nullif(this=exp.Count(this=value), expression=_lit(0))
+            sel = exp.select(
+                *[exp.alias_(_col(f"g{sub_gidx[g]}", "x"), f"g{gidx[g]}") for g in outer],
+                exp.alias_(agg_expr, "v"),
+            ).from_(exp.Table(this=_ident(f"{sub_prefix}sonuc"), alias=exp.TableAlias(this=_ident("x"))))
+            if outer:
+                sel = sel.group_by(*[_col(f"g{sub_gidx[g]}", "x") for g in outer])
+            name = f"{prefix}n{i}"
+            with_parts.append((name, sel))
+            slot_ref[n] = (name, "v")
+            joins.append((name, outer))
+
+        # 2) toplamalar: aynı (taban, ayrıntı, filtreler) tek CTE'de
+        ctes: dict[_CteKey, list[ir.Slot]] = {}
+        for s in slots:
+            ctes.setdefault(self._effective(s, group), []).append(s)
+        k = 0
+        for i, (key, members) in enumerate(ctes.items()):
+            name = f"{prefix}q{i}"
+            for s in members:
+                slot_ref[s] = (name, f"s{k}")
+                k += 1
+            if key.time:
+                time_keys.add(key.time)
+            with_parts.append((name, self._cte_select(key, members, gidx, slot_ref)))
+            joins.append((name, key.grain))
+
+        # 3) eksen: görünen satırlar
+        if group:
+            full = [name for name, grain in joins if grain == tuple(group)]
+            if full:
+                axis = None
+                for name in full:
+                    part = exp.select(*[_col(f"g{gidx[g]}") for g in group]).from_(name)
+                    axis = part if axis is None else exp.union(axis, part, distinct=True)
+            else:
+                axis = self._fallback_axis(group, base_ctx, gidx)
+        else:
+            axis = exp.select(exp.alias_(_lit(1), "bir"))
+        with_parts.append((f"{prefix}eksen", axis))
+
+        # 4) sonuç: eksen + CTE'ler
+        ref = lambda s: _col(slot_ref[s][1], slot_ref[s][0])  # noqa: E731
+        sonuc = exp.select(
+            *[exp.alias_(_col(f"g{gidx[g]}", "e"), f"g{gidx[g]}") for g in group],
+            *[exp.alias_(self.render(e, lambda c: None, ref), f"m{i}") for i, (_, e) in enumerate(measure_exprs)],
+        ).from_(exp.Table(this=_ident(f"{prefix}eksen"), alias=exp.TableAlias(this=_ident("e"))))
+        for name, grain in joins:
+            if grain:
+                on = _and_all([_null_safe_eq(_col(f"g{gidx[g]}", "e"), _col(f"g{gidx[g]}", name)) for g in grain])
+            else:
+                on = exp.EQ(this=_lit(1), expression=_lit(1))
+            sonuc = sonuc.join(exp.Table(this=_ident(name)), on=on, join_type="left")
+        with_parts.append((f"{prefix}sonuc", sonuc))
+        return with_parts
+
+    def _collect(self, e: ir.Expr, slots: list[ir.Slot], nesteds: list[ir.Nested]) -> None:
+        """Bu düzeyin toplamaları; iç içe toplamanın içi kendi planında toplanır."""
+        if isinstance(e, ir.Slot):
+            if e not in slots:
+                slots.append(e)
+            return
+        if isinstance(e, ir.Nested):
+            if e not in nesteds:
+                nesteds.append(e)
+            return
+        for v in vars(e).values():
+            if isinstance(v, ir.Expr):
+                self._collect(v, slots, nesteds)
+            elif isinstance(v, tuple):
+                for x in v:
+                    if isinstance(x, ir.Expr):
+                        self._collect(x, slots, nesteds)
+                    elif isinstance(x, tuple):
+                        for y in x:
+                            if isinstance(y, ir.Expr):
+                                self._collect(y, slots, nesteds)
 
     # ------------------------------------------------------------ CTE gövdesi
     def _cte_select(self, key: _CteKey, members: list[ir.Slot], gidx, slot_ref) -> exp.Select:

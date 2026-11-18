@@ -178,3 +178,59 @@ def test_new_functions_compile_to_tsql(model, engine):
         'SELECTEDVALUE(Urun[Kategori], "Çoklu")',
     ], dialect="tsql")
     assert "DATEFROMPARTS" in sql.upper() and "LEN(" in sql.upper()
+
+
+# ------------------------------------------------------------------ bağlam geçişi (satır bağlamında ölçü)
+def monthly(facts):
+    return sums(facts, lambda r: (r["yil"], r["ay"]))
+
+
+def test_averagex_over_months(model, engine, facts):
+    """Aylık ortalama satış: satış olmayan aylar (BLANK) ortalamaya girmez (DAX AVERAGEX)."""
+    res = q(model, engine, ["Tarih[Yil]"], ["AVERAGEX(VALUES(Tarih[AyNo]), [Toplam Satış])"])
+    per_month = monthly(facts)
+    expected = {}
+    for (y, _m), v in per_month.items():
+        expected.setdefault(y, []).append(v)
+    for (y,), (avg,) in res.items():
+        assert num(avg) == pytest.approx(sum(expected[y]) / len(expected[y]), rel=TOL)
+    assert {k[0] for k in res} == set(expected)
+
+
+def test_maxx_countx_sumx_over_salespeople(model, engine, facts):
+    res = q(model, engine, ["Urun[Kategori]"], [
+        "MAXX(VALUES(Temsilci[TemsilciKodu]), [Toplam Satış])",
+        "COUNTX(VALUES(Temsilci[TemsilciKodu]), [Toplam Satış])",
+        "SUMX(Temsilci, [Toplam Satış] * 2)",            # tablo üzerinde: anahtar sütunla yinelenir
+    ])
+    per = sums(facts, lambda r: (r["kategori"], r["slp"]))
+    for (cat,), (mx, cnt, dbl) in res.items():
+        vals = [v for (c, _s), v in per.items() if c == cat]
+        assert num(mx) == pytest.approx(max(vals), rel=TOL)
+        assert num(cnt) == len(vals)
+        assert num(dbl) == pytest.approx(2 * sum(vals), rel=TOL)
+
+
+def test_row_column_inside_context_transition(model, engine, facts):
+    res = q(model, engine, ["Tarih[Yil]"], ["SUMX(VALUES(Tarih[AyNo]), [Toplam Satış] * Tarih[AyNo])"])
+    expected = defaultdict(float)
+    for (y, m), v in monthly(facts).items():
+        expected[y] += v * m
+    assert {k[0]: num(v[0]) for k, v in res.items()} == pytest.approx(dict(expected), rel=TOL)
+
+
+def test_context_transition_respects_calculate_and_slicer(model, engine, facts):
+    """Dış CALCULATE filtresi ve dilimleyici iç hesaba da uygulanır."""
+    res = q(model, engine, [], [
+        'CALCULATE(AVERAGEX(VALUES(Tarih[AyNo]), [Toplam Satış]), Musteri[Grup] = "Bayi")',
+    ], filters=[("Tarih[Yil]", [2024])])
+    vals = list(sums(facts, lambda r: r["ay"], where=lambda r: r["grup"] == "Bayi" and r["yil"] == 2024).values())
+    ((avg,),) = res.values()
+    assert num(avg) == pytest.approx(sum(vals) / len(vals), rel=TOL)
+
+
+def test_context_transition_errors_and_tsql(model, engine):
+    with pytest.raises(CompileError, match="anahtar sütun"):
+        q(model, engine, [], ["SUMX(Satis, [Toplam Satış])"])
+    sql = q(model, engine, ["Tarih[Yil]"], ["AVERAGEX(VALUES(Tarih[AyNo]), [Toplam Satış])"], dialect="tsql")
+    assert sql.upper().count("WITH") == 1                 # iç plan üst düzeye taşındı (T-SQL iç içe WITH almaz)

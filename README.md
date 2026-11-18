@@ -159,23 +159,30 @@ curl -X POST 127.0.0.1:8000/query -H "Content-Type: application/json; charset=ut
 }'
 ```
 
-## Desteklenen DAX alt kümesi (MVP)
+## Desteklenen DAX alt kümesi
+
+Ölçüler Desktop'ta formül çubuğundan yazılır (Hesaplamalar → Yeni ölçü): `Ad = ifade`,
+otomatik tamamlama, yazarken hata işareti. Tarih tablosu: Hesaplamalar → Tarih tablosu.
 
 | Grup | Fonksiyonlar |
 |---|---|
 | Toplama | SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, COUNTROWS, DISTINCTCOUNT |
-| Satır satır hesaplama (iterator) | SUMX, AVERAGEX, MINX, MAXX, COUNTX (tek tablo, satır ifadesi; RELATED desteklenir) |
-| Filtre bağlamı | CALCULATE, ALL, REMOVEFILTERS, ALLEXCEPT, KEEPFILTERS, tek sütunlu boolean filtreler |
+| Satır satır hesaplama (iterator) | SUMX, AVERAGEX, MINX, MAXX, COUNTX; tablo, `FILTER(...)` ya da `VALUES(T[c])` üzerinde; RELATED desteklenir |
+| Bağlam geçişi | İteratör içinde ölçü: `AVERAGEX(VALUES(Tarih[Ay]), [Satış])`, `SUMX(Musteri, [Satış] * 2)` (tablonun tek anahtar sütunu olmalı) |
+| Filtre bağlamı | CALCULATE, FILTER, ALL, ALLEXCEPT, ALLSELECTED, REMOVEFILTERS, KEEPFILTERS, USERELATIONSHIP, tek ya da aynı tablonun çok sütunlu boolean koşulları |
+| Tek değer | VALUES (skaler), SELECTEDVALUE, HASONEVALUE |
 | Zaman zekâsı | SAMEPERIODLASTYEAR, DATEADD (YEAR/QUARTER/MONTH), DATESYTD/QTD/MTD, TOTALYTD/QTD/MTD |
-| Mantık ve skaler | IF, SWITCH, DIVIDE, ISBLANK, COALESCE, AND, OR, NOT, IN, ABS, ROUND, YEAR, MONTH, DAY, UPPER, LOWER |
+| Mantık ve skaler | IF, SWITCH, DIVIDE, ISBLANK, COALESCE, BLANK, AND, OR, NOT, IN, ABS, ROUND, INT, MOD |
+| Tarih ve metin | YEAR, MONTH, DAY, DATE, TODAY, LEN, LEFT, RIGHT, MID, TRIM, UPPER, LOWER, CONCATENATE |
 | Değişkenler | VAR / RETURN |
 | Güvenlik | USERPRINCIPALNAME, USERATTRIBUTE (RLS kuralları için) |
 
-**Bilinen sapmalar ve v1'e kalanlar:**
-- FILTER, USERELATIONSHIP, CROSSFILTER, ALLSELECTED, VALUES ve SELECTEDVALUE desteklenmiyor.
-- Satır bağlamında ölçü kullanmak (bağlam geçişi) desteklenmiyor.
+**Bilinen sapmalar ve sonraya kalanlar:**
+- FILTER koşulunda ölçü (`FILTER(Musteri, [Satış] > 1000)`) ve hesaplanmış sütunda ölçü henüz yok.
+- CROSSFILTER, RANKX, TOPN, SUMMARIZE, ADDCOLUMNS, EARLIER desteklenmiyor.
 - Çift yönlü ilişkiler tek yön gibi uygulanıyor; model yüklenirken uyarı veriliyor.
 - `x / 0`, DAX'taki ∞ yerine BLANK döndürüyor.
+- Zaman zekâsı için tarih tablosu, ölçünün taban tablosuna doğrudan bağlı olmalı.
 - Zaman zekâsının tek günlük bağlamlardaki uç durumu için: `src/floem_bi/compiler/timeintel.py`.
 
 ## Yapı
