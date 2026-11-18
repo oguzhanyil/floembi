@@ -355,6 +355,7 @@ function GatewayPage({ id }: { id: number }) {
     </tbody></table>
     <h2>Yayımlanan veri kaynakları</h2>
     <p className="hint">Desktop'tan yayımlanan bağlantılar burada görünür. Hazır durumu, Floemway bağlantı eşlemesini gösterir.</p>
+    {publishedSources.some((s) => !s.ready) && <p className="hint warn">Floemway rapordan sonra kaydedildiyse Desktop'ta raporu yeniden yayımlayın. Desktop'taki SQL şifresi kayıtlıysa bağlantı otomatik eşlenir.</p>}
     <table className="items"><thead><tr><th>Anlam modeli</th><th>Sunucu</th><th>Veritabanı</th><th>SQL kullanıcısı</th><th>Floemway</th><th>Durum</th></tr></thead><tbody>
       {publishedSources.map((s) => <tr key={`${s.dataset_id}-${s.source_key}`} className="static">
         <td>{s.dataset_name}</td><td>{s.server}</td><td>{s.database}</td><td>{s.username}</td>
@@ -445,6 +446,8 @@ function DatasetRefreshPage({ id }: { id: number }) {
     <section className="form-card">
       <h2>Floemway bağlantısı eşlemesi</h2>
       <p className="hint">Desktop'tan yayımlanan SQL bağlantıları otomatik eşlenir. Eksik kalan kaynakları burada tamamlayabilirsiniz.</p>
+      {bindings.sources.length > 0 && sources.length === 0 &&
+        <p className="hint warn">Henüz Floemway veri bağlantısı yok. Floemway kaydından sonra raporu Desktop'ta yeniden yayımlayın; kayıtlı SQL bağlantısı otomatik eşlenir.</p>}
       <form onSubmit={saveBindings} className="gateway-fields">
         {bindings.sources.map((x) => {
           const matches = sources.filter((s) => s.server.toLowerCase() === x.server.toLowerCase() &&

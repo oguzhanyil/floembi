@@ -171,7 +171,9 @@ kaynaklarına otomatik eşler. Sunucu yalnızca şifreli metni saklar. Çalışm
 Yayımlanan veri kaynakları** tablosunda sunucu, veritabanı ve hazır/bekliyor durumunu görebilirsiniz.
 Şifre Desktop'ta kayıtlı değilse, Windows kimlik doğrulaması kullanılıyorsa veya Floemway henüz
 kaydedilmemişse rapor yayımlanır ve bağlantı bekliyor görünür. Eksik eşlemeyi aynı ekranda veya anlam
-modelinin yenileme sayfasında tamamlayabilirsiniz. **Şimdi yenile**, kaynak tabloları Floemway üzerinden Arrow parçalarıyla alır, Floem Query adımlarını
+modelinin yenileme sayfasında tamamlayabilirsiniz. Floemway'i rapordan sonra kaydettiyseniz raporu
+Desktop'ta yeniden yayımlayın; kayıtlı SQL bağlantıları o sırada otomatik eşlenir. **Şimdi yenile**,
+kaynak tabloları Floemway üzerinden Arrow parçalarıyla alır, Floem Query adımlarını
 uygular ve başarılı olursa yeni DuckDB sürümüne geçirir. **Yenileme geçmişi** tablo, adım, süre ve
 ham hata ayrıntısını gösterir. Başarısız yenilemede rapor eski veriyle çalışmayı sürdürür.
 
