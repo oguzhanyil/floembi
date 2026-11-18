@@ -132,6 +132,57 @@ role_members = Table(
     UniqueConstraint("dataset_id", "role", "user_id"),
 )
 
+# H7: dışa açılan Gateway, tek kullanımlık kayıt, şifreli kaynak bilgisi ve yenileme geçmişi.
+gateways = Table(
+    "gateways", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False),
+    Column("name", String(120), nullable=False),
+    Column("public_key", Text),
+    Column("last_seen", DateTime(timezone=True)),
+    Column("created_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+)
+gateway_tokens = Table(
+    "gateway_tokens", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("gateway_id", Integer, ForeignKey("gateways.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+gateway_sources = Table(
+    "gateway_sources", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("workspace_id", Integer, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False),
+    Column("gateway_id", Integer, ForeignKey("gateways.id", ondelete="CASCADE"), nullable=False),
+    Column("server", String(255), nullable=False),
+    Column("database", String(255), nullable=False),
+    Column("username", String(254), nullable=False),
+    Column("password_enc", Text, nullable=False),
+    Column("created_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+    UniqueConstraint("workspace_id", "server", "database", "username"),
+)
+dataset_source_bindings = Table(
+    "dataset_source_bindings", metadata,
+    Column("dataset_id", Integer, ForeignKey("datasets.id", ondelete="CASCADE"), primary_key=True),
+    Column("source_key", String(120), primary_key=True),
+    Column("gateway_source_id", Integer, ForeignKey("gateway_sources.id", ondelete="CASCADE"), nullable=False),
+)
+refresh_runs = Table(
+    "refresh_runs", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("dataset_id", Integer, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False),
+    Column("gateway_id", Integer, ForeignKey("gateways.id", ondelete="SET NULL")),
+    Column("status", String(16), nullable=False),
+    Column("stage", String(120)),
+    Column("table_name", String(255)),
+    Column("error", Text),
+    Column("started_at", DateTime(timezone=True), nullable=False, default=now),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("requested_by", Integer, ForeignKey("users.id"), nullable=False),
+)
+
 
 # Gönderilen e-postalar: durum ve hata ekranda okunabilsin (giden kutusu modunda .eml yolu)
 mail_log = Table(

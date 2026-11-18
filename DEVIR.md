@@ -93,7 +93,7 @@ tests/            pytest; test_server.py sunucu, test_document.py Desktop servis
 ```
 python -m venv .venv && .venv\Scripts\pip install -e .[dev,server]
 npm install
-.venv\Scripts\python -m pytest -q          # şu an: 157 passed, 1 skipped
+.venv\Scripts\python -m pytest -q          # H7 sonrası: 161 passed, 1 skipped
 npm run typecheck                          # ya da: npx tsc --noEmit -p apps/web (apps/desktop)
 npm run desktop                            # Electron (geliştirme)
 npm run server                             # floembi.app → http://127.0.0.1:8800
@@ -120,13 +120,22 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H4 | ✓ | Rapor tasarımcısı: ECharts görselleri, matris, drill-down, dilimleyici, Biçim bölmesi, çapraz filtre, detaya git, metin kutusu, KPI ve trend, hizalama kılavuzları |
 | H5 | ✓ | floembi.app sunucusu, giriş (JWT + argon2), çalışma alanları, Desktop'tan **Yayımla**, web'de rapor görüntüleme |
 | H6 | ✓ | E-postayla paylaşım ve davet, Yönetim (e-posta sunucusu ekranı, kullanıcılar), **RLS** (Desktop: Rolleri yönet + Farklı görüntüle; web: anlam modeli → Güvenlik), **App** yayınlama (dondurulmuş sürüm, erişim, davet), **SSE** ile anlık güncelleme |
+| H7 | ✓ | Floem Gateway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, şifreli SQL bağlantıları, kaynak eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
 
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
 
-### H7: Floem Gateway ve manuel yenileme (sıradaki iş)
+### H7: Floem Gateway ve manuel yenileme (tamamlandı)
+
+Uygulama: `src/floem_bi/gateway/__main__.py`, `src/floem_bi/server/refresh.py`,
+`server/app.py` ve `db.py`; web'de çalışma alanı → Gateway'ler ve anlam modeli →
+Yenileme ekranı. Hedefli kabul testleri `tests/test_gateway.py` içindedir.
+Windows'ta açık DuckDB dosyası fiziksel kopyalanamadığı için yeni sürüm DuckDB'nin
+`COPY FROM DATABASE` komutuyla geçici klasörde kurulur. Başarısız aktarımda mevcut
+snapshot değişmez. Son iki sürüm tutulur. Gateway özel anahtarı dosyada değil,
+Windows Kimlik Bilgisi Yöneticisi'ndedir. Uzak bağlantı HTTPS/WSS gerektirir.
 
 **Gateway** müşteri sunucusunda çalışan bir Python uygulaması. Yeni modül: `src/floem_bi/gateway/`.
 - İlk sürümde konsol uygulaması olacak; Windows servisi H8'de.

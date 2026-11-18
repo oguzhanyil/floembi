@@ -122,6 +122,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (closed) return;
         es = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
         es.addEventListener("report", dispatch as EventListener);
+        es.addEventListener("dataset", dispatch as EventListener);
         es.addEventListener("app", dispatch as EventListener);
         es.onerror = () => {
           es?.close();             // bilet tek kullanımlık: tarayıcının kendi yeniden bağlanması işe yaramaz

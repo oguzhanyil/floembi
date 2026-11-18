@@ -1,5 +1,6 @@
 import {
-  FloemApiError, type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
+  FloemApiError, type DatasetBindings, type DatasetDetails, type GatewaySource, type RefreshRun,
+  type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
 } from "@floem/client";
 import { InboxPage, ShareDialog } from "./share";
 import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
@@ -64,6 +65,8 @@ function Router() {
   }
   else if ((m = /^\/workspaces\/(\d+)\/app$/.exec(path))) page = <AppSetupPage workspaceId={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/datasets\/(\d+)\/security$/.exec(path))) page = <SecurityPage id={Number(m[1])} key={m[1]} />;
+  else if ((m = /^\/datasets\/(\d+)\/refresh$/.exec(path))) page = <DatasetRefreshPage id={Number(m[1])} key={m[1]} />;
+  else if ((m = /^\/workspaces\/(\d+)\/gateways$/.exec(path))) page = <GatewayPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
   else if (path === "/inbox") page = <InboxPage />;
   else if (path === "/admin/mail" && isAdmin) page = <MailSettingsPage />;
@@ -243,12 +246,13 @@ function WorkspacePage({ id }: { id: number }) {
   const canManage = data.workspace.role === "admin" || data.workspace.role === "member";
   const open = (it: (typeof items)[number]) => {
     if (it.kind === "Rapor") navigate(`/reports/${it.id}`);
-    else if (canManage) navigate(`/datasets/${it.id}/security`);
+    else if (canManage) navigate(`/datasets/${it.id}/refresh`);
   };
   return (
     <div className="page-wrap">
       <div className="ws-head">
         <h1>{data.workspace.name}</h1>
+        {canManage && <Link to={`/workspaces/${id}/gateways`} className="button">Gateway'ler</Link>}
         <span className="spacer" />
         {data.app && (
           <Link to={`/apps/${data.app.id}`} className="button">▦ Uygulamayı aç</Link>
@@ -280,11 +284,11 @@ function WorkspacePage({ id }: { id: number }) {
                 key={`${it.kind}-${it.id}`}
                 className={it.kind === "Rapor" || canManage ? "" : "static"}
                 onClick={() => open(it)}
-                title={it.kind === "Rapor" ? undefined : canManage ? "Güvenlik: rollere kişi ata" : undefined}
+                title={it.kind === "Rapor" ? undefined : canManage ? "Anlam modeli ayarları" : undefined}
               >
                 <td>
                   <span className={it.kind === "Rapor" ? "ico-report" : "ico-dataset"} aria-hidden /> {it.name}
-                  {it.kind !== "Rapor" && canManage && <span className="muted small"> · Güvenlik</span>}
+                  {it.kind !== "Rapor" && canManage && <span className="muted small"> · Yenileme ve güvenlik</span>}
                 </td>
                 <td>{it.kind}</td>
                 <td>{it.published_by}</td>
@@ -297,6 +301,166 @@ function WorkspacePage({ id }: { id: number }) {
       )}
     </div>
   );
+}
+
+function GatewayPage({ id }: { id: number }) {
+  const { client, guard } = useSession();
+  const [items, setItems] = useState<import("@floem/client").GatewayInfo[]>([]);
+  const [sources, setSources] = useState<GatewaySource[]>([]);
+  const [name, setName] = useState("");
+  const [source, setSource] = useState({ gateway_id: 0, server: "", database: "", username: "", password: "" });
+  const [enrollment, setEnrollment] = useState<import("@floem/client").GatewayEnrollment | null>(null);
+  const [error, setError] = useState<UiError | null>(null);
+  const [saved, setSaved] = useState("");
+  const load = useCallback(() => Promise.all([guard(client.gateways(id)), guard(client.gatewaySources(id))])
+    .then(([g, s]) => { setItems(g); setSources(s); }).catch((e) => setError(toUiError(e))), [client, guard, id]);
+  useEffect(() => { load(); const timer = setInterval(load, 15000); return () => clearInterval(timer); }, [load]);
+  async function create(e: FormEvent) {
+    e.preventDefault(); setError(null);
+    try { setEnrollment(await guard(client.createGateway(id, name))); setName(""); await load(); }
+    catch (e) { setError(toUiError(e)); }
+  }
+  async function saveSource(e: FormEvent) {
+    e.preventDefault(); setError(null); setSaved("");
+    try {
+      await guard(client.saveGatewaySource(source));
+      setSource({ ...source, password: "" });
+      setSaved("Bağlantı kaydedildi. Şifre yalnızca Gateway tarafından çözülebilir.");
+      await load();
+    } catch (err) { setError(toUiError(err)); }
+  }
+  const command = enrollment && `python -m floem_bi.gateway --server ${window.location.origin} --id ${enrollment.id} --token ${enrollment.registration_token}`;
+  return <div className="page-wrap">
+    <p><Link to={`/workspaces/${id}`}>← Çalışma alanı</Link></p>
+    <h1>Gateway'ler</h1>
+    <p className="muted">Gateway, müşteri sunucusundan floembi.app'e dışa açılan bağlantı kurar.</p>
+    {error && <ErrorPanel error={error} />}
+    <form className="inline-form" onSubmit={create}>
+      <label>Gateway adı<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></label>
+      <button className="primary">Kayıt anahtarı oluştur</button>
+    </form>
+    {enrollment && <section><h2>{enrollment.name}: tek kullanımlık kayıt</h2>
+      <p>Bu anahtar 15 dakika geçerlidir ve yalnızca şimdi gösterilir.</p><pre>{command}</pre>
+      <button className="link" onClick={() => command && navigator.clipboard.writeText(command)}>Komutu kopyala</button>
+      <button className="link" onClick={() => setEnrollment(null)}>Gizle</button>
+    </section>}
+    <table className="items"><thead><tr><th>Ad</th><th>Durum</th><th>Son bağlantı</th></tr></thead><tbody>
+      {items.map((g) => <tr key={g.id}><td>{g.name}</td><td>{g.online ? "Çevrimiçi" : g.registered ? "Çevrimdışı" : "Kayıt bekliyor"}</td><td>{g.last_seen ? when(g.last_seen) : "Henüz bağlanmadı"}</td></tr>)}
+      {items.length === 0 && <tr><td colSpan={3} className="muted">Henüz Gateway yok.</td></tr>}
+    </tbody></table>
+    <section className="form-card gateway-form">
+      <h2>SQL Server bağlantısı</h2>
+      <p className="hint">Power BI'daki Gateway bağlantısı gibi, yayımlanan anlam modelindeki sunucu ve veritabanıyla eşleştirilir.</p>
+      <form onSubmit={saveSource} className="gateway-fields">
+        <label>Gateway<select value={source.gateway_id} onChange={(e) => setSource({ ...source, gateway_id: Number(e.target.value) })} required>
+          <option value={0}>Seçin</option>{items.filter((g) => g.registered).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select></label>
+        <label>Sunucu<input value={source.server} onChange={(e) => setSource({ ...source, server: e.target.value })} required /></label>
+        <label>Veritabanı<input value={source.database} onChange={(e) => setSource({ ...source, database: e.target.value })} required /></label>
+        <label>SQL kullanıcısı<input value={source.username} onChange={(e) => setSource({ ...source, username: e.target.value })} required /></label>
+        <label>Şifre<input type="password" autoComplete="new-password" value={source.password} onChange={(e) => setSource({ ...source, password: e.target.value })} required /></label>
+        <button className="primary" disabled={!source.gateway_id}>Bağlantıyı kaydet</button>
+      </form>
+      {saved && <p className="ok-text" role="status">{saved}</p>}
+    </section>
+    <h2>Kaydedilen bağlantılar</h2>
+    <table className="items"><thead><tr><th>Gateway</th><th>Sunucu</th><th>Veritabanı</th><th>Kullanıcı</th></tr></thead><tbody>
+      {sources.map((s) => <tr key={s.id} className="static"><td>{s.gateway_name}</td><td>{s.server}</td><td>{s.database}</td><td>{s.username}</td></tr>)}
+      {sources.length === 0 && <tr><td colSpan={4} className="muted">Henüz bağlantı tanımlanmadı.</td></tr>}
+    </tbody></table>
+  </div>;
+}
+
+function DatasetRefreshPage({ id }: { id: number }) {
+  const { client, guard } = useSession();
+  const [dataset, setDataset] = useState<DatasetDetails | null>(null);
+  const [bindings, setBindings] = useState<DatasetBindings | null>(null);
+  const [sources, setSources] = useState<GatewaySource[]>([]);
+  const [selected, setSelected] = useState<Record<string, number>>({});
+  const [history, setHistory] = useState<RefreshRun[]>([]);
+  const [error, setError] = useState<UiError | null>(null);
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadHistory = useCallback(() => guard(client.refreshHistory(id)).then(setHistory)
+    .catch((e) => setError(toUiError(e))), [client, guard, id]);
+  useEffect(() => {
+    guard(client.dataset(id)).then(async (d) => {
+      setDataset(d);
+      const [b, s] = await Promise.all([guard(client.datasetBindings(id)), guard(client.gatewaySources(d.workspace_id))]);
+      setBindings(b); setSources(s);
+      setSelected(Object.fromEntries(b.sources.map((x) => [x.id, x.binding_id ?? 0])));
+    }).catch((e) => setError(toUiError(e)));
+    void loadHistory();
+    const timer = setInterval(() => { void loadHistory(); }, 5000);
+    return () => clearInterval(timer);
+  }, [client, guard, id, loadHistory]);
+  useLive((event) => {
+    if (event.type === "dataset" && event.dataset_id === id) {
+      void guard(client.dataset(id)).then(setDataset).catch((e) => setError(toUiError(e)));
+      void loadHistory();
+    }
+  });
+
+  async function saveBindings(e: FormEvent) {
+    e.preventDefault(); setError(null); setSaved("");
+    try {
+      await guard(client.saveDatasetBindings(id, selected));
+      setSaved("Veri kaynağı eşlemesi kaydedildi.");
+    } catch (err) { setError(toUiError(err)); }
+  }
+  async function refresh() {
+    setBusy(true); setError(null);
+    try {
+      await guard(client.refreshDataset(id));
+      await loadHistory();
+    } catch (err) { setError(toUiError(err)); }
+    finally { setBusy(false); }
+  }
+  if (!dataset || !bindings) return <div className="page-wrap">{error ? <ErrorPanel error={error} /> : "Yükleniyor…"}</div>;
+  return <div className="page-wrap dataset-refresh">
+    <p><Link to={`/workspaces/${dataset.workspace_id}`}>← Çalışma alanı</Link></p>
+    <div className="ws-head"><h1>{dataset.name}</h1><span className="spacer" />
+      <Link className="button" to={`/datasets/${id}/security`}>Güvenlik</Link>
+      <button className="primary" onClick={refresh} disabled={busy || history[0]?.status === "running" || history[0]?.status === "queued"}>
+        {busy ? "Başlatılıyor…" : "⟳ Şimdi yenile"}
+      </button>
+    </div>
+    <p className="muted">Anlam modeli sürümü {dataset.version}. Yenileme bitene kadar raporlar önceki veriyle çalışır.</p>
+    {error && <ErrorPanel error={error} />}
+    <section className="form-card">
+      <h2>Gateway bağlantısı eşlemesi</h2>
+      <p className="hint">Power BI'daki veri kaynağı kimlik bilgileri gibi, her model kaynağına aynı sunucu ve veritabanındaki bağlantıyı seçin.</p>
+      <form onSubmit={saveBindings} className="gateway-fields">
+        {bindings.sources.map((x) => {
+          const matches = sources.filter((s) => s.server.toLowerCase() === x.server.toLowerCase() &&
+            s.database.toLowerCase() === x.database.toLowerCase());
+          return <label key={x.id}>{x.server} / {x.database}
+            <select value={selected[x.id] ?? 0} onChange={(e) => setSelected({ ...selected, [x.id]: Number(e.target.value) })} required>
+              <option value={0}>Gateway bağlantısı seçin</option>
+              {matches.map((s) => <option key={s.id} value={s.id}>{s.gateway_name} · {s.username}</option>)}
+            </select>
+          </label>;
+        })}
+        {bindings.sources.length === 0 && <p>Bu anlam modelinde kaynak bağlantısı yok.</p>}
+        <button className="primary" disabled={bindings.sources.length === 0 || bindings.sources.some((x) => !selected[x.id])}>Eşlemeyi kaydet</button>
+      </form>
+      {saved && <p className="ok-text" role="status">{saved}</p>}
+      <p><Link to={`/workspaces/${dataset.workspace_id}/gateways`}>Gateway bağlantılarını yönet</Link></p>
+    </section>
+    <h2>Yenileme geçmişi</h2>
+    <table className="items"><thead><tr><th>Başlangıç</th><th>Durum</th><th>Tablo / adım</th><th>Süre</th><th>Hata</th></tr></thead><tbody>
+      {history.map((r) => <tr key={r.id} className="static">
+        <td>{when(r.started_at)}</td>
+        <td>{({ queued: "Kuyrukta", running: "Çalışıyor", succeeded: "Başarılı", failed: "Hata" })[r.status]}</td>
+        <td>{r.table_name ? `${r.table_name} · ` : ""}{r.stage}</td>
+        <td>{(r.elapsed_ms / 1000).toFixed(1)} sn</td>
+        <td>{r.error && <><strong className="bad-text">{r.error.message}</strong>
+          {r.error.detail && <details><summary>Ham hata</summary><pre>{r.error.detail}</pre></details>}</>}</td>
+      </tr>)}
+      {history.length === 0 && <tr><td colSpan={5} className="muted">Henüz yenileme yapılmadı.</td></tr>}
+    </tbody></table>
+  </div>;
 }
 
 // ------------------------------------------------------------------ rapor
@@ -322,9 +486,13 @@ function ReportPage({ id }: { id: number }) {
   // Anlık güncelleme: rapor yeniden yayımlanınca açık ekran kendiliğinden yenilenir
   const [notice, setNotice] = useState<string | null>(null);
   useLive((e) => {
-    if (e.type !== "report" || e.report_id !== id) return;
-    load();
-    setNotice(`Rapor güncellendi (sürüm ${e.version})`);
+    if (e.type === "report" && e.report_id === id) {
+      load();
+      setNotice(`Rapor güncellendi (sürüm ${e.version})`);
+    } else if (e.type === "dataset" && e.dataset_id === report?.dataset.id) {
+      load();
+      setNotice("Veri güncellendi");
+    }
   });
   useEffect(() => {
     if (!notice) return;

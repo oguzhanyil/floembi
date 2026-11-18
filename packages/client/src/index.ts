@@ -752,6 +752,7 @@ export interface PublishedReport {
 /** Anlık güncelleme olayları (SSE) */
 export type LiveEvent =
   | { type: "report"; report_id: number; version: number; dataset_id: number; dataset_version: number }
+  | { type: "dataset"; dataset_id: number; version: number }
   | { type: "app"; app_id: number; version?: number; removed: boolean };
 
 // ------------------------------------------------------------------ App (uygulama)
@@ -959,6 +960,28 @@ export interface MailMessage {
   text: string;
 }
 
+export interface GatewayInfo { id: number; name: string; registered: boolean; online: boolean; last_seen: string | null }
+export interface GatewayEnrollment extends GatewayInfo { registration_token: string; expires_in: number }
+export interface GatewaySource {
+  id: number; gateway_id: number; gateway_name: string; server: string; database: string; username: string;
+}
+export interface DatasetSourceBinding {
+  id: string; server: string; database: string; username: string; binding_id: number | null;
+}
+export interface DatasetBindings { dataset_id: number; sources: DatasetSourceBinding[] }
+export interface DatasetDetails {
+  id: number; workspace_id: number; name: string; version: number; published_at: string;
+  tables: { ad: string; sutunlar: number; gizli: boolean }[];
+  relationships: unknown[]; sources: { sunucu: string; veritabani: string | null }[];
+}
+export interface RefreshRun {
+  id: number; dataset_id: number; gateway_id: number | null;
+  status: "queued" | "running" | "succeeded" | "failed";
+  stage: string | null; table_name: string | null;
+  error: { message: string; detail: string } | null;
+  started_at: string; finished_at: string | null; elapsed_ms: number;
+}
+
 /** floembi.app sunucusu istemcisi (Bearer oturum belirteci). */
 export class WebClient {
   private http: HttpClient;
@@ -980,6 +1003,33 @@ export class WebClient {
   }
   content(workspaceId: number) {
     return this.http.request<WorkspaceContent>("GET", `/api/workspaces/${workspaceId}/content`);
+  }
+  gateways(workspaceId: number) {
+    return this.http.request<GatewayInfo[]>("GET", `/api/workspaces/${workspaceId}/gateways`);
+  }
+  createGateway(workspaceId: number, name: string) {
+    return this.http.request<GatewayEnrollment>("POST", "/api/gateways", { workspace_id: workspaceId, name });
+  }
+  gatewaySources(workspaceId: number) {
+    return this.http.request<GatewaySource[]>("GET", `/api/workspaces/${workspaceId}/gateway-sources`);
+  }
+  saveGatewaySource(source: { gateway_id: number; server: string; database: string; username: string; password: string }) {
+    return this.http.request<{ id: number }>("POST", "/api/gateway-sources", source);
+  }
+  dataset(id: number) {
+    return this.http.request<DatasetDetails>("GET", `/api/datasets/${id}`);
+  }
+  datasetBindings(id: number) {
+    return this.http.request<DatasetBindings>("GET", `/api/datasets/${id}/source-bindings`);
+  }
+  saveDatasetBindings(id: number, sources: Record<string, number>) {
+    return this.http.request<DatasetBindings>("PUT", `/api/datasets/${id}/source-bindings`, { sources });
+  }
+  refreshDataset(id: number) {
+    return this.http.request<RefreshRun>("POST", `/api/datasets/${id}/refresh`, {});
+  }
+  refreshHistory(id: number) {
+    return this.http.request<RefreshRun[]>("GET", `/api/datasets/${id}/refreshes`);
   }
   sharedWithMe() {
     return this.http.request<SharedReport[]>("GET", "/api/shared-with-me");

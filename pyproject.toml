@@ -18,6 +18,8 @@ dependencies = [
   "pyodbc",       # MIT-0 (SQL Server; makinede Microsoft ODBC Driver 17/18 gerekir)
   "keyring",      # MIT (Windows Kimlik Bilgisi Yöneticisi)
   "pyarrow",      # Apache-2.0 (içe aktarımda kaynak → DuckDB veri taşıma)
+  "PyNaCl>=1.5", # Apache-2.0 (Gateway sealed box)
+  "websockets>=14", # BSD-3 (Gateway outbound WebSocket)
 ]
 
 [project.optional-dependencies]

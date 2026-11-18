@@ -23,6 +23,7 @@ Web arayüzü (apps/web/dist) varsa kökten sunulur.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -38,7 +39,7 @@ from datetime import timedelta, timezone
 from pathlib import Path
 
 import yaml
-from fastapi import Depends, FastAPI, File, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -59,6 +60,7 @@ from .mail import (
     login_hint, send, sender_display, settings_from_row, share_mail, test_mail,
 )
 from .events import EventHub
+from .refresh import RefreshError, SnapshotBuilder
 from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
@@ -209,6 +211,41 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class GatewayCreateIn(BaseModel):
+    workspace_id: int
+    name: str = Field(min_length=1, max_length=120)
+
+
+class GatewayRegisterIn(BaseModel):
+    token: str
+    public_key: str
+
+
+class GatewaySourceIn(BaseModel):
+    gateway_id: int
+    server: str = Field(min_length=1, max_length=255)
+    database: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=500)
+
+
+class SourceBindingsIn(BaseModel):
+    sources: dict[str, int]
+
+
+@dataclass
+class ActiveRefresh:
+    id: int
+    dataset_id: int
+    gateway_id: int
+    version: int
+    snapshot: Path
+    model_yaml: str
+    stage: Path
+    builder: SnapshotBuilder | None = None
+    timeout: asyncio.Task | None = None
+
+
 # ------------------------------------------------------------------ sorgu motorları
 class EngineCache:
     """Anlam modeli sürümü başına bir DuckDB bağlantısı."""
@@ -248,6 +285,11 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     engine = db.make_engine(f"sqlite:///{(settings.data_dir / 'floem.db').as_posix()}")
     if settings.seed_users:
         seed(engine, settings)
+    with engine.begin() as c:
+        c.execute(db.refresh_runs.update().where(db.refresh_runs.c.status.in_(["queued", "running"])).values(
+            status="failed", stage="Sunucu yeniden başlatıldı", finished_at=db.now(),
+            error=json.dumps({"message": "Sunucu yeniden başlatıldığı için yenileme durdu", "detail": ""},
+                             ensure_ascii=False)))
     engines = EngineCache()
     publish_lock = threading.Lock()
     @asynccontextmanager
@@ -262,6 +304,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     app.state.engines = engines
     hub = EventHub()
     app.state.events = hub
+    gateway_sockets: dict[int, tuple[WebSocket, asyncio.Lock]] = {}
+    active_refreshes: dict[int, ActiveRefresh] = {}
+    gateway_lock = threading.Lock()
 
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, e: ApiError):
@@ -376,6 +421,401 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         r = c.execute(select(db.members.c.role).where(
             and_(db.members.c.workspace_id == workspace_id, db.members.c.user_id == user_id))).first()
         return r[0] if r else None
+
+    # -------------------------------------------------------------- H7 Gateway
+    def source_database(model: ModelTanimi, source_id: str) -> str:
+        source = next(s for s in model.veri_kaynaklari if s.id == source_id)
+        return source.veritabani or next((t.sorgu.veritabani for t in model.tablolar
+                                          if t.sorgu and t.sorgu.kaynak == source_id and t.sorgu.veritabani), "")
+
+    @app.post("/api/gateways")
+    def create_gateway(body: GatewayCreateIn, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            role = role_in(c, user["id"], body.workspace_id)
+            if role not in ("admin", "member"):
+                raise FORBIDDEN("Gateway oluşturmak için çalışma alanı Yöneticisi ya da Üyesi olmalısınız")
+            gid = c.execute(db.gateways.insert().values(
+                workspace_id=body.workspace_id, name=body.name, created_by=user["id"]
+            )).inserted_primary_key[0]
+            token = secrets.token_urlsafe(32)
+            c.execute(db.gateway_tokens.insert().values(
+                gateway_id=gid, token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                expires_at=db.now() + timedelta(minutes=15),
+            ))
+        return {"id": gid, "name": body.name, "registration_token": token, "expires_in": 900}
+
+    @app.get("/api/workspaces/{wid}/gateways")
+    def list_gateways(wid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            if role_in(c, user["id"], wid) is None:
+                raise FORBIDDEN("Bu çalışma alanına erişiminiz yok")
+            rows = c.execute(select(db.gateways).where(db.gateways.c.workspace_id == wid)).all()
+        with gateway_lock:
+            online = set(gateway_sockets)
+        return [{"id": r.id, "name": r.name, "registered": bool(r.public_key), "online": r.id in online,
+                 "last_seen": iso(r.last_seen) if r.last_seen else None} for r in rows]
+
+    @app.post("/api/gateways/register")
+    def register_gateway(body: GatewayRegisterIn):
+        from nacl.public import PublicKey
+        try:
+            PublicKey(base64.b64decode(body.public_key, validate=True))
+        except Exception as e:
+            raise ApiError(400, "invalid_key", "Gateway açık anahtarı geçersiz") from e
+        digest = hashlib.sha256(body.token.encode()).hexdigest()
+        with engine.begin() as c:
+            row = c.execute(select(db.gateway_tokens).where(db.gateway_tokens.c.token_hash == digest)).first()
+            if row is None or row.expires_at.replace(tzinfo=timezone.utc) < db.now():
+                raise ApiError(401, "invalid_registration", "Kayıt anahtarı geçersiz ya da süresi dolmuş")
+            c.execute(db.gateways.update().where(db.gateways.c.id == row.gateway_id).values(public_key=body.public_key))
+            c.execute(db.gateway_tokens.delete().where(db.gateway_tokens.c.id == row.id))
+        return {"gateway_id": row.gateway_id}
+
+    @app.post("/api/gateway-sources")
+    def create_gateway_source(body: GatewaySourceIn, user: dict = Depends(current_user)):
+        from nacl.public import PublicKey, SealedBox
+        with engine.connect() as c:
+            gw = c.execute(select(db.gateways).where(db.gateways.c.id == body.gateway_id)).first()
+            if gw is None:
+                raise NOT_FOUND("Gateway")
+            if role_in(c, user["id"], gw.workspace_id) not in ("admin", "member"):
+                raise FORBIDDEN()
+            if not gw.public_key:
+                raise ApiError(409, "gateway_unregistered", "Gateway henüz kaydolmadı")
+        encrypted = SealedBox(PublicKey(base64.b64decode(gw.public_key))).encrypt(body.password.encode()).hex()
+        with engine.begin() as c:
+            existing = c.execute(select(db.gateway_sources.c.id).where(and_(
+                db.gateway_sources.c.workspace_id == gw.workspace_id,
+                db.gateway_sources.c.server == body.server.strip(),
+                db.gateway_sources.c.database == body.database.strip(),
+                db.gateway_sources.c.username == body.username.strip(),
+            ))).first()
+            values = dict(gateway_id=gw.id, password_enc=encrypted, created_by=user["id"])
+            if existing:
+                sid = existing.id
+                c.execute(db.gateway_sources.update().where(db.gateway_sources.c.id == sid).values(**values))
+            else:
+                sid = c.execute(db.gateway_sources.insert().values(
+                    workspace_id=gw.workspace_id, server=body.server.strip(), database=body.database.strip(),
+                    username=body.username.strip(), **values,
+                )).inserted_primary_key[0]
+        return {"id": sid}
+
+    @app.get("/api/workspaces/{wid}/gateway-sources")
+    def list_gateway_sources(wid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            if role_in(c, user["id"], wid) not in ("admin", "member"):
+                raise FORBIDDEN()
+            rows = c.execute(select(db.gateway_sources.c.id, db.gateway_sources.c.gateway_id,
+                                    db.gateway_sources.c.server, db.gateway_sources.c.database,
+                                    db.gateway_sources.c.username, db.gateways.c.name.label("gateway_name"))
+                             .join(db.gateways, db.gateways.c.id == db.gateway_sources.c.gateway_id)
+                             .where(db.gateway_sources.c.workspace_id == wid).order_by(db.gateway_sources.c.id)).all()
+        return [dict(r._mapping) for r in rows]
+
+    @app.get("/api/datasets/{dsid}/source-bindings")
+    def get_source_bindings(dsid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            if ds is None:
+                raise NOT_FOUND("Anlam modeli")
+            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
+                raise FORBIDDEN()
+            bindings = c.execute(select(db.dataset_source_bindings).where(
+                db.dataset_source_bindings.c.dataset_id == dsid)).all()
+        model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+        return {"dataset_id": dsid,
+                "sources": [{"id": s.id, "server": s.sunucu, "database": source_database(model, s.id),
+                             "username": s.kullanici or "", "binding_id": next((b.gateway_source_id for b in bindings
+                                                                           if b.source_key == s.id), None)}
+                            for s in model.veri_kaynaklari]}
+
+    @app.put("/api/datasets/{dsid}/source-bindings")
+    def set_source_bindings(dsid: int, body: SourceBindingsIn, user: dict = Depends(current_user)):
+        with engine.begin() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            if ds is None:
+                raise NOT_FOUND("Anlam modeli")
+            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
+                raise FORBIDDEN()
+            model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+            keys = {s.id for s in model.veri_kaynaklari}
+            if set(body.sources) != keys:
+                raise ApiError(400, "source_mismatch", "Tüm model veri kaynaklarını eşleştirin")
+            for key, sid in body.sources.items():
+                source = next(s for s in model.veri_kaynaklari if s.id == key)
+                row = c.execute(select(db.gateway_sources).where(db.gateway_sources.c.id == sid)).first()
+                if row is None or row.workspace_id != ds.workspace_id or (
+                    row.server.casefold(), row.database.casefold()) != (
+                        source.sunucu.casefold(), source_database(model, source.id).casefold()
+                ):
+                    raise ApiError(400, "source_mismatch",
+                                   f"{source.sunucu} / {source.veritabani} için uygun Gateway bağlantısı seçin")
+            c.execute(db.dataset_source_bindings.delete().where(db.dataset_source_bindings.c.dataset_id == dsid))
+            for key, sid in body.sources.items():
+                c.execute(db.dataset_source_bindings.insert().values(
+                    dataset_id=dsid, source_key=key, gateway_source_id=sid))
+        return get_source_bindings(dsid, user)
+
+    def refresh_view(row) -> dict:
+        error = json.loads(row.error) if row.error else None
+        elapsed = int(((row.finished_at or db.now()).replace(tzinfo=timezone.utc) -
+                       row.started_at.replace(tzinfo=timezone.utc)).total_seconds() * 1000)
+        return {"id": row.id, "dataset_id": row.dataset_id, "gateway_id": row.gateway_id,
+                "status": row.status, "stage": row.stage, "table_name": row.table_name,
+                "error": error, "started_at": iso(row.started_at),
+                "finished_at": iso(row.finished_at) if row.finished_at else None, "elapsed_ms": max(0, elapsed)}
+
+    def refresh_row(run_id: int) -> dict:
+        with engine.connect() as c:
+            return refresh_view(c.execute(select(db.refresh_runs).where(db.refresh_runs.c.id == run_id)).one())
+
+    async def fail_refresh(gateway_id: int, message: str, *, stage: str = "Gateway", table: str | None = None,
+                           detail: str = "") -> None:
+        with gateway_lock:
+            task = active_refreshes.pop(gateway_id, None)
+        if task is None:
+            return
+        if task.timeout and task.timeout is not asyncio.current_task():
+            task.timeout.cancel()
+        with engine.begin() as c:
+            c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == task.id).values(
+                status="failed", stage=stage, table_name=table,
+                error=json.dumps({"message": message, "detail": detail}, ensure_ascii=False), finished_at=db.now()))
+        try:
+            if task.builder:
+                await asyncio.to_thread(task.builder.close)
+        finally:
+            await asyncio.to_thread(shutil.rmtree, task.stage, True)
+
+    async def complete_refresh(task: ActiveRefresh) -> None:
+        if task.builder is None:
+            raise RefreshError("Aktarım başlamadı", stage="Aktarım")
+        await asyncio.to_thread(task.builder.finish)
+        with publish_lock, engine.begin() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == task.dataset_id)).one()
+            if ds.version != task.version:
+                raise RefreshError("Yenileme sürerken anlam modeli yeniden yayımlandı", stage="Sürüm kontrolü")
+            version = ds.version + 1
+            target = settings.data_dir / "datasets" / str(ds.id) / f"v{version}"
+            if target.exists():
+                raise RefreshError("Yeni sürüm klasörü zaten var", stage="Anlık görüntü")
+            target.mkdir(parents=True)
+            try:
+                os.replace(task.builder.path, target / "data.duckdb")
+                (target / "model.yaml").write_text(task.model_yaml, encoding="utf-8")
+                c.execute(db.datasets.update().where(db.datasets.c.id == ds.id).values(
+                    version=version, snapshot=str(target / "data.duckdb"),
+                    size_bytes=(target / "data.duckdb").stat().st_size))
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == task.id).values(
+                    status="succeeded", stage="Tamamlandı", table_name=None, finished_at=db.now()))
+            except BaseException:
+                shutil.rmtree(target, ignore_errors=True)
+                raise
+        with gateway_lock:
+            active_refreshes.pop(task.gateway_id, None)
+        if task.timeout:
+            task.timeout.cancel()
+        await asyncio.to_thread(shutil.rmtree, task.stage, True)
+        engines.drop(task.dataset_id)
+        for old in (settings.data_dir / "datasets" / str(task.dataset_id)).glob("v*"):
+            try:
+                if int(old.name[1:]) <= version - KEEP_VERSIONS:
+                    shutil.rmtree(old, ignore_errors=True)
+            except ValueError:
+                pass
+        notify_dataset(task.dataset_id, version)
+
+    @app.post("/api/datasets/{dsid}/refresh")
+    async def start_refresh(dsid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            if ds is None:
+                raise NOT_FOUND("Anlam modeli")
+            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
+                raise FORBIDDEN("Şimdi yenile için Yönetici ya da Üye olmalısınız")
+            model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
+            bindings = {r.source_key: r.gateway_source_id for r in c.execute(select(db.dataset_source_bindings).where(
+                db.dataset_source_bindings.c.dataset_id == dsid)).all()}
+            sources = {r.id: r for r in c.execute(select(db.gateway_sources).where(
+                db.gateway_sources.c.workspace_id == ds.workspace_id)).all()}
+        tables = [t for t in model.tablolar if t.sorgu]
+        source_keys = {t.sorgu.kaynak for t in tables}
+        selected = [sources.get(bindings.get(k)) for k in source_keys]
+        gateway_id = selected[0].gateway_id if selected and selected[0] else None
+        error = None
+        if not tables:
+            error = "Yenilenebilir kaynak tablosu yok"
+        elif any(s is None for s in selected):
+            error = "Veri kaynağı Gateway bağlantısıyla eşleştirilmedi"
+        elif len({s.gateway_id for s in selected}) != 1:
+            error = "Bir anlam modeli için aynı Gateway üzerindeki bağlantıları seçin"
+        with engine.begin() as c:
+            run_id = c.execute(db.refresh_runs.insert().values(
+                dataset_id=dsid, gateway_id=gateway_id, status="queued", stage="Kuyruk",
+                requested_by=user["id"])).inserted_primary_key[0]
+        if error:
+            with engine.begin() as c:
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
+                    status="failed", stage="Eşleme", error=json.dumps({"message": error, "detail": ""}, ensure_ascii=False),
+                    finished_at=db.now()))
+            return refresh_row(run_id)
+        with gateway_lock:
+            connected = gateway_sockets.get(gateway_id)
+            busy = gateway_id in active_refreshes
+        if busy:
+            with engine.begin() as c:
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
+                    status="failed", stage="Kuyruk", error=json.dumps({"message": "Gateway üzerinde başka bir yenileme sürüyor", "detail": ""}, ensure_ascii=False),
+                    finished_at=db.now()))
+            return refresh_row(run_id)
+        if connected is None:
+            with engine.begin() as c:
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
+                    status="failed", stage="Bağlantı", error=json.dumps({"message": "Gateway çevrimdışı", "detail": ""}, ensure_ascii=False),
+                    finished_at=db.now()))
+            return refresh_row(run_id)
+        tmp_root = settings.data_dir / "tmp"
+        tmp_root.mkdir(exist_ok=True)
+        stage = Path(tempfile.mkdtemp(dir=tmp_root))
+        task = ActiveRefresh(run_id, dsid, gateway_id, ds.version, Path(ds.snapshot), ds.model_yaml, stage)
+        with gateway_lock:
+            still_connected = gateway_sockets.get(gateway_id) == connected
+            reserved = still_connected and gateway_id not in active_refreshes
+            if reserved:
+                active_refreshes[gateway_id] = task
+        if not reserved:
+            shutil.rmtree(stage, ignore_errors=True)
+            with engine.begin() as c:
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
+                    status="failed", stage="Kuyruk", finished_at=db.now(),
+                    error=json.dumps({"message": "Gateway bağlantısı değişti; yeniden deneyin", "detail": ""},
+                                     ensure_ascii=False)))
+            return refresh_row(run_id)
+        payload = {"type": "refresh", "run_id": run_id, "tables": []}
+        for table in tables:
+            source = sources[bindings[table.sorgu.kaynak]]
+            payload["tables"].append({"name": table.ad, "query": table.sorgu.model_dump(),
+                                      "source": {"server": source.server, "database": source.database,
+                                                 "username": source.username, "password_enc": source.password_enc}})
+        try:
+            socket, send_lock = connected
+            async with send_lock:
+                await socket.send_json(payload)
+        except Exception:
+            await fail_refresh(gateway_id, "Gateway çevrimdışı", stage="Bağlantı")
+            return refresh_row(run_id)
+
+        async def watchdog() -> None:
+            await asyncio.sleep(300)
+            await fail_refresh(gateway_id, "Zaman aşımı (300 sn)", stage="Aktarım")
+            with gateway_lock:
+                current = gateway_sockets.get(gateway_id)
+            if current:
+                await current[0].close(code=4001)
+
+        task.timeout = asyncio.create_task(watchdog())
+        return refresh_row(run_id)
+
+    @app.get("/api/datasets/{dsid}/refreshes")
+    def refresh_history(dsid: int, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+            if ds is None:
+                raise NOT_FOUND("Anlam modeli")
+            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
+                raise FORBIDDEN()
+            rows = c.execute(select(db.refresh_runs).where(db.refresh_runs.c.dataset_id == dsid)
+                             .order_by(db.refresh_runs.c.id.desc()).limit(30)).all()
+        return [refresh_view(r) for r in rows]
+
+    @app.websocket("/api/gateways/connect/{gateway_id}")
+    async def gateway_connect(websocket: WebSocket, gateway_id: int):
+        with engine.connect() as c:
+            gw = c.execute(select(db.gateways).where(db.gateways.c.id == gateway_id)).first()
+        if gw is None or not gw.public_key:
+            await websocket.close(code=4404)
+            return
+        await websocket.accept()
+        try:
+            from nacl.public import PublicKey, SealedBox
+            challenge = secrets.token_urlsafe(24)
+            public = PublicKey(base64.b64decode(gw.public_key))
+            await websocket.send_json({"type": "challenge", "value": SealedBox(public).encrypt(challenge.encode()).hex()})
+            proof = await asyncio.wait_for(websocket.receive_json(), timeout=20)
+            if proof.get("type") != "challenge_response" or proof.get("value") != challenge:
+                raise ValueError("geçersiz yanıt")
+        except Exception:
+            await websocket.close(code=4401)
+            return
+        send_lock = asyncio.Lock()
+        with gateway_lock:
+            prior = gateway_sockets.get(gateway_id)
+            gateway_sockets[gateway_id] = (websocket, send_lock)
+        if prior:
+            await fail_refresh(gateway_id, "Gateway bağlantısı yeniden kuruldu", stage="Bağlantı")
+            await prior[0].close(code=4000)
+        with engine.begin() as c:
+            c.execute(db.gateways.update().where(db.gateways.c.id == gateway_id).values(last_seen=db.now()))
+        try:
+            while True:
+                packet = await asyncio.wait_for(websocket.receive(), timeout=65)
+                if packet["type"] == "websocket.disconnect":
+                    break
+                raw = packet.get("text")
+                message = json.loads(raw) if raw else None
+                if message and message.get("type") == "heartbeat":
+                    with engine.begin() as c:
+                        c.execute(db.gateways.update().where(db.gateways.c.id == gateway_id).values(last_seen=db.now()))
+                    continue
+                with gateway_lock:
+                    task = active_refreshes.get(gateway_id)
+                if task is None:
+                    continue
+                try:
+                    if packet.get("bytes") is not None:
+                        data = packet["bytes"]
+                        if len(data) > 32 * 1024 * 1024:
+                            raise RefreshError("Arrow parçası 32 MB sınırını aşıyor", stage="Aktarım")
+                        if task.builder is None:
+                            raise RefreshError("Aktarım başlamadı", stage="Aktarım")
+                        await asyncio.to_thread(task.builder.add_batch, data)
+                    elif message and message.get("run_id") == task.id:
+                        kind = message.get("type")
+                        if kind == "start":
+                            model = ModelTanimi.model_validate(yaml.safe_load(task.model_yaml))
+                            task.builder = await asyncio.to_thread(
+                                SnapshotBuilder, task.snapshot, task.stage / "data.duckdb", model)
+                            with engine.begin() as c:
+                                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == task.id).values(
+                                    status="running", stage="SQL Server bağlantısı"))
+                        elif kind == "table_start":
+                            task.builder.start_table(message["name"])
+                            with engine.begin() as c:
+                                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == task.id).values(
+                                    stage="Tablo aktarımı", table_name=message["name"]))
+                        elif kind == "table_end":
+                            task.builder.end_table(message["name"])
+                        elif kind == "error":
+                            await fail_refresh(gateway_id, message.get("message", "Gateway hatası"),
+                                               stage=message.get("stage") or "Gateway",
+                                               table=message.get("table_name"), detail=message.get("detail") or "")
+                        elif kind == "done":
+                            await complete_refresh(task)
+                except RefreshError as e:
+                    await fail_refresh(gateway_id, e.message, stage=e.stage, table=e.table, detail=e.detail)
+                except Exception as e:
+                    await fail_refresh(gateway_id, "Yenileme tamamlanamadı", stage="Sunucu", detail=str(e))
+        except (WebSocketDisconnect, asyncio.TimeoutError):
+            pass
+        finally:
+            with gateway_lock:
+                current = gateway_sockets.get(gateway_id)
+                was_current = current is not None and current[0] is websocket
+                if was_current:
+                    del gateway_sockets[gateway_id]
+            if was_current:
+                await fail_refresh(gateway_id, "Gateway çevrimdışı", stage="Bağlantı")
 
     def report_access(c, user_id: int, report_row) -> str | None:
         role = role_in(c, user_id, report_row.workspace_id)
@@ -1060,6 +1500,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         tanim = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
         return {
             "id": ds.id, "name": ds.name, "version": ds.version, "published_at": iso(ds.published_at),
+            "workspace_id": ds.workspace_id,
             "tables": [{"ad": t.ad, "sutunlar": len(t.sutunlar), "gizli": t.gizli} for t in tanim.tablolar],
             "relationships": [r.model_dump() for r in tanim.iliskiler],
             "sources": [{"sunucu": k.sunucu, "veritabani": k.veritabani} for k in tanim.veri_kaynaklari],
@@ -1082,6 +1523,21 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 return False
         hub.emit({"type": "report", "report_id": rid, "version": version, "dataset_id": dataset_id,
                   "dataset_version": dataset_version}, allowed)
+
+    def notify_dataset(dataset_id: int, version: int) -> None:
+        """Yenilenen veri hem rapor hem de dondurulmuş App tasarımında yeniden sorgulanır."""
+        def allowed(uid: int) -> bool:
+            with engine.connect() as c:
+                reports = c.execute(select(db.reports).where(db.reports.c.dataset_id == dataset_id)).all()
+                for rp in reports:
+                    if report_access(c, uid, rp):
+                        return True
+                    for a in c.execute(select(db.apps).join(db.app_items, db.app_items.c.app_id == db.apps.c.id)
+                                       .where(db.app_items.c.report_id == rp.id)).all():
+                        if app_role(c, uid, a):
+                            return True
+                return False
+        hub.emit({"type": "dataset", "dataset_id": dataset_id, "version": version}, allowed)
 
     def notify_app(aid: int, version: int) -> None:
         def allowed(uid: int) -> bool:

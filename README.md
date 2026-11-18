@@ -156,6 +156,21 @@ bağlantıyı oturumla alınan 60 saniyelik, tek kullanımlık bir biletle açar
 satırına ve sunucu günlüğüne düşmez. Ters vekil (nginx) arkasında `/api/events` için tamponlama
 kapalı olmalı (`X-Accel-Buffering: no` başlığı gönderiliyor).
 
+**Floem Gateway ve manuel yenileme (H7):** Çalışma alanı → **Gateway'ler** ekranında kayıt
+anahtarı oluşturun. Müşteri ağındaki Windows bilgisayarında Python ortamına projeyi
+`pip install -e .` ile kurup ekranda verilen `python -m floem_bi.gateway ...` komutunu bir kez
+çalıştırın. Gateway daha sonra `python -m floem_bi.gateway --id <numara>` ile yeniden başlatılır;
+ayar dosyası `%APPDATA%\FloemBI\gateway-<numara>.json` içindedir. Özel anahtar Windows Kimlik
+Bilgisi Yöneticisi'nde tutulur. İlk sürüm konsol uygulamasıdır; Windows servisi H8 kapsamındadır.
+Uzak floembi.app adresi HTTPS olmalıdır; yerel geliştirmede `127.0.0.1` için HTTP kullanılabilir.
+
+Gateway çevrimiçi olduktan sonra aynı ekranda SQL Server sunucusu, veritabanı, kullanıcı ve şifreyle
+**SQL Server bağlantısı** tanımlayın. Şifre, Gateway'in açık anahtarıyla şifrelenir; sunucu yalnızca
+şifreli metni saklar. Çalışma alanında anlam modeline tıklayıp kaynakları bu bağlantılara eşleştirin.
+**Şimdi yenile**, kaynak tabloları Gateway üzerinden Arrow parçalarıyla alır, Floem Query adımlarını
+uygular ve başarılı olursa yeni DuckDB sürümüne geçirir. **Yenileme geçmişi** tablo, adım, süre ve
+ham hata ayrıntısını gösterir. Başarısız yenilemede rapor eski veriyle çalışmayı sürdürür.
+
 **Yönetim (sistem yöneticisi):** web'de sol menüdeki *Yönetim* bölümü yalnızca sistem
 yöneticilerine görünür (sahte kullanıcılardan `yonetici@floembi.test`). Mevcut bir metadata
 veritabanı açılınca çalışma alanı Yöneticileri otomatik olarak sistem yöneticisi yapılır.

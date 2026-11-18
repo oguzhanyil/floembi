@@ -119,7 +119,7 @@ export function AppViewerPage({ id, itemId }: { id: number; itemId: number | nul
       }
       setAppRev((x) => x + 1);
       setNotice(`Uygulama güncellendi (sürüm ${e.version})`);
-    } else if (e.type === "report" && item && e.dataset_id === item.dataset.id) {
+    } else if ((e.type === "report" || e.type === "dataset") && item && e.dataset_id === item.dataset.id) {
       load();
       setNotice("Veri güncellendi");
     }
