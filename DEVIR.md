@@ -93,7 +93,7 @@ tests/            pytest; test_server.py sunucu, test_document.py Desktop servis
 ```
 python -m venv .venv && .venv\Scripts\pip install -e .[dev,server]
 npm install
-.venv\Scripts\python -m pytest -q          # H7 sonrası: 161 passed, 1 skipped
+.venv\Scripts\python -m pytest -q          # Son tam koşu: 163 passed, 1 skipped
 npm run typecheck                          # ya da: npx tsc --noEmit -p apps/web (apps/desktop)
 npm run desktop                            # Electron (geliştirme)
 npm run server                             # floembi.app → http://127.0.0.1:8800
@@ -126,6 +126,20 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
+
+### Güncel iş sırası (19.11.2026)
+
+| Sıra | Kalan iş | Bitti sayılma koşulu |
+|---|---|---|
+| 0 | **H7 saha kabulü:** gerçek SQL Server ile Floemway yenilemesi | Bağlı model yenilenir, yeni veri raporda görünür; hatalı şifre ve çevrimdışı durumda hata geçmişi yazılır, eski anlık görüntü korunur. Sahte bağlayıcı testleri geçiyor; yerel kurulumda eşleme sonrası başarılı yenileme henüz doğrulanmadı. |
+| 1 | **H8 zamanlanmış yenileme** | Anlam modeli için günlük saat ve saat dilimi API/arayüzde saklanır; sunucu aynı yenileme kuyruğunu zamanı gelince tetikler, çakışma ve yeniden başlatma davranışı test edilir. |
+| 2 | **H8 yenileme e-postası** | Başarısız işin özeti, tablo/adım bilgisi ve geçmiş bağlantısı model sahibine gider; isteğe bağlı başarı bildirimi ve gönderim hatası test edilir. |
+| 3 | **H8 Floemway kurulumu** | Ayrı yükleyici ve Windows servisiyle kullanıcı oturumu olmadan çalışır; özel anahtar erişimi, yeniden bağlanma ve kaldırma doğrulanır. |
+| 4 | **H8 sunucu dağıtımı ve Desktop kabulü** | Docker Compose ile sunucu, PostgreSQL metadata ve geliştirme posta servisi kurulur; gerçek alan adı/TLS ve yedekleme ayarları tanımlanır. Paketli Desktop'ta `.floem` dosyasına çift tıklama doğrulanır. |
+| 5 | **H9 sağlamlaştırma** | Gerçek SQL entegrasyon ve temel tarayıcı uçtan uca senaryoları, 1–5 milyon satır performans ölçümü, demo ve işletim belgeleri tamamlanır. |
+
+Eski iki aylık plan, H7'deki web üzerinden elle bağlantı tanımını ve "Gateway" adını anlatıyor.
+Güncel ürün akışı Desktop yayımlamasında otomatik eşleme ve **Floemway** adıdır.
 
 ### H7: Floemway ve manuel yenileme (tamamlandı)
 
@@ -216,9 +230,8 @@ Test: `tests/test_server.py::test_desktop_publish_auto_syncs_floemway` uçtan uc
 - **App eksikleri:** kitleler (audiences); ilk sürümde tek erişim listesi var, şema buna uygun.
 - **Görsellerin bilinen sınırları** (kullanıcı ileride geliştirmek istiyor):
   - Ölçeklenince yazı boyutu ölçeklenmiyor.
-  - Matriste ara toplam yok.
   - Harita kararı bekliyor.
-  - Detaya gitte sağ tık menüsü, gizli sayfa ve geri yığını yok.
+  - Detaya gitte sağ tık menüsü, gizli sayfa ve çok adımlı geri yığını yok; başlık düğmesi ve tek adım geri var.
   - Trend göstergesi yalnızca kart/KPI'da var, "geçen yılın aynı dönemi" seçeneği yok.
   - Ana-ayrıntıda çoklu seçim yok.
   - Metin kutusunda zengin metin yok.
@@ -229,7 +242,7 @@ Test: `tests/test_server.py::test_desktop_publish_auto_syncs_floemway` uçtan uc
 - **E-posta sağlayıcısı:** kullanıcının alan adının e-postası **GoDaddy**'de (MX kaydı `secureserver.net`; Titan değil).
   - SMTP: `smtpout.secureserver.net`, port 465, SSL; kullanıcı adı tam e-posta adresi. 19.11.2026'da bu ayarla test e-postası başarıyla gitti.
   - Ekranda **GoDaddy** hazır ayarı var. Şifre sohbete değil, Yönetim → E-posta sunucusu ekranına girilir (şifreli saklanır).
-- **Kararsız test:** `test_refresh_fails_cleanly_when_step_breaks`, makine aşırı yavaşken bir kez başarısız oldu; tek başına çalıştırınca geçiyor. Zamanlamaya bağlı görünüyor; incelenebilir.
+- **Çözülen test yarışı:** `test_refresh_fails_cleanly_when_step_breaks` sırasında iş durumu hata ayrıntısından önce yazılıyordu; `document/jobs.py` düzeltildi. Son tam koşu 163 geçti, 1 atlandı.
 - **Kullanıcının yerel değişikliği:** kökteki `package.json` ve `package-lock.json` dosyalarına yanlışlıkla `npm install server` eklenmiş olabilir.
   - Depoda bu değişiklik geri alındı (`f684c6e`), yerel dosyalarda duruyor.
   - Kullanıcı eklemediyse: `git checkout -- package.json package-lock.json`.
