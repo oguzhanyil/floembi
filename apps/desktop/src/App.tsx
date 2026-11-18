@@ -12,6 +12,7 @@ import { SqlView } from "./components/SqlView";
 import { DocumentProvider, useDocument } from "./document";
 import { ModelView } from "./model/ModelView";
 import { ReportView } from "./report/ReportView";
+import { PowerQueryEditor } from "./transform/PowerQueryEditor";
 
 type View = "rapor" | "veri" | "model" | "sql";
 
@@ -42,6 +43,7 @@ function Shell() {
   const [publishing, setPublishing] = useState(false);
   const [measureEdit, setMeasureEdit] = useState<MeasureEdit | null>(null);
   const [dateDialog, setDateDialog] = useState(false);
+  const [transform, setTransform] = useState<{ table?: string } | null>(null);
   // Yeni ölçünün ana tablosu: olgu tablosu tahmini (en çok satırlı tablo)
   const defaultMeasureTable = () => {
     const tables = doc?.model.tablolar ?? [];
@@ -129,6 +131,14 @@ function Shell() {
         <div className="ribbon-group">
           <button className="ribbon-btn" onClick={() => setGetData(true)}>
             <span className="ribbon-ico">⛃</span>Veri al
+          </button>
+          <button
+            className="ribbon-btn"
+            onClick={() => setTransform({})}
+            disabled={busy || !doc?.model.tablolar.some((t) => t.sorgu)}
+            title="Power Query düzenleyicisi: sütun böl, filtrele, birleştir…"
+          >
+            <span className="ribbon-ico">⚙</span>Verileri dönüştür
           </button>
           <button className="ribbon-btn" onClick={() => setView("sql")}>
             <span className="ribbon-ico">⌨</span>SQL sorgusu
@@ -232,6 +242,7 @@ function Shell() {
             <ModelView
               onGetData={() => setGetData(true)}
               onRefreshTable={(t) => void refresh([t])}
+              onTransformTable={(t) => setTransform({ table: t })}
               onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })}
               onNewMeasure={(table) => setMeasureEdit({ mode: "new", table })}
             />
@@ -265,6 +276,7 @@ function Shell() {
       {navigator && <Navigator connection={navigator} onClose={() => setNavigator(null)} onLoad={loadFromNavigator} />}
       {job && <JobDialog onShowModel={() => setView("model")} />}
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
+      {transform && <PowerQueryEditor initialTable={transform.table} onClose={() => setTransform(null)} />}
       {dateDialog && (
         <DateTableDialog
           onClose={() => setDateDialog(false)}

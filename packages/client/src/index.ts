@@ -202,6 +202,45 @@ export interface TableQuery {
   sema?: string;
   tablo?: string;
   sql?: string;
+  /** Power Query "Uygulanan adımlar" karşılığı */
+  adimlar?: TransformStep[];
+}
+
+// ---- Veri dönüştürme (Power Query) adımları; floem_bi.transform.steps ile aynı şema
+export type StepType = "int64" | "decimal" | "double" | "string" | "date" | "datetime" | "bool";
+export type FilterOp =
+  | "esit" | "esit_degil" | "buyuk" | "buyuk_esit" | "kucuk" | "kucuk_esit" | "icinde" | "icinde_degil"
+  | "icerir" | "icermez" | "ile_baslar" | "ile_biter" | "bos" | "bos_degil" | "arasinda";
+export type Scalar = string | number | boolean | null;
+export type AggOp = "toplam" | "ortalama" | "en_kucuk" | "en_buyuk" | "say" | "farkli_say";
+
+export type TransformStep =
+  | { tur: "yeniden_adlandir"; sutun: string; yeni_ad: string }
+  | { tur: "sutun_kaldir"; sutunlar: string[] }
+  | { tur: "sutun_sec"; sutunlar: string[] }
+  | { tur: "tip_degistir"; sutun: string; tip: StepType }
+  | { tur: "satir_filtrele"; sutun: string; islem: FilterOp; degerler: Scalar[] }
+  | { tur: "deger_degistir"; sutun: string; bul: Scalar; yerine: Scalar }
+  | { tur: "metin"; sutun: string; islem: "kirp" | "buyuk" | "kucuk" }
+  | { tur: "sutun_bol"; sutun: string; ayirici: string; adet: number }
+  | { tur: "sutun_birlestir"; sutunlar: string[]; ayirici: string; yeni_ad: string }
+  | { tur: "ozel_sutun"; ad: string; ifade: string }
+  | { tur: "yinelenenleri_kaldir"; sutunlar: string[] }
+  | { tur: "grupla"; gruplar: string[]; toplamalar: { sutun: string | null; islem: AggOp; ad: string }[] }
+  | { tur: "ters_ozet"; sutunlar: string[]; nitelik_adi: string; deger_adi: string }
+  | {
+      tur: "sorgu_birlestir"; tablo: string; sol: string[]; sag: string[]; birlesim: "sol" | "ic";
+      sutunlar: string[]; onek: string;
+    }
+  | { tur: "sorgu_ekle"; tablolar: string[] };
+
+export interface TransformPreview {
+  columns: ResultColumn[];
+  rows: unknown[][];
+  truncated: boolean;
+  /** önizlemede uygulanan adım sayısı (hata varsa hatalı adımın sırası) */
+  applied: number;
+  error: { step: number; message: string; detail: string } | null;
 }
 
 export interface ModelTable {
@@ -475,6 +514,8 @@ export interface DocumentClient {
   query(q: VisualQuery): Promise<VisualResult>;
   relationshipProfile(kimden: string, kime: string): Promise<RelationshipProfile>;
   validateDax(expression: string): Promise<{ ok: boolean; errors: DaxDiagnostic[] }>;
+  transformPreview(table: string, steps: TransformStep[], upto?: number | null, limit?: number): Promise<TransformPreview>;
+  applySteps(table: string, steps: TransformStep[]): Promise<{ warnings: string[]; document: DocumentState }>;
   startImport(connectionId: string, database: string | null, items: ImportItem[]): Promise<Job>;
   startRefresh(tables?: string[]): Promise<Job>;
   job(id: string): Promise<Job>;
@@ -538,6 +579,14 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   }
   validateDax(expression: string) {
     return this.doc.request<{ ok: boolean; errors: DaxDiagnostic[] }>("POST", "/document/dax/validate", { expression });
+  }
+  transformPreview(table: string, steps: TransformStep[], upto: number | null = null, limit = 1000) {
+    return this.doc.request<TransformPreview>("POST", "/document/transform/preview", { table, adimlar: steps, upto, limit });
+  }
+  applySteps(table: string, steps: TransformStep[]) {
+    return this.doc.request<{ warnings: string[]; document: DocumentState }>("POST", "/document/transform/apply", {
+      table, adimlar: steps,
+    });
   }
   relationshipProfile(kimden: string, kime: string) {
     return this.doc.request<RelationshipProfile>("POST", "/document/relationship-profile", { kimden, kime });

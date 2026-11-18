@@ -29,10 +29,11 @@ type Dialog =
 
 /** Power BI'daki model görünümü: tablo kartları, ilişki çizgileri, Özellikler ve Veri bölmeleri. */
 export function ModelView({
-  onGetData, onRefreshTable, onEditMeasure, onNewMeasure,
+  onGetData, onRefreshTable, onTransformTable, onEditMeasure, onNewMeasure,
 }: {
   onGetData: () => void;
   onRefreshTable: (t: string) => void;
+  onTransformTable: (t: string) => void;
   onEditMeasure: (name: string) => void;
   onNewMeasure: (table: string) => void;
 }) {
@@ -51,15 +52,16 @@ export function ModelView({
   }
   return (
     <ReactFlowProvider>
-      <ModelCanvas onRefreshTable={onRefreshTable} onEditMeasure={onEditMeasure} onNewMeasure={onNewMeasure} />
+      <ModelCanvas onRefreshTable={onRefreshTable} onTransformTable={onTransformTable} onEditMeasure={onEditMeasure} onNewMeasure={onNewMeasure} />
     </ReactFlowProvider>
   );
 }
 
 function ModelCanvas({
-  onRefreshTable, onEditMeasure, onNewMeasure,
+  onRefreshTable, onTransformTable, onEditMeasure, onNewMeasure,
 }: {
   onRefreshTable: (t: string) => void;
+  onTransformTable: (t: string) => void;
   onEditMeasure: (name: string) => void;
   onNewMeasure: (table: string) => void;
 }) {
@@ -262,6 +264,7 @@ function ModelCanvas({
           onPreview={(t) => setDialog({ kind: "preview", table: t })}
           onEditRelationship={editRelationship}
           onRefresh={onRefreshTable}
+          onTransform={onTransformTable}
           onNewMeasure={onNewMeasure}
         />
         <DataPane tables={tables} selection={selection} onSelect={selectFromPane} onEditMeasure={onEditMeasure} />

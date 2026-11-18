@@ -185,7 +185,12 @@ class DeleteTable(_Op):
         used = {o.kaynak.tablo.lower() for o in ctx.tanim.tablolar if o.kaynak.katman == DATA_SCHEMA}
         if t.kaynak.katman == DATA_SCHEMA and t.kaynak.tablo.lower() not in used:
             target = phys_table(t)
-            ctx.checks.append(lambda cur: cur.execute(f"DROP TABLE IF EXISTS {target}"))
+            raw = f"{qident(DATA_SCHEMA)}.{qident(t.kaynak.tablo + '__ham')}"     # dönüştürme öncesi ham veri
+
+            def drop(cur, target=target, raw=raw):
+                cur.execute(f"DROP TABLE IF EXISTS {target}")
+                cur.execute(f"DROP TABLE IF EXISTS {raw}")
+            ctx.checks.append(drop)
 
 
 # ------------------------------------------------------------------ sütunlar

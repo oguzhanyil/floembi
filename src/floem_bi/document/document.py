@@ -25,7 +25,8 @@ import duckdb
 from ..connectors import Connector, ConnectorError, SourceRef, json_value
 from ..importer.loader import Cancelled, LoadResult, load, qident, unique_names
 from ..importer.relationships import detect
-from ..importer.types import DUCKDB_TYPE, NUMERIC_TIPS, model_tip
+from ..importer.types import DUCKDB_TYPE, NUMERIC_TIPS, model_tip, tip_from_duckdb
+from ..transform import ADIM_ADI, StepError, build, dependencies, parse_steps
 from ..model.schema import (
     Iliski, ModelBilgisi, ModelTanimi, Sutun, Tablo, TabloKaynak, TabloSorgu, VeriKaynagi, parse_column_ref,
 )
@@ -35,10 +36,12 @@ from ..report import Report, VisualQuery, empty_report, run_visual_query
 from . import floemfile
 from .floemfile import FloemContent, FloemFileError
 from .jobs import Job
-from .ops import DATA_SCHEMA, OpContext, TIP_ADI, phys_col, phys_table, sanitize_name
+from .ops import DATA_SCHEMA, OpContext, RenameColumn, TIP_ADI, phys_col, phys_table, sanitize_name
 
 APP_VERSION = "0.1.0"
 STAGE_PREFIX = "__stg_"
+RAW_SUFFIX = "__ham"          # dönüştürme adımı olan tablonun kaynaktan gelen ham hâli
+PREVIEW_LIMIT = 1000
 DEFAULT_NAME = "Adsız rapor"
 
 
@@ -62,6 +65,28 @@ def _stage(job: Job, i: int) -> str:
 
 def _q(table: str) -> str:
     return f"{qident(DATA_SCHEMA)}.{qident(table)}"
+
+
+def raw_name(t: Tablo) -> str:
+    return f"{t.kaynak.tablo}{RAW_SUFFIX}"
+
+
+def _step_error(t: Tablo, steps: list, e: StepError) -> DocumentError:
+    label = ADIM_ADI.get(getattr(steps[e.index], "tur", ""), "") if e.index < len(steps) else ""
+    where = f"Adım {e.index + 1}" + (f" ({label})" if label else "")
+    err = DocumentError(f"{t.ad} → {where}: {e.message}", e.detail, code="transform_step")
+    err.step = e.index
+    return err
+
+
+def _rename_trace(steps: list) -> dict[str, str]:
+    """Yeniden adlandırma adımları boyunca: kaynak sütun adı (küçük harf) → son ad."""
+    cur: dict[str, tuple[str, str]] = {}            # şimdiki ad (küçük) → (şimdiki ad, köken)
+    for s in steps:
+        if getattr(s, "tur", None) == "yeniden_adlandir":
+            _, origin = cur.pop(s.sutun.lower(), (s.sutun, s.sutun))
+            cur[s.yeni_ad.lower()] = (s.yeni_ad, origin)
+    return {origin.lower(): name for name, origin in cur.values()}
 
 
 class Document:
@@ -436,7 +461,8 @@ class Document:
                     for i, (it, name, res) in enumerate(zip(items, names, results)):
                         phys, n = sanitize_name(name, "Tablo"), 2
                         base = phys
-                        while phys.lower() in phys_taken or phys.lower().startswith(STAGE_PREFIX):
+                        while (phys.lower() in phys_taken or phys.lower().startswith(STAGE_PREFIX)
+                               or phys.lower().endswith(RAW_SUFFIX)):
                             phys = f"{base}_{n}"
                             n += 1
                         phys_taken.add(phys.lower())
@@ -473,6 +499,201 @@ class Document:
             finally:
                 cur.close()
 
+    # ---------------------------------------------------------------- veri dönüştürme (Power Query)
+    @staticmethod
+    def _table_map(tanim: ModelTanimi, exclude: Tablo | None = None) -> dict[str, str]:
+        return {
+            t.ad.lower(): _q(t.kaynak.tablo) for t in tanim.tablolar
+            if t is not exclude and t.kaynak.katman == DATA_SCHEMA
+        }
+
+    def _transform_table(self, name: str) -> Tablo:
+        t = OpContext(self.tanim, {}).table(name)
+        if t.sorgu is None:
+            raise DocumentError(
+                f"{t.ad} bir veri kaynağından gelmiyor; yalnızca içe aktarılan tablolar dönüştürülebilir",
+                code="not_transformable",
+            )
+        return t
+
+    def _source_of(self, cur, t: Tablo) -> str:
+        raw = raw_name(t)
+        return _q(raw) if raw.lower() in self._physical_tables(cur) else _q(t.kaynak.tablo)
+
+    @staticmethod
+    def _check_cycle(tanim: ModelTanimi, t: Tablo, steps: list) -> None:
+        by_name = {x.ad.lower(): x for x in tanim.tablolar}
+        todo, seen = list(dependencies(steps)), set()
+        while todo:
+            n = todo.pop()
+            if n == t.ad.lower():
+                raise DocumentError(
+                    f"{t.ad} kendisine (doğrudan ya da başka bir tablo üzerinden) başvuramaz", code="transform_cycle",
+                )
+            if n in seen or n not in by_name:
+                continue
+            seen.add(n)
+            o = by_name[n]
+            if o.sorgu and o.sorgu.adimlar:
+                todo += list(dependencies(parse_steps(o.sorgu.adimlar)))
+
+    def transform_preview(self, table: str, raw_steps: list[dict], upto: int | None = None,
+                          limit: int = PREVIEW_LIMIT) -> dict:
+        """Power Query düzenleyicisindeki önizleme: adımlar `upto`'ya kadar uygulanmış ilk satırlar.
+
+        Bir adım hatalıysa ondan önceki son geçerli sonuç ve hata birlikte döner (düzenleyici
+        hatalı adımı işaretler)."""
+        with self.lock:
+            t = self._transform_table(table)
+            steps = parse_steps(raw_steps)
+            self._check_cycle(self.tanim, t, steps)
+            cur = self.con.cursor()
+            try:
+                source = self._source_of(cur, t)
+                tables = self._table_map(self.tanim, exclude=t)
+                n = len(steps) if upto is None else max(0, min(upto, len(steps)))
+                error = None
+                try:
+                    built = build(cur, source, steps, tables, n)
+                except StepError as e:
+                    de = _step_error(t, steps, e)
+                    error = {"step": e.index, "message": de.message, "detail": de.detail}
+                    built = build(cur, source, steps, tables, e.index)
+                try:
+                    rows = cur.execute(f"SELECT * FROM ({built.sql}) LIMIT {int(limit) + 1}").fetchall()
+                except duckdb.Error as e:          # yalnızca veri okunurken ortaya çıkan hatalar
+                    step = n - 1 if n else 0
+                    msg = "Değerler istenen tipe dönüştürülemedi" if "onver" in str(e) else "Adım uygulanamadı"
+                    return {
+                        "columns": [{"name": c, "type": tip_from_duckdb(ty)} for c, ty in built.columns],
+                        "rows": [], "truncated": False, "applied": n,
+                        "error": {"step": step, "message": msg, "detail": str(e).split("\n")[0]},
+                    }
+            finally:
+                cur.close()
+            return {
+                "columns": [{"name": c, "type": tip_from_duckdb(ty)} for c, ty in built.columns],
+                "rows": [[json_value(v) for v in r] for r in rows[:limit]],
+                "truncated": len(rows) > limit,
+                "applied": n if error is None else error["step"],
+                "error": error,
+            }
+
+    def _rebuild(self, cur, tanim: ModelTanimi, t: Tablo, stage: str, warnings: list[str],
+                 old_steps: list | None = None) -> None:
+        """Ham tablodan adımlarla son tabloyu yeniden kurar ve model sütunlarını eşitler.
+
+        `old_steps` verilirse (düzenleyiciden "Uygula"), adımlarla tipi değişen sütunların model
+        tipi yeni tipe geçer; yeniden adlandırılan sütunlar ilişki ve ölçüleriyle birlikte taşınır."""
+        steps = parse_steps(t.sorgu.adimlar)
+        tables = self._table_map(tanim, exclude=t)
+        try:
+            built = build(cur, _q(raw_name(t)), steps, tables)
+        except StepError as e:
+            raise _step_error(t, steps, e) from e
+        cols = [(c, tip_from_duckdb(ty)) for c, ty in built.columns]
+        adopt: set[str] = set()
+        if old_steps is not None:
+            try:
+                old = {c.lower(): tip_from_duckdb(ty) for c, ty in build(cur, _q(raw_name(t)), old_steps, tables).columns}
+            except StepError:
+                old = {}
+            self._carry_renames(tanim, t, old_steps, steps, [c for c, _ in cols])
+            for name, tip in cols:
+                if old.get(name.lower()) not in (None, tip):
+                    adopt.add(name.lower())
+        cur.execute(f"CREATE TABLE {_q(stage)} AS {built.sql}")
+        _sync_columns(tanim, t, [(n, tip, False) for n, tip in cols], _q(stage), cur, warnings, adopt)
+        cur.execute(f"DROP TABLE IF EXISTS {_q(t.kaynak.tablo)}")
+        cur.execute(f"ALTER TABLE {_q(stage)} RENAME TO {qident(t.kaynak.tablo)}")
+
+    def _carry_renames(self, tanim: ModelTanimi, t: Tablo, old_steps: list, steps: list, final: list[str]) -> None:
+        """Adımlarla yeniden adlandırılan sütunları modelde de yeniden adlandırır (ilişki, ölçü ve
+        rapor referanslarıyla); böylece sütun silinip yeniden eklenmiş gibi özelliklerini kaybetmez."""
+        old_trace, new_trace = _rename_trace(old_steps), _rename_trace(steps)
+        back = {v.lower(): k for k, v in old_trace.items()}
+        names = {c.lower(): c for c in final}
+        ctx = OpContext(tanim, {}, report=self._pending_report)
+        for c in list(t.sutunlar):
+            if c.ifade is not None:
+                continue
+            phys = c.kaynak or c.ad
+            origin = back.get(phys.lower(), phys)
+            new_phys = new_trace.get(origin.lower(), origin)
+            if new_phys.lower() == phys.lower() or new_phys.lower() not in names:
+                continue
+            new_phys = names[new_phys.lower()]
+            if c.kaynak is None and not any(o.ad.lower() == new_phys.lower() for o in t.sutunlar if o is not c):
+                RenameColumn(op="rename_column", table=t.ad, column=c.ad, new_name=new_phys).apply(ctx)
+            c.kaynak = None if c.ad == new_phys else new_phys
+
+    def _dependents(self, tanim: ModelTanimi, changed: set[str]) -> list[Tablo]:
+        """Adımlarında `changed` tablolarından birine başvuran tablolar (bağımlılık sırasıyla)."""
+        out: list[Tablo] = []
+        changed = set(changed)
+        progress = True
+        while progress:
+            progress = False
+            for o in tanim.tablolar:
+                if o in out or o.ad.lower() in changed or not (o.sorgu and o.sorgu.adimlar):
+                    continue
+                if dependencies(parse_steps(o.sorgu.adimlar)) & changed:
+                    out.append(o)
+                    changed.add(o.ad.lower())
+                    progress = True
+        return out
+
+    def apply_steps(self, table: str, raw_steps: list[dict]) -> dict:
+        """Power Query'deki "Kapat ve uygula": adımları kaydeder, tabloyu yeniden kurar."""
+        with self.lock:
+            t0 = self._transform_table(table)
+            steps = parse_steps(raw_steps)
+            self._check_cycle(self.tanim, t0, steps)
+            tanim = self.tanim.model_copy(deep=True)
+            self._pending_report = copy.deepcopy(self.content.report)
+            t = next(x for x in tanim.tablolar if x.ad == t0.ad)
+            old_steps = parse_steps(t.sorgu.adimlar)
+            t.sorgu.adimlar = [s.model_dump(exclude_defaults=False) for s in steps]
+            warnings: list[str] = []
+            cur = self.con.cursor()
+            try:
+                has_raw = raw_name(t).lower() in self._physical_tables(cur)
+                cur.execute("BEGIN TRANSACTION")
+                try:
+                    if steps:
+                        if not has_raw:
+                            cur.execute(f"ALTER TABLE {_q(t.kaynak.tablo)} RENAME TO {qident(raw_name(t))}")
+                        self._rebuild(cur, tanim, t, f"{STAGE_PREFIX}tr_{t.kaynak.tablo}", warnings, old_steps)
+                    elif has_raw:
+                        # adımlar kaldırıldı: ham tablo yeniden asıl tablo olur
+                        try:
+                            before = {c.lower(): tip_from_duckdb(ty) for c, ty in build(
+                                cur, _q(raw_name(t)), old_steps, self._table_map(tanim, exclude=t)).columns}
+                        except StepError:
+                            before = {}
+                        cur.execute(f"DROP TABLE IF EXISTS {_q(t.kaynak.tablo)}")
+                        cur.execute(f"ALTER TABLE {_q(raw_name(t))} RENAME TO {qident(t.kaynak.tablo)}")
+                        old = [(r[0], tip_from_duckdb(r[1])) for r in cur.execute(
+                            f"DESCRIBE {_q(t.kaynak.tablo)}").fetchall()]
+                        self._carry_renames(tanim, t, old_steps, [], [n for n, _ in old])
+                        _sync_columns(tanim, t, [(n, tip, False) for n, tip in old], _q(t.kaynak.tablo), cur,
+                                      warnings, {n.lower() for n, tip in old if before.get(n.lower()) not in (None, tip)})
+                    for i, o in enumerate(self._dependents(tanim, {t.ad.lower()})):
+                        self._rebuild(cur, tanim, o, f"{STAGE_PREFIX}tr{i}_{o.kaynak.tablo}", warnings)
+                    self.validate(tanim)
+                    cur.execute("DROP TABLE IF EXISTS floem.tarih_map")
+                    cur.execute("COMMIT")
+                except BaseException:
+                    cur.execute("ROLLBACK")
+                    raise
+            finally:
+                cur.close()
+            self.content.tanim = tanim
+            self.content.report = self._pending_report
+            self._pending_report = None
+            self._touch()
+            return {"warnings": warnings}
+
     def refresh_targets(self, only: list[str] | None = None) -> list[Tablo]:
         wanted = {n.lower() for n in only} if only else None
         return [t for t in self.tanim.tablolar if t.sorgu and (wanted is None or t.ad.lower() in wanted)]
@@ -496,13 +717,27 @@ class Document:
                 tanim = self.tanim.model_copy(deep=True)
                 cur.execute("BEGIN TRANSACTION")
                 try:
+                    transformed: list[Tablo] = []
                     for i, (phys, res) in enumerate(zip(phys_names, results)):
                         t = next((x for x in tanim.tablolar if x.kaynak.tablo == phys), None)
                         if t is None:          # yenileme sürerken tablo silinmiş
                             continue
-                        _sync_columns(tanim, t, res, _q(_stage(job, i)), cur, warnings)
+                        if t.sorgu and t.sorgu.adimlar:
+                            # yeni ham veri; son tablo adımlar uygulanarak aşağıda yeniden kurulur
+                            if raw_name(t).lower() not in self._physical_tables(cur):
+                                cur.execute(f"ALTER TABLE {_q(phys)} RENAME TO {qident(raw_name(t))}")
+                            cur.execute(f"DROP TABLE IF EXISTS {_q(raw_name(t))}")
+                            cur.execute(f"ALTER TABLE {_q(_stage(job, i))} RENAME TO {qident(raw_name(t))}")
+                            transformed.append(t)
+                            continue
+                        _sync_columns(tanim, t, _loaded_columns(res), _q(_stage(job, i)), cur, warnings)
                         cur.execute(f"DROP TABLE IF EXISTS {_q(phys)}")
                         cur.execute(f"ALTER TABLE {_q(_stage(job, i))} RENAME TO {qident(phys)}")
+                    # adımlı tablolar ve onlara (birleştirme/ekleme ile) bağlı tablolar, bağımlılık sırasıyla
+                    refreshed = {t.ad.lower() for t in targets}
+                    order = _topo(transformed + [d for d in self._dependents(tanim, refreshed) if d not in transformed])
+                    for k, t in enumerate(order):
+                        self._rebuild(cur, tanim, t, f"{STAGE_PREFIX}tr{k}_{t.kaynak.tablo}", warnings)
                     self.validate(tanim)
                     cur.execute("DROP TABLE IF EXISTS floem.tarih_map")   # tarihler değişmiş olabilir
                     cur.execute("COMMIT")
@@ -519,15 +754,42 @@ class Document:
                 cur.close()
 
 
-def _new_column(ec_name: str, mname: str, dt, is_pk: bool) -> Sutun:
-    tip = model_tip(dt)
+def _loaded_columns(res: LoadResult) -> list[tuple[str, str, bool]]:
+    return [(c.name, model_tip(dt), c.is_primary_key) for c, dt in zip(res.columns, res.types)]
+
+
+def _topo(tables: list[Tablo]) -> list[Tablo]:
+    """Adımlı tabloları, başvurdukları tablolardan sonra gelecek şekilde sıralar."""
+    names = {t.ad.lower(): t for t in tables}
+    out: list[Tablo] = []
+    state: dict[str, int] = {}
+
+    def visit(t: Tablo) -> None:
+        key = t.ad.lower()
+        if state.get(key) == 2:
+            return
+        if state.get(key) == 1:
+            raise DocumentError("Tabloların dönüştürme adımları birbirine döngüsel olarak bağlı", code="transform_cycle")
+        state[key] = 1
+        for d in sorted(dependencies(parse_steps(t.sorgu.adimlar))):
+            if d in names:
+                visit(names[d])
+        state[key] = 2
+        out.append(t)
+
+    for t in tables:
+        visit(t)
+    return out
+
+
+def _new_column(ec_name: str, mname: str, tip: str, is_pk: bool) -> Sutun:
     ozet = ("none" if is_pk else "sum") if tip in NUMERIC_TIPS else None
     return Sutun(ad=mname, kaynak=None if mname == ec_name else ec_name, tip=tip, anahtar=is_pk, ozet=ozet)
 
 
 def _table_from(name: str, phys: str, source: SourceRef, kaynak_id: str, res: LoadResult) -> Tablo:
     mnames = unique_names([sanitize_name(c.name, "Sütun") for c in res.columns])
-    cols = [_new_column(c.name, m, dt, c.is_primary_key) for c, dt, m in zip(res.columns, res.types, mnames)]
+    cols = [_new_column(c.name, m, model_tip(dt), c.is_primary_key) for c, dt, m in zip(res.columns, res.types, mnames)]
     sorgu = TabloSorgu(
         kaynak=kaynak_id, veritabani=source.database,
         sema=(source.schema or "dbo") if source.table else None, tablo=source.table, sql=source.sql,
@@ -556,9 +818,13 @@ def _drop_column_refs(tanim: ModelTanimi, t: Tablo, c: Sutun) -> list[Iliski]:
     return removed
 
 
-def _sync_columns(tanim: ModelTanimi, t: Tablo, res: LoadResult, stage: str, cur, warnings: list[str]) -> None:
-    """Kaynakta eklenen/silinen sütunları modele yansıtır; kullanıcının değiştirdiği tipleri korur."""
-    loaded = {c.name.lower(): (c, dt) for c, dt in zip(res.columns, res.types)}
+def _sync_columns(tanim: ModelTanimi, t: Tablo, cols: list[tuple[str, str, bool]], stage: str, cur,
+                  warnings: list[str], adopt: set[str] = frozenset()) -> None:
+    """Kaynakta (ya da dönüştürme sonucunda) eklenen/silinen sütunları modele yansıtır.
+
+    `cols`: (fiziksel ad, model tipi, birincil anahtar mı). Kullanıcının modelde değiştirdiği
+    tipler korunur; `adopt`taki sütunlarda (adımla tipi değişenler) model tipi yeni tipe geçer."""
+    loaded = {name.lower(): (name, tip, pk) for name, tip, pk in cols}
     by_phys = {(c.kaynak or c.ad).lower(): c for c in t.sutunlar if c.ifade is None}
     for key, c in by_phys.items():
         if key not in loaded:
@@ -569,21 +835,28 @@ def _sync_columns(tanim: ModelTanimi, t: Tablo, res: LoadResult, stage: str, cur
                 msg += f" ({len(gone)} ilişki de kaldırıldı)"
             warnings.append(msg)
     taken = {c.ad.lower() for c in t.sutunlar}
-    for key, (ec, dt) in loaded.items():
+    for key, (pname, tip, pk) in loaded.items():
         c = by_phys.get(key)
         if c is None:
-            base, name, n = sanitize_name(ec.name, "Sütun"), sanitize_name(ec.name, "Sütun"), 2
+            base, name, n = sanitize_name(pname, "Sütun"), sanitize_name(pname, "Sütun"), 2
             while name.lower() in taken:
                 name = f"{base} ({n})"
                 n += 1
             taken.add(name.lower())
-            t.sutunlar.append(_new_column(ec.name, name, dt, ec.is_primary_key))
+            t.sutunlar.append(_new_column(pname, name, tip, pk))
             warnings.append(f"{t.ad}[{name}] kaynakta yeni; modele eklendi")
             continue
-        loaded_tip = model_tip(dt)
-        if loaded_tip != c.tip:
+        if c.kaynak and c.kaynak != pname:
+            c.kaynak = None if c.ad == pname else pname        # yalnızca büyük/küçük harf farkı
+        if tip != c.tip and key in adopt:
+            c.tip = tip
+            if tip in NUMERIC_TIPS and c.ozet is None and not c.anahtar:
+                c.ozet = "sum"
+            elif tip not in NUMERIC_TIPS:
+                c.ozet = None
+        elif tip != c.tip:
             try:
-                cur.execute(f"ALTER TABLE {stage} ALTER {qident(ec.name)} TYPE {DUCKDB_TYPE[c.tip]}")
+                cur.execute(f"ALTER TABLE {stage} ALTER {qident(pname)} TYPE {DUCKDB_TYPE[c.tip]}")
             except duckdb.Error as e:
                 raise ModelError(
                     f"{t.ad}[{c.ad}] {TIP_ADI[c.tip]} tipine çevrilemedi: kaynaktaki yeni değerler bu tipe uymuyor"

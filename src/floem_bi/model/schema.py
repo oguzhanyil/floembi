@@ -67,6 +67,8 @@ class TabloSorgu(_Base):
     sema: str | None = None
     tablo: str | None = None
     sql: str | None = None
+    # Power Query "Uygulanan adımlar" karşılığı (floem_bi.transform.steps); ham veriye sırayla uygulanır
+    adimlar: list[dict] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _one_of(self) -> "TabloSorgu":

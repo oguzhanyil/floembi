@@ -191,7 +191,7 @@ def test_import_sapb1_and_detect_relationships(client):
     # kaynak bilgisi modelde (şifresiz)
     assert d["model"]["veri_kaynaklari"][0]["sunucu"] == "SAPSRV"
     assert "password" not in str(d["model"]) and "sifre" not in str(d["model"])
-    assert table(d, "OINV")["sorgu"] == {"kaynak": client.cid, "veritabani": "SBO_DEMO", "sema": "dbo", "tablo": "OINV"}
+    assert table(d, "OINV")["sorgu"] == {"kaynak": client.cid, "veritabani": "SBO_DEMO", "sema": "dbo", "tablo": "OINV", "adimlar": []}
 
     r = rels(d)
     assert r[("INV1[DocEntry]", "OINV[DocEntry]")] is True        # satır → başlık

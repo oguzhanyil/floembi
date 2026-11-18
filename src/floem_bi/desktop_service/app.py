@@ -18,13 +18,14 @@ from typing import Any, Callable, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ValidationError, BaseModel, ConfigDict, Field, model_validator
 
 from ..connectors import ConnectionSpec, ConnectorError, ResultSet, SourceRef, json_value
 from ..connectors.sqlserver import make_connector
 from ..document import Document, DocumentError, FloemFileError, ImportItem, Job, JobConflict, JobRunner, JobTable, OpsIn
 from ..model.schema import VeriKaynagi
 from ..model.semantic import ModelError
+from ..transform import parse_steps
 from ..report import QueryError, VisualQuery
 from .connections import ConnectionStore
 from .publish import PublishClient
@@ -67,6 +68,13 @@ class ImportIn(BaseModel):
     connection_id: str
     database: str | None = None
     items: list[ImportItemIn] = Field(min_length=1, max_length=200)
+
+
+class TransformIn(BaseModel):
+    table: str
+    adimlar: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+    upto: int | None = Field(default=None, ge=0)          # yalnızca önizleme: bu adıma kadar
+    limit: int = Field(default=1000, ge=1, le=5000)
 
 
 class RefreshIn(BaseModel):
@@ -330,6 +338,27 @@ def create_app(
     @app.get("/document/tables/{table}/preview", dependencies=[Depends(auth)])
     def table_preview(table: str, limit: int = 100):
         return doc().preview(table, max(1, min(limit, 1000)))
+
+    def _steps(body: TransformIn) -> list[dict]:
+        try:
+            parse_steps(body.adimlar)
+        except ValidationError as e:
+            first = e.errors()[0]
+            where = first["loc"][1] + 1 if len(first["loc"]) > 1 and isinstance(first["loc"][1], int) else None
+            raise DocumentError(
+                f"Adım {where}: tanım geçersiz" if where else "Adım tanımı geçersiz", first.get("msg", ""),
+                code="transform_invalid",
+            ) from e
+        return body.adimlar
+
+    @app.post("/document/transform/preview", dependencies=[Depends(auth)])
+    def transform_preview(body: TransformIn):
+        return doc().transform_preview(body.table, _steps(body), body.upto, body.limit)
+
+    @app.post("/document/transform/apply", dependencies=[Depends(auth)])
+    def transform_apply(body: TransformIn):
+        result = doc().apply_steps(body.table, _steps(body))
+        return {**result, "document": doc().state()}
 
     @app.post("/document/dax/validate", dependencies=[Depends(auth)])
     def dax_validate(body: DaxIn):

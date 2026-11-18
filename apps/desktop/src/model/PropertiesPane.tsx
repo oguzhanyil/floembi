@@ -45,13 +45,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** Power BI model görünümündeki "Özellikler" bölmesi. */
 export function PropertiesPane({
-  selection, onSelect, onPreview, onEditRelationship, onRefresh, onNewMeasure,
+  selection, onSelect, onPreview, onEditRelationship, onRefresh, onTransform, onNewMeasure,
 }: {
   selection: Selection;
   onSelect: (s: Selection) => void;
   onPreview: (table: string) => void;
   onEditRelationship: (kimden: string, kime: string) => void;
   onRefresh: (table: string) => void;
+  onTransform: (table: string) => void;
   onNewMeasure: (table: string) => void;
 }) {
   const { doc, apply } = useDocument();
@@ -245,6 +246,11 @@ export function PropertiesPane({
           <button onClick={() => onPreview(t.ad)}>Veriyi önizle</button>
           <button onClick={() => onNewMeasure(t.ad)}>Yeni ölçü</button>
           {src && <button onClick={() => onRefresh(t.ad)}>Yenile</button>}
+          {src && (
+            <button onClick={() => onTransform(t.ad)} title="Power Query düzenleyicisi">
+              Verileri dönüştür{t.sorgu?.adimlar?.length ? ` (${t.sorgu.adimlar.length} adım)` : ""}
+            </button>
+          )}
           <button
             className="danger"
             onClick={() =>
