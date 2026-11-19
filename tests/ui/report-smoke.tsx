@@ -53,7 +53,7 @@ const runMenuReport = async (q: VisualQuery): Promise<VisualResult> => {
   if (holdMenuQueries) await new Promise<void>((done) => heldMenuQueries.push(done));
   return ({
   columns: [...q.group.map((g) => ({ name: g.column, kind: "group" as const, type: "string" })),
-    ...q.values.map((_, i) => ({ name: `Değer ${i + 1}`, kind: "value" as const, type: "double" }))],
+    ...q.values.map((v, i) => ({ name: v.measure ?? `Değer ${i + 1}`, kind: "value" as const, type: "double" }))],
   rows: (q.group.length ? [1, 2] : [1]).map((i) => [...q.group.map((g) => `${g.column} ${i}`), ...q.values.map(() => i * 10)]), truncated: false,
 }); };
 const gridResult: VisualResult = {

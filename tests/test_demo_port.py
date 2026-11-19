@@ -15,14 +15,14 @@ def source():
     con.execute("CREATE TABLE dbo.OSLP(SlpCode INT, SlpName VARCHAR)")
     for head, line in [('OINV', 'INV1'), ('ORIN', 'RIN1'), ('ORDR', 'RDR1'), ('OPCH', 'PCH1'), ('OPOR', 'POR1')]:
         con.execute(f"CREATE TABLE dbo.{head}(DocEntry INT, DocNum INT, DocDate DATE, CardCode VARCHAR, SlpCode INT, CANCELED VARCHAR, DocStatus VARCHAR)")
-        con.execute(f"CREATE TABLE dbo.{line}(DocEntry INT, LineNum INT, UomCode VARCHAR, LineTotal DOUBLE, GrssProfit DOUBLE, Quantity DOUBLE, OpenQty DOUBLE, LineStatus VARCHAR)")
+        con.execute(f"CREATE TABLE dbo.{line}(DocEntry INT, LineNum INT, UomCode VARCHAR, LineTotal DOUBLE, GrssProfit DOUBLE, Quantity DOUBLE, OpenQty DOUBLE, LineStatus VARCHAR, ItemCode VARCHAR)")
     yield con
     con.close()
 
 
 def add(con, head, line, entry, *, status='O', line_status='O', qty=10, remaining=4, canceled='N', card='C1', unit='KG'):
     con.execute(f"INSERT INTO dbo.{head} VALUES (?, 7, '2026-01-10', ?, 0, ?, ?)", [entry, card, canceled, status])
-    con.execute(f"INSERT INTO dbo.{line} VALUES (?, 0, ?, 100, 20, ?, ?, ?)", [entry, unit, qty, remaining, line_status])
+    con.execute(f"INSERT INTO dbo.{line} VALUES (?, 0, ?, 100, 20, ?, ?, ?, 'P1')", [entry, unit, qty, remaining, line_status])
 
 
 def rows(con, table):

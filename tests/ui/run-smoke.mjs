@@ -339,6 +339,41 @@ try {
   await testMatrix({ call, evaluate, waitFor, openMenu, choose, input, dir });
   await testThemes({ call, evaluate, waitFor, openMenu, choose, dir });
   await testImportAudit({ call, evaluate, waitFor, input, dir });
+  // İsteğe bağlı gerçek rapor düzeni: kayıtlar yerine fixture değerleri kullanılır.
+  // Alan/ölçü adları korunur; uzun başlıklar ve sayfa düğmeleri böylece denenir.
+  if (process.env.FLOEM_UI_REPORT) {
+    const localReport = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_REPORT), 'utf8'));
+    await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    await evaluate(`window.setAllReport(${JSON.stringify(localReport)}); window.setTestMode('all-viewer')`);
+    const target = localReport.pages.find((page) => page.id === 'ortak-model');
+    assert(target, 'Ortak Model sayfası bulunamadı');
+    const navigationId = `${localReport.pages[0].id}-nav-ortak`;
+    await waitFor(`document.querySelector('[data-visual-id="${navigationId}"] button')`);
+    await evaluate(`document.querySelector('[data-visual-id="${navigationId}"] button').click()`);
+    await waitFor('document.querySelector("[data-visual-id=ortak-karsilastirma] .ag-cell")');
+    assert.equal(await evaluate('document.querySelectorAll(".visual-error").length'), 0);
+    const layout = await evaluate(`(() => {
+      const box = (id) => document.querySelector('[data-visual-id="'+id+'"]').getBoundingClientRect();
+      const card = box('ortak-model-card-0'), table = box('ortak-karsilastirma');
+      const viewport = document.querySelector('[data-visual-id="ortak-karsilastirma"] .ag-grid-viewport');
+      return { separated: card.bottom <= table.top, fits: viewport.scrollWidth <= viewport.clientWidth + 2,
+        columns: document.querySelectorAll('[data-visual-id="ortak-karsilastirma"] [role="columnheader"]').length };
+    })()`);
+    assert(layout.separated, 'Kart ve tablo üst üste geldi');
+    assert.equal(layout.columns, 6, 'Ortak tablo alanları eksik');
+    assert(layout.fits, 'Ortak tablonun sütunları nesne genişliğine sığmadı');
+    const withoutFit = structuredClone(localReport);
+    withoutFit.pages.find((page) => page.id === 'ortak-model').visuals.find((v) => v.id === 'ortak-karsilastirma').format.gridFitColumns = false;
+    await evaluate(`window.setAllReport(${JSON.stringify(withoutFit)})`);
+    await waitFor(`(() => { const v = document.querySelector('[data-visual-id="ortak-karsilastirma"] .ag-grid-viewport'); return v && v.scrollWidth > v.clientWidth + 5; })()`);
+    await evaluate(`window.setAllReport(${JSON.stringify(localReport)})`);
+    await waitFor(`(() => { const v = document.querySelector('[data-visual-id="ortak-karsilastirma"] .ag-grid-viewport'); return v && v.scrollWidth <= v.clientWidth + 2; })()`);
+    if (process.env.FLOEM_UI_ARTIFACT_DIR) {
+      const shot = await call('Page.captureScreenshot', { format: 'png' });
+      await writeFile(join(resolve(process.env.FLOEM_UI_ARTIFACT_DIR), 'f06-ortak-model.png'), Buffer.from(shot.data, 'base64'));
+    }
+    console.log('PASS: F06 gerçek rapor düzeninde Ortak Model düğmesi, 6 sütunlu grid ve kart/tablo yerleşimi (sentetik ekran verisi).');
+  }
   await call("Browser.close");
 } finally {
   ws?.close();

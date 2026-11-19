@@ -388,6 +388,8 @@ export interface VisualFormat {
   gridFilters?: boolean;
   gridSearch?: boolean;
   gridColumnChooser?: boolean;
+  /** Okunabilir en küçük genişliği koruyarak sütunları nesneye dağıtır; başlıklar sarılır. */
+  gridFitColumns?: boolean;
   gridExport?: boolean;
   gridExportPdf?: boolean;
   gridExportExcel?: boolean;

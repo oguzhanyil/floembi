@@ -82,6 +82,7 @@ class _CteKey:
     filters: tuple[tuple[ColKey, tuple[ir.Expr, ...]], ...]
     time: str | None
     rels: frozenset = frozenset()
+    row_grain: tuple[ColKey, ...] = ()
 
 
 class SqlGenerator:
@@ -173,7 +174,7 @@ class SqlGenerator:
             else:
                 self._cols_in(calc, out)
             return out
-        if isinstance(e, (ir.Slot, ir.Nested)):
+        if isinstance(e, (ir.Slot, ir.Nested, ir.FrozenScalar)):
             return out
         for v in vars(e).values():
             if isinstance(v, ir.Expr):
@@ -196,7 +197,7 @@ class SqlGenerator:
         if isinstance(e, ir.Col):
             calc = self._calc(e.key)
             return exp.Paren(this=r(calc)) if calc is not None else col_fn(e.key)
-        if isinstance(e, (ir.Slot, ir.Nested)):
+        if isinstance(e, (ir.Slot, ir.Nested, ir.FrozenScalar)):
             if slot_fn is None:
                 raise CompileError("Satır ifadesinde toplama kullanılamaz")
             return slot_fn(e)
@@ -301,14 +302,42 @@ class SqlGenerator:
         raise CompileError(f"Bilinmeyen toplama: {slot.agg}")
 
     # ------------------------------------------------------------ planlama
+    def _frozen_values(self, expr: ir.Expr) -> list[ir.FrozenScalar]:
+        if isinstance(expr, ir.FrozenScalar):
+            return [expr]
+        result = []
+        for value in vars(expr).values():
+            if isinstance(value, ir.Expr):
+                result.extend(self._frozen_values(value))
+            elif isinstance(value, tuple):
+                for item in value:
+                    if isinstance(item, ir.Expr):
+                        result.extend(self._frozen_values(item))
+                    elif isinstance(item, tuple):
+                        for child in item:
+                            if isinstance(child, ir.Expr):
+                                result.extend(self._frozen_values(child))
+        return list(dict.fromkeys(result))
+
+    def _frozen_context(self, value: ir.FrozenScalar) -> tuple[list[ColKey], ir.Context]:
+        slots, nested = [], []
+        self._collect(value.value, slots, nested)
+        if nested or not slots or any(s.ctx.time for s in slots):
+            raise CompileError("Filtredeki VAR için iç içe iteratör/zaman dönüşümü henüz desteklenmiyor")
+        group = sorted({g for s in slots for g in s.ctx.group if self.model.reachable(s.base, g.table, s.ctx.rels)})
+        return group, slots[0].ctx
+
     def _effective(self, slot: ir.Slot, group: list[ColKey]) -> _CteKey:
         rels = slot.ctx.rels
         reach = lambda t: self.model.reachable(slot.base, t, rels)  # noqa: E731
-        grain = tuple(g for g in group if g in slot.ctx.group and reach(g.table))
+        native = tuple(g for g in group if g in slot.ctx.group and reach(g.table))
         filters = tuple((c, p) for c, p in slot.ctx.filters if reach(c.table))
+        frozen_group = {g for _, preds in filters for p in preds for value in self._frozen_values(p)
+                        for g in self._frozen_context(value)[0]}
+        grain = tuple(g for g in group if g in native or g in frozen_group)
         date_table = self.model.date_table()
         time = slot.ctx.time if (slot.ctx.time and date_table and reach(date_table.ad)) else None
-        return _CteKey(slot.base, grain, filters, time, rels)
+        return _CteKey(slot.base, grain, filters, time, rels, native)
 
     def compile(self, req: QueryRequest) -> CompiledQuery:
         group = list(dict.fromkeys(req.group_by))
@@ -414,7 +443,8 @@ class SqlGenerator:
                 k += 1
             if key.time:
                 time_keys.add(key.time)
-            with_parts.append((name, self._cte_select(key, members, gidx, slot_ref)))
+            body = self._cte_select(key, members, gidx, slot_ref, name, with_parts, time_keys)
+            with_parts.append((name, body))
             joins.append((name, key.grain))
 
         # 3) eksen: görünen satırlar
@@ -469,17 +499,21 @@ class SqlGenerator:
                                 self._collect(y, slots, nesteds)
 
     # ------------------------------------------------------------ CTE gövdesi
-    def _cte_select(self, key: _CteKey, members: list[ir.Slot], gidx, slot_ref) -> exp.Select:
+    def _cte_select(self, key: _CteKey, members: list[ir.Slot], gidx, slot_ref,
+                    cte_name: str, with_parts: list, time_keys: set[str]) -> exp.Select:
         model = self.model
         base = key.base
         date_table = model.date_table()
         dt_name = date_table.ad if (key.time and date_table) else None
 
         filter_map = dict(key.filters)
+        frozen = list(dict.fromkeys(v for preds in filter_map.values() for p in preds for v in self._frozen_values(p)))
+        if frozen and key.time:
+            raise CompileError("Filtredeki VAR ve zaman dönüşümünün birlikte kullanımı henüz desteklenmiyor")
         rls = [(t, p) for t, p in self.rls if model.reachable(base, t, key.rels)]
 
         # gereken tablolar
-        needed: set[str] = {g.table for g in key.grain} | {c.table for c in filter_map} | {t for t, _ in rls}
+        needed: set[str] = {g.table for g in key.row_grain} | {c.table for c in filter_map} | {t for t, _ in rls}
         # FILTER(T, RELATED(...)) gibi koşulların kullandığı diğer tablolar da birleştirilir
         for preds in filter_map.values():
             for pr in preds:
@@ -533,10 +567,37 @@ class SqlGenerator:
                     )
                 joined.add(to)
 
+        # VAR önceki bağlamda hesaplanır. Tarih filtresi kalkınca MIN/MAX sınırı
+        # kaybolmaz; ay satırları için ayrı sınır üretir. Olgular bu sınırla
+        # karşılaştırılır, önceki dönemin hareketi yeni aya yanlışlıkla bağlanmaz.
+        bound_cols: dict[ColKey, exp.Expression] = {}
+        bound_values: dict[ir.FrozenScalar, exp.Expression] = {}
+        for index, value in enumerate(frozen):
+            groups, original_ctx = self._frozen_context(value)
+            sub_prefix = f"{cte_name}_fv{index}_"
+            with_parts.extend(self._plan(groups, [("value", value.value)], original_ctx, sub_prefix, time_keys))
+            sub = exp.select("*").from_(f"{sub_prefix}sonuc")
+            alias = f"fv{index}"
+            group_index = {g: i for i, g in enumerate(groups)}
+            conditions = []
+            for g in groups:
+                if g in bound_cols:
+                    conditions.append(_null_safe_eq(bound_cols[g].copy(), _col(f"g{group_index[g]}", alias)))
+                elif g in key.row_grain:
+                    conditions.append(_null_safe_eq(col_fn(g), _col(f"g{group_index[g]}", alias)))
+            sel = sel.join(exp.Subquery(this=sub, alias=exp.TableAlias(this=_ident(alias))),
+                           on=_and_all(conditions) or exp.true(), join_type="inner")
+            for g in groups:
+                if g not in key.row_grain:
+                    bound_cols[g] = _col(f"g{group_index[g]}", alias)
+            bound_values[value] = _col("m0", alias)
+
+        group_col = lambda g: bound_cols[g].copy() if g in bound_cols else col_fn(g)  # noqa: E731
+
         # SELECT
         projections = []
         for g in key.grain:
-            projections.append(exp.alias_(col_fn(g), f"g{gidx[g]}"))
+            projections.append(exp.alias_(group_col(g), f"g{gidx[g]}"))
         for s in members:
             projections.append(exp.alias_(self._aggregate(s, col_fn), slot_ref[s][1]))
         sel = sel.select(*projections)
@@ -546,7 +607,7 @@ class SqlGenerator:
         for c, preds in filter_map.items():
             if dt_name and c.table == dt_name:
                 continue
-            conds.extend(self.render(p, col_fn) for p in preds)
+            conds.extend(self.render(p, col_fn, lambda v: bound_values[v].copy()) for p in preds)
         for t, p in rls:
             if dt_name and t == dt_name:
                 continue
@@ -555,7 +616,7 @@ class SqlGenerator:
         if where is not None:
             sel = sel.where(where)
         if key.grain:
-            sel = sel.group_by(*[col_fn(g) for g in key.grain])
+            sel = sel.group_by(*[group_col(g) for g in key.grain])
         return sel
 
     def _date_subquery(self, key: _CteKey, filter_map, rls, gidx) -> tuple[exp.Select, dict[ColKey, str]]:

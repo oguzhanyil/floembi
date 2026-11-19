@@ -78,6 +78,12 @@ class Func(Expr):
     args: tuple[Expr, ...]
 
 
+@dataclass(frozen=True)
+class FrozenScalar(Expr):
+    """VAR'ın tanımlandığı filtre bağlamındaki değeri; satır filtresinde değişmez."""
+    value: Expr
+
+
 # --- filtre bağlamı ---------------------------------------------------------
 
 @dataclass(frozen=True)

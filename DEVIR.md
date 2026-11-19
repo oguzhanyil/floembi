@@ -139,6 +139,30 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 20.11.2026 F06 ortak model ve ölçü geçiş haritası uygulandı
+
+[Kullanım, kapsam ve kalan F06 işleri](docs/f06-ortak-model-ve-olcu-gecisi.md).
+Yeni verili dosya `data/SAPB1Demo-Floem-F06.floem`: 9 sayfa, 13 tablo, 27 ilişki,
+29 FDX ölçüsü. Ortak Model sayfasında tarih/muhatap filtresiyle satış, açık sipariş
+ve cari açılış/hareket/kapanış birlikte incelenir. Firma, tarih, muhatap, ürün,
+hesap ve temsilci boyutları; anahtar tekillik/referans kontrolleri kuruldu.
+Finans günlük hesap özetine geçti. Önceki dosyalar korunur; web yeniden yayımlanmadı.
+
+Yönsüz döngü kontrolünün geçerli ortak boyutları reddetmesi düzeltildi. Yönlü
+belirsizlik ve döngüler engellenmeye devam eder. FDX filtrelerinde toplamalı VAR
+tanımlandığı bağlamı korur; açılış/kapanış, dönem satırı/genel toplam ve RLS testli.
+`semantic_import` TMDL alt kümesini sorgu çalıştırmadan envanterler; JSON/Markdown
+çıktısında ham sorgu/ifade/bağlantı yok. `--demo` yerel dosya kontrollerini de ekler.
+
+135 kaynak ölçüden 19'u SQL üretir; 116'sı motor/sözdizimi/bağımlılık engelli.
+61 alan eşlendi, 21 kaynak ölçüye sınırlı demo uyarlaması gösterildi; birebir sonuç
+eşdeğerliği doğrulanan kaynak ölçü yok. **135 ölçünün tam geçişi tamamlanmadı.**
+Yerel dosyada 69 görsel sorgusu ve 8 senaryoda 56 bağımsız hesap karşılaştırması geçti.
+F05 için ortak temel hazır; kaynak ölçü/motor/mutabakat işleri F06-2–5 olarak açık.
+Tabloda isteğe bağlı `gridFitColumns` (Biçim: Sütunları nesneye sığdır) başlık sarma
+ve otomatik yükseklikle çalışır; yeni karşılaştırma tablosunda açıktır. 206 Python
+testi geçti, 1 atlandı; 15 hedefli tekrar, typecheck ve Desktop/web build başarılı.
+
 ### 20.11.2026 F10 PBIP uyumluluk raporu uygulandı
 
 **Geliştirme girdisi:** Kullanıcının isteğiyle görünüm bulguları
@@ -161,7 +185,8 @@ Yerel JSON/Markdown dosyaları `data/pbip-compatibility-F10/`; yeni örnek
 `data/SAPB1Demo-Taslak-F10.floem` 18 sayfa/905 hedef/23 boş tablo. Önceki verili dosyalar korunur.
 29 hedefli pytest, Chromium UI ve önceki regresyonlar, typecheck, Desktop/web build başarılı.
 Gerçek yeni taslak `Document.open` ile açıldı; model uyarısı yok. Yeni bağımlılık eklenmedi.
-**Sıradaki ana iş F06: ortak model ve ölçü geçiş haritası**, ardından F05 → F07B.
+Bu teslimden sonraki F06 ortak temel/harita uygulandı; tam ölçü uyumu F06-2–5 olarak açık.
+Tasarım sırası F05 → F07B.
 
 ### 19.11.2026 F07A tema altyapısı uygulandı
 

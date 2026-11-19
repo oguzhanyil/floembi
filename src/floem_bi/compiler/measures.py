@@ -567,6 +567,8 @@ class MeasureCompiler:
             if not node.quoted and node.name.lower() in env:
                 value = env[node.name.lower()]
                 if not _is_constant(value):
+                    if allow_vars_from_scalar:
+                        return ir.FrozenScalar(value)
                     raise self.err("Satır bağlamında yalnızca sabit değerli VAR kullanılabilir (MVP)", node)
                 return value
             raise self.err(f"'{node.name}' burada kullanılamaz", node)

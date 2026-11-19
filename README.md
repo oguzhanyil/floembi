@@ -27,7 +27,13 @@ aktarım raporu**, sayfa/nesne/alan bazında kayıpları gösterir. JSON/Markdow
 `data/SAPB1Demo-Taslak-F10.floem` (**boş verili taslak**).
 [Kullanım, yedi raporun bulguları ve sınırlar](docs/f10-pbip-uyumluluk.md).
 
-Yeni demo: `data/SAPB1Demo-Floem-F01-F04.floem` (Desktop'ta Aç / Ctrl+O).
+**F06 ortak model ve ölçü haritası hazır:** verili yeni dosya
+`data/SAPB1Demo-Floem-F06.floem` (Desktop'ı yeniden açın, **Aç / Ctrl+O**).
+**Model → Ortak Model** sayfasında aynı tarih/muhatap filtresiyle satış, açık sipariş ve
+cari bakiyeleri inceleyin. 13 tablo, 27 ilişki, 29 yerel FDX ölçüsü; 135 özgün
+Power BI ölçüsünün tam geçişi henüz tamamlanmadı.
+[Kapsam, denetim çıktısı ve kalan işler](docs/f06-ortak-model-ve-olcu-gecisi.md).
+
 Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı
 sürüklenebilir; sağ üstteki **Görselleştirmeler** ve **Veri** düğmeleriyle ayrı ayrı gizlenir.
 UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.

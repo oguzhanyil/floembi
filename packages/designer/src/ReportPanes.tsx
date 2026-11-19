@@ -547,6 +547,8 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
               onChange={(e) => set({ gridSearch: e.target.checked })} />Tabloda ara</label>
             <label className="inline"><input type="checkbox" checked={f.gridColumnChooser !== false}
               onChange={(e) => set({ gridColumnChooser: e.target.checked })} />Sütun seçici</label>
+            <label className="inline"><input type="checkbox" checked={f.gridFitColumns === true}
+              onChange={(e) => set({ gridFitColumns: e.target.checked })} />Sütunları nesneye sığdır</label>
             <label className="inline"><input type="checkbox" checked={f.gridRowCount !== false}
               onChange={(e) => set({ gridRowCount: e.target.checked })} />Satır sayısını göster</label>
             <p className="hint">Arama veya sütun filtreleri kapatılınca etkin filtreleri temizlenir.</p>

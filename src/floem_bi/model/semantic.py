@@ -235,27 +235,35 @@ def _children(node: ast.Node) -> list[ast.Node]:
 
 
 def find_ambiguity(iliskiler: list[Iliski]) -> Iliski | None:
-    """Etkin ilişkiler arasında iki tablo arasında ikinci bir filtre yolu açan ilk ilişkiyi döndürür.
+    """Motorun çok→bir grafiğinde döngü veya ikinci yönlü yol açan ilişki.
 
-    Power BI'daki "belirsizlik" kuralı: etkin ilişkiler (yönden bağımsız) döngü oluşturmamalı.
-    Döngü kuran ilişki pasif olmalıdır (ileride USERELATIONSHIP ile kullanılır).
+    İki olgu tablosunun aynı tarih ve müşteri boyutuna bağlanması geçerlidir.
+    Yönsüz döngü testi bu olağan yıldız modelini yanlışlıkla reddederdi.
+    Çift yön seçimi motorun mevcut tek yön davranışıyla değerlendirilir;
+    SemanticModel bu sınırlama için ayrıca uyarı verir.
     """
-    parent: dict[str, str] = {}
-
-    def root(x: str) -> str:
-        parent.setdefault(x, x)
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
+    graph: dict[str, list[str]] = {}
     for r in iliskiler:
         if not r.aktif:
             continue
         a = parse_column_ref(r.kimden)[0].lower()
         b = parse_column_ref(r.kime)[0].lower()
-        ra, rb = root(a), root(b)
-        if ra == rb:
-            return r
-        parent[ra] = rb
+        graph.setdefault(a, []).append(b)
+        graph.setdefault(b, [])
+        for start in graph:
+            counts: dict[str, int] = {}
+            visiting: set[str] = set()
+
+            def visit(node: str) -> bool:
+                counts[node] = counts.get(node, 0) + 1
+                if node in visiting or counts[node] > 1:
+                    return True
+                visiting.add(node)
+                if any(visit(nxt) for nxt in graph[node]):
+                    return True
+                visiting.remove(node)
+                return False
+
+            if visit(start):
+                return r
     return None

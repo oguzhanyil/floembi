@@ -63,6 +63,7 @@ export function AgDataGrid({
   const filtersEnabled = format.gridFilters !== false;
   const searchEnabled = format.gridSearch !== false;
   const columnsEnabled = format.gridColumnChooser !== false;
+  const fitColumns = format.gridFitColumns === true;
   const exportKinds = allowedExportKinds(format);
   const contextEnabled = visualMenuEnabled(format);
   const exportEnabled = exportKinds.length > 0;
@@ -78,6 +79,8 @@ export function AgDataGrid({
     ...columns.map((c: VisualResultColumn, i): ColDef<GridRow> => ({
       colId: `c${i}`, field: `c${i}`, headerName: c.name,
       minWidth: 88, width: Math.max(110, Math.min(280, c.name.length * 8 + 75)),
+      flex: fitColumns ? 1 : null,
+      wrapHeaderText: fitColumns, autoHeaderHeight: fitColumns,
       filter: filtersEnabled ? (isNumericType(c.type) ? "agNumberColumnFilter" : "agTextColumnFilter") : false,
       floatingFilter: filtersEnabled,
       sortable: true, resizable: true,
@@ -101,7 +104,7 @@ export function AgDataGrid({
         </button>;
       },
     } satisfies ColDef<GridRow>] : []),
-  ], [columns, hidden, filtersEnabled, columnsEnabled, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
+  ], [columns, hidden, filtersEnabled, columnsEnabled, fitColumns, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
 
   // Grid API'yi yalnız gridReady olayından sonra kullan.
   useEffect(() => { gridApi.current?.redrawRows(); }, [selected, selectedKey, rows]);

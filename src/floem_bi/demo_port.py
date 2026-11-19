@@ -1,8 +1,9 @@
 """Yerel, maskelenmiş SAP B1 Demo verisinden çalışır Floem BI raporu üretir.
 
 Kaynak yalnızca (localdb)\\MSSQLLocalDB / DEMO_FIRMA1'dir. Hiçbir kaynak tabloya yazmaz.
-PBIP'in 135 DAX ölçüsünü taklit etmez; eşdeğer olduğu doğrulanan basit toplamlarla
-sekiz düzenlenebilir demo sayfası oluşturur. Çıktı yerel .floem dosyasıdır.
+PBIP'in 135 ölçüsünü taklit etmez; yerel satır toplamlarıyla sekiz sayfa oluşturur.
+--semantic ortak boyutlar, 29 FDX ölçüsü ve dokuzuncu karşılaştırma sayfasını ekler.
+Çıktı yerel .floem dosyasıdır; özgün ölçü sonuç eşdeğerliği iddia edilmez.
 """
 
 from __future__ import annotations
@@ -31,11 +32,13 @@ NAV = [
 
 TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     "Finans": ([
+        ("Tarih", "date"), ("HesapKod", "string"),
         ("Donem", "string"), ("Yil", "int64"), ("HesapSinifi", "string"),
         ("AnaHesap", "string"), ("Hesap", "string"), ("Borc", "double"),
         ("Alacak", "double"), ("Bakiye", "double"), ("Kayit", "int64"),
     ], """
-        SELECT CONVERT(char(7), J.RefDate, 120) AS Donem,
+        SELECT CONVERT(date, J.RefDate) AS Tarih, L.Account AS HesapKod,
+               CONVERT(char(7), J.RefDate, 120) AS Donem,
                YEAR(J.RefDate) AS Yil,
                LEFT(L.Account, 1) AS HesapSinifi,
                LEFT(L.Account, 3) AS AnaHesap,
@@ -48,17 +51,17 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
         JOIN dbo.OJDT J ON J.TransId = L.TransId
         LEFT JOIN dbo.OACT A ON A.AcctCode = L.Account
         WHERE J.RefDate IS NOT NULL AND L.Account IS NOT NULL
-        GROUP BY CONVERT(char(7), J.RefDate, 120), YEAR(J.RefDate),
+        GROUP BY CONVERT(date, J.RefDate), CONVERT(char(7), J.RefDate, 120), YEAR(J.RefDate),
                  LEFT(L.Account, 1), LEFT(L.Account, 3), L.Account, A.AcctName
     """),
     "Cari": ([
         ("Tarih", "date"), ("Donem", "string"), ("FisNo", "int64"),
-        ("SatirNo", "int64"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("Borc", "double"),
+        ("SatirNo", "int64"), ("HesapKod", "string"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("Borc", "double"),
         ("Alacak", "double"), ("Bakiye", "double"), ("YuruyenBakiye", "double"),
     ], """
         SELECT CONVERT(date, J.RefDate) AS Tarih,
                CONVERT(char(7), J.RefDate, 120) AS Donem,
-               L.TransId AS FisNo, L.Line_ID AS SatirNo,
+               L.TransId AS FisNo, L.Line_ID AS SatirNo, L.Account AS HesapKod,
                C.CardCode AS MuhatapKod, CONCAT(C.CardCode, N' · ', C.CardName) AS Muhatap,
                CONVERT(float, COALESCE(L.Debit, 0)) AS Borc,
                CONVERT(float, COALESCE(L.Credit, 0)) AS Alacak,
@@ -75,22 +78,23 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
         ("Tarih", "date"), ("Donem", "string"), ("BelgeNo", "int64"),
         ("BelgeKimlik", "string"), ("SatirNo", "int64"), ("KayitAnahtari", "string"),
         ("BelgeTuru", "string"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
+        ("UrunKod", "string"), ("SatisElemaniKod", "int64"),
         ("NetSatis", "double"), ("Siparis", "double"), ("AcikSiparis", "double"), ("BrutKar", "double"),
         ("Birim", "string"), ("NetFaturaMiktar", "double"), ("SiparisMiktar", "double"),
         ("AcikSiparisMiktar", "double"), ("SatirAdedi", "int64"),
     ], """
         WITH Satir AS (
           SELECT 'Fatura' AS Tur, 1 AS Isaret, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity,
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity, L.ItemCode,
                  CAST(0 AS decimal(19,6)) AS OpenQty
           FROM dbo.OINV H JOIN dbo.INV1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'İade', -1, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity, 0
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity, L.ItemCode, 0
           FROM dbo.ORIN H JOIN dbo.RIN1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'Sipariş', 1, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity,
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity, L.ItemCode,
                  CASE WHEN H.DocStatus = 'O' AND L.LineStatus = 'O' THEN L.OpenQty ELSE 0 END
           FROM dbo.ORDR H JOIN dbo.RDR1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
         )
@@ -103,6 +107,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
                X.Tur AS BelgeTuru, X.CardCode AS MuhatapKod,
                CONCAT(X.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
                COALESCE(S.SlpName, N'Atanmamış') AS SatisElemani,
+               X.ItemCode AS UrunKod, CONVERT(bigint, X.SlpCode) AS SatisElemaniKod,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN 0 ELSE X.Isaret * X.LineTotal END) AS NetSatis,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.LineTotal ELSE 0 END) AS Siparis,
                CONVERT(float, CASE WHEN X.OpenQty > 0 THEN X.LineTotal * X.OpenQty / NULLIF(X.Quantity, 0) ELSE 0 END) AS AcikSiparis,
@@ -120,18 +125,19 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
         ("Tarih", "date"), ("Donem", "string"), ("BelgeNo", "int64"),
         ("BelgeKimlik", "string"), ("SatirNo", "int64"), ("KayitAnahtari", "string"),
         ("BelgeTuru", "string"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
+        ("UrunKod", "string"), ("SatisElemaniKod", "int64"),
         ("FaturaTutar", "double"), ("SiparisTutar", "double"), ("AcikSiparisTutar", "double"),
         ("Birim", "string"), ("FaturaMiktar", "double"), ("SiparisMiktar", "double"),
         ("AcikSiparisMiktar", "double"), ("SatirAdedi", "int64"),
     ], """
         WITH Satir AS (
           SELECT N'Fatura' AS Tur, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity,
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity, L.ItemCode,
                  CAST(0 AS decimal(19,6)) AS OpenQty
           FROM dbo.OPCH H JOIN dbo.PCH1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'Sipariş', H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity,
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity, L.ItemCode,
                  CASE WHEN H.DocStatus = 'O' AND L.LineStatus = 'O' THEN L.OpenQty ELSE 0 END
           FROM dbo.OPOR H JOIN dbo.POR1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
         )
@@ -144,6 +150,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
                X.Tur AS BelgeTuru, X.CardCode AS MuhatapKod,
                CONCAT(X.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
                COALESCE(S.SlpName, N'Atanmamış') AS SatisElemani,
+               X.ItemCode AS UrunKod, CONVERT(bigint, X.SlpCode) AS SatisElemaniKod,
                CONVERT(float, CASE WHEN X.Tur = N'Fatura' THEN X.LineTotal ELSE 0 END) AS FaturaTutar,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.LineTotal ELSE 0 END) AS SiparisTutar,
                CONVERT(float, CASE WHEN X.OpenQty > 0 THEN X.LineTotal * X.OpenQty / NULLIF(X.Quantity, 0) ELSE 0 END) AS AcikSiparisTutar,
@@ -158,7 +165,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Firsat": ([
         ("Tarih", "date"), ("Donem", "string"), ("FirsatNo", "int64"),
-        ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"), ("Asama", "string"),
+        ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"), ("SatisElemaniKod", "int64"), ("Asama", "string"),
         ("Durum", "string"), ("Tutar", "double"), ("AgirlikliTutar", "double"),
         ("AcikTutar", "double"), ("Adet", "int64"), ("AcikAdet", "int64"),
     ], """
@@ -167,7 +174,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
                O.OpprId AS FirsatNo,
                O.CardCode AS MuhatapKod,
                CONCAT(O.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
-               COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani,
+               COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani, CONVERT(bigint, O.SlpCode) AS SatisElemaniKod,
                COALESCE(S.Descript, N'Belirsiz') AS Asama,
                CASE O.Status WHEN 'O' THEN N'Açık' WHEN 'W' THEN N'Kazanıldı'
                     WHEN 'L' THEN N'Kaybedildi' ELSE N'Diğer' END AS Durum,
@@ -200,7 +207,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Aktivite": ([
         ("Tarih", "date"), ("Donem", "string"), ("AktiviteNo", "int64"), ("MuhatapKod", "string"), ("Muhatap", "string"),
-        ("SatisElemani", "string"), ("Tur", "string"), ("Durum", "string"),
+        ("SatisElemani", "string"), ("SatisElemaniKod", "int64"), ("Tur", "string"), ("Durum", "string"),
         ("Oncelik", "string"), ("Adet", "int64"), ("AcikAdet", "int64"),
         ("YuksekAdet", "int64"),
     ], """
@@ -208,7 +215,7 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
                CONVERT(char(7), A.CntctDate, 120) AS Donem,
                A.ClgCode AS AktiviteNo, A.CardCode AS MuhatapKod,
                CONCAT(A.CardCode, N' · ', COALESCE(C.CardName, N'Muhatap yok')) AS Muhatap,
-               COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani,
+               COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani, CONVERT(bigint, A.SlpCode) AS SatisElemaniKod,
                CASE A.Action WHEN 'C' THEN N'Telefon' WHEN 'M' THEN N'Toplantı'
                     WHEN 'T' THEN N'Görev' WHEN 'E' THEN N'Not' ELSE N'Diğer' END AS Tur,
                CASE WHEN A.Closed = 'Y' THEN N'Tamamlandı' ELSE N'Açık' END AS Durum,
@@ -419,7 +426,7 @@ def _copy_table(source: pyodbc.Connection, doc: Document, name: str,
     return count
 
 
-def build(output: Path) -> dict[str, int]:
+def build(output: Path, *, semantic: bool = False) -> dict[str, int]:
     """Kaynak DB'ye sadece SELECT yapar; çıktı dosyası hedefte mevcutsa üzerine yazar."""
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -448,7 +455,16 @@ def build(output: Path) -> dict[str, int]:
                 SemanticModel(doc.tanim)
                 counts = {name: _copy_table(connection, doc, name, columns, query)
                           for name, (columns, query) in TABLES.items()}
-                doc.set_report(_report())
+                report = _report()
+                if semantic:
+                    from .semantic_demo import apply_semantic_model
+
+                    apply_semantic_model(doc, report)
+                doc.set_report(report)
+                if semantic:
+                    from .semantic_validation import verify_demo
+
+                    verify_demo(doc)
                 doc.con.execute("CHECKPOINT")
                 doc.save(output)
             finally:
@@ -461,8 +477,9 @@ def build(output: Path) -> dict[str, int]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Maskelenmiş SAP B1 Demo DB'yi Floem BI raporuna aktarır")
     parser.add_argument("output", type=Path, help="Oluşturulacak yerel .floem dosyası")
+    parser.add_argument("--semantic", action="store_true", help="F06 ortak boyutlarını ve FDX ölçülerini ekler")
     args = parser.parse_args()
-    counts = build(args.output)
+    counts = build(args.output, semantic=args.semantic)
     print("Oluşturuldu:", args.output.resolve())
     print(" · ".join(f"{name}: {count:,} satır" for name, count in counts.items()))
 

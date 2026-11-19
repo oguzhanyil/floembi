@@ -87,7 +87,7 @@ planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak; ana sı
 | 1–4 | **F01 → F02 → F03 → F04** | Uygulandı; fiziksel DPI/çoklu monitör son kontrolü bekliyor. |
 | 5 | **F07A: tema/tipografi/boşluk/durum altyapısı ve karşılaştırma** | Uygulandı; [kullanım ve doğrulama](f07a-tema-altyapisi.md). Nihai marka ailesi seçilmedi. |
 | 6 | **F10: PBIP uyumluluk ve kayıp raporu** | Uygulandı; [kullanım ve yedi raporun bulguları](f10-pbip-uyumluluk.md). |
-| 7 | **F06: ortak model ve ölçü geçişi** | Bileşenlere bağlanacak alanların tane düzeyi ve anlamı doğrulanır. |
+| 7 | **F06: ortak model ve ölçü geçişi** | Ortak temel, 29 yerel ölçü ve 135 kaynak ölçünün haritası uygulandı; tam motor/sonuç uyumu açık. [Kapsam ve kalan işler](f06-ortak-model-ve-olcu-gecisi.md). |
 | 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | F07A tokenlarını kullanır; serbest tasarımın düzen temeli. |
 | 9 | **F07B: kullanıcı bileşenleri, marka ve ikon kitaplığı** | F05 üzerinde yeniden kullanılabilir nesneler; ortak stil ve yerel istisna. |
 | 10 | **F08: ekranlara göre düzen varyantları** | Aynı bileşen/ölçü farklı ekran düzenlerinde korunur. |

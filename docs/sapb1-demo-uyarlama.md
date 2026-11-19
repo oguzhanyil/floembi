@@ -1,6 +1,8 @@
 # SAP B1 Demo → Floem BI uyarlaması
 
-**Güncelleme:** F01–F04 ile düzeltilen veri demosu `data/SAPB1Demo-Floem-F01-F04.floem` dosyasıdır.
+**Güncelleme:** Yeni ortak model demosu `data/SAPB1Demo-Floem-F06.floem` dosyasıdır
+(9 sayfa, 13 tablo, 29 FDX ölçüsü). [F06 kapsamı ve kalan ölçü işleri](f06-ortak-model-ve-olcu-gecisi.md).
+F01–F04 ile düzeltilen önceki veri demosu `data/SAPB1Demo-Floem-F01-F04.floem` dosyasıdır.
 Önceki dosyalar korunur. Ölçü kapsamı, yeni kontroller ve tasarım sırası
 [uygulama notunda](f01-f04-uygulama-ve-tasarim-sirasi.md); aşağıdaki ilk aktarım bilgileri tarihsel kayıttır.
 
