@@ -2,10 +2,10 @@ import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualSt
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
   visualMotion, visualStyle,
-  visualIsVisible, rowActionValue,
+  visualIsVisible, rowActionValue, ReportViewport,
   type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
-import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 
 import { FIELD_MIME, readPayload, type FieldPayload } from "./fields";
 
@@ -121,21 +121,9 @@ export function PageCanvas({
   columnOf: (table: string, column: string) => ModelColumn | undefined;
   run: QueryFn;
 }) {
-  const outer = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dropHover, setDropHover] = useState<string | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
-
-  useLayoutEffect(() => {
-    const el = outer.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const scale = box.w ? Math.max(0.2, Math.min((box.w - 32) / page.width, (box.h - 32) / page.height)) : 1;
 
   function start(e: RPointerEvent, v: Visual, mode: Drag["mode"]) {
     if (e.button !== 0) return;
@@ -151,7 +139,7 @@ export function PageCanvas({
     setDrag({ id: v.id, mode, sx: e.clientX, sy: e.clientY, orig: v, moved: false });
   }
 
-  function move(e: RPointerEvent) {
+  function move(e: RPointerEvent, scale: number) {
     if (!drag) return;
     const dx = (e.clientX - drag.sx) / scale;
     const dy = (e.clientY - drag.sy) / scale;
@@ -195,8 +183,9 @@ export function PageCanvas({
 
 
   return (
-    <div className="page-outer" ref={outer} onPointerDown={() => { if (!previewActions) onSelect(null); setCross(null); }}>
-      {banner}
+    <ReportViewport width={page.width} height={page.height} banner={banner}
+      onBackground={() => { if (!previewActions) onSelect(null); setCross(null); }}>
+      {(scale) => (
       <div
         className="page"
         style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
@@ -268,12 +257,12 @@ export function PageCanvas({
               <div
                 className="visual-head"
                 onPointerDown={(e) => start(e, v, "move")}
-                onPointerMove={move}
+                onPointerMove={(e) => move(e, scale)}
                 onPointerUp={end}
                 onPointerCancel={end}
                 title="Taşımak için sürükleyin"
               >
-                <span className="visual-title">{title}</span>
+                <span className="visual-title" title={title}>{title}</span>
                 <DrillThroughButton targets={drillTargets(pages, page.id, v, cross)} onGo={onDrillThrough} />
                 <button
                   className="visual-del"
@@ -308,7 +297,7 @@ export function PageCanvas({
                 <div
                   className="visual-resize"
                   onPointerDown={(e) => start(e, v, "resize")}
-                  onPointerMove={move}
+                  onPointerMove={(e) => move(e, scale)}
                   onPointerUp={end}
                 onPointerCancel={end}
                   title="Boyutlandır"
@@ -321,7 +310,7 @@ export function PageCanvas({
             </div>
           );
         })}
-      </div>
-    </div>
+      </div>)}
+    </ReportViewport>
   );
 }

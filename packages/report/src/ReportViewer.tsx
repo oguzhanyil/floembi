@@ -1,5 +1,6 @@
 import type { FilterRef, ReportDefinition, Visual, VisualAction, VisualState } from "@floem/client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { ReportViewport } from "./ReportViewport";
 import {
   DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
   type CrossFilter,
@@ -31,22 +32,11 @@ export function ReportViewer({
   const [visibility, setVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [actionRev, setActionRev] = useState(0);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const outer = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-
-  useLayoutEffect(() => {
-    const el = outer.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
   if (!page) return <div className="viewer-empty">Bu raporda sayfa yok.</div>;
   // Power BI "Sayfaya sığdır" görünümü
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
-  const scale = box.w ? Math.max(0.2, Math.min((box.w - 32) / page.width, (box.h - 32) / page.height)) : 1;
 
   function runAction(visual: Visual, chosen?: VisualAction, source?: ActionValue) {
     const action = resolveVisualAction(visual, report.pages, page.id, chosen, source);
@@ -87,8 +77,7 @@ export function ReportViewer({
 
   return (
     <div className="viewer">
-      <div className="viewer-stage" ref={outer} onClick={() => setCross(null)}>
-        {drill && pageFilters.length > 0 && (
+      <ReportViewport width={page.width} height={page.height} onBackground={() => setCross(null)} banner={drill && pageFilters.length > 0 && (
           <DrillBanner
             label={drill.label}
             onBack={() => {
@@ -97,7 +86,8 @@ export function ReportViewer({
               setCross(null);
             }}
           />
-        )}
+        )}>
+        {(scale) => (
         <div className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {page.visuals.filter((v) => visualIsVisible(v, visibility[page.id] ?? {})).map((v) => {
@@ -113,7 +103,7 @@ export function ReportViewer({
                 onClick={(e) => { e.stopPropagation(); if (v.type !== "button" && v.format.action) runAction(v); }}
               >
                 <div className="visual-head">
-                  <span className="visual-title">{title}</span>
+                  <span className="visual-title" title={title}>{title}</span>
                   <DrillThroughButton
                     targets={drillTargets(report.pages, page.id, v, cross)}
                     onGo={(t) => {
@@ -144,8 +134,8 @@ export function ReportViewer({
               </div>
             );
           })}
-        </div>
-      </div>
+        </div>)}
+      </ReportViewport>
       {report.pages.length > 1 && (
         <nav className="page-tabs" aria-label="Sayfalar">
           {report.pages.map((p) => (

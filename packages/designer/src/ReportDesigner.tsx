@@ -9,6 +9,7 @@ import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
 import { moveWellItem } from "./wells";
+import { DesignerPanels } from "./DesignerPanels";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -470,7 +471,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           </button>
         </nav>
       </div>
-      <VisualizationsPane
+      <DesignerPanels><VisualizationsPane
         page={page}
         pages={report.pages}
         tables={tables}
@@ -487,7 +488,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           if (source) updateVisual(moveWellItem(selected, source, from.index, to, index, columnOf));
         }}
       />
-      <FieldsPane tables={tables} visual={selected} onToggle={toggleField} onEditMeasure={host.onEditMeasure} />
+      <FieldsPane tables={tables} visual={selected} onToggle={toggleField} onEditMeasure={host.onEditMeasure} /></DesignerPanels>
       {actionNotice && <div className="v-action-notice" role="status"><span>{actionNotice}</span>
         <button type="button" aria-label="Mesajı kapat" onClick={() => setActionNotice(null)}>✕</button></div>}
     </div>

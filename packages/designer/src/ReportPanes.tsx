@@ -356,6 +356,7 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
         </label>
         <label>Satır aralığı<input type="number" min={1} max={2.5} step={0.1} value={f.lineHeight ?? 1.4}
           onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
+        {f.textOverflow === "grow" && <p className="hint">Yükseklik içerikle büyür; diğer nesnelerin konumu korunur.</p>}
         <label>
           Hizalama
           <select value={(f.align as string) || "left"} onChange={(e) => set({ align: e.target.value })}>

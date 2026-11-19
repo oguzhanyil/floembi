@@ -72,7 +72,36 @@ try {
   assert(await evaluate('document.querySelector("dialog[open]") !== null'));
   await evaluate('document.querySelector("dialog[open]").close(); window.repairVisual(); document.querySelector("[data-fixture=broken] .v-error button").click(); document.querySelector("[data-fixture=rejected] .v-error button").click()');
   await waitFor('document.querySelector("[data-fixture=broken] .v-card-value")?.textContent === "42" && document.querySelector("[data-fixture=rejected] .v-card-value")?.textContent === "42"');
-  console.log("PASS: gerçek Chromium; metin yerleşimi, tam metin, sıfır/boş ayrımı, görsel hata yalıtımı ve yeniden deneme.");
+  await evaluate('window.setTestMode("viewer")');
+  await waitFor('document.querySelector(".viewer .canvas-zoom")');
+  for (const [width, height, deviceScaleFactor] of [[1366,768,1], [1920,1080,1.25], [2560,1440,1.5], [1024,768,1.25], [768,1024,1.5], [390,844,2]]) {
+    await call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor, mobile: false });
+    await delay(150);
+    assert(await evaluate('(()=>{const e=document.querySelector(".report-scroll");return e.scrollWidth<=e.clientWidth+1 && e.scrollHeight<=e.clientHeight+1})()'), `Sayfaya sığdır: ${width}`);
+  }
+  await call("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+  await evaluate('document.querySelector(".canvas-zoom button[title]").click()');
+  await waitFor('Math.abs(document.querySelector(".page").getBoundingClientRect().width-1280)<1');
+  assert(await evaluate('(()=>{const e=document.querySelector(".report-scroll");return e.scrollHeight>e.clientHeight})()'));
+  await evaluate('(()=>{const e=document.querySelector(".canvas-zoom select");e.value="width";e.dispatchEvent(new Event("change",{bubbles:true}))})()');
+  await waitFor('Math.abs(document.querySelector(".page").getBoundingClientRect().width-(document.querySelector(".report-scroll").clientWidth-32))<2');
+  await evaluate('window.setTestMode("designer")');
+  await waitFor('document.querySelector(".designer-panes [role=separator]")');
+  const oldWidth = await evaluate('document.querySelector(".designer-panes").getBoundingClientRect().width');
+  await evaluate('document.querySelector(".pane-resizer.total").dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowLeft",bubbles:true}))');
+  await waitFor(`document.querySelector(".designer-panes").getBoundingClientRect().width > ${oldWidth}`);
+  await call("Emulation.setDeviceMetricsOverride", { width: 768, height: 768, deviceScaleFactor: 1.25, mobile: false });
+  await waitFor('getComputedStyle(document.querySelector(".designer-panes")).position === "absolute"');
+  assert(await evaluate('document.querySelector(".report-main").getBoundingClientRect().width >= 760'));
+  await evaluate('document.querySelector(".panes-toggle").click();document.querySelector(".canvas-zoom button[title]").click()');
+  await waitFor('getComputedStyle(document.querySelector(".designer-panes")).display === "none"');
+  await evaluate('document.querySelector(".report-scroll").scrollTo(0,0)');
+  const handle = await evaluate('(()=>{const r=document.querySelector(".visual-head").getBoundingClientRect();return {x:r.x+30,y:r.y+10}})()');
+  await call("Input.dispatchMouseEvent", { type: "mousePressed", ...handle, button: "left", clickCount: 1, modifiers: 1 });
+  await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: handle.x+40, y: handle.y+20, button: "left", buttons: 1, modifiers: 1 });
+  await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: handle.x+40, y: handle.y+20, button: "left", clickCount: 1, modifiers: 1 });
+  await waitFor('window.savedReport?.pages[0].visuals[0].x === 140 && window.savedReport?.pages[0].visuals[0].y === 120');
+  console.log("PASS: metin/taşma, sıfır/boş, hata yalıtımı/yeniden deneme; 6 viewport/DPR, zoom, panel çekmecesi/boyutu ve gerçek pointer ile nesne taşıma.");
   await call("Browser.close");
 } finally {
   ws?.close();

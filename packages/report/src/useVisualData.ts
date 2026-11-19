@@ -205,7 +205,7 @@ export function useQueryData(query: VisualQuery | null, revision: string, run: Q
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, run]);
 
-  return query && data.state === "empty" ? { state: "loading" } : data;
+  return !query ? { state: "empty" } : data.state === "empty" ? { state: "loading" } : data;
 }
 
 export interface MatrixPart {
@@ -242,5 +242,5 @@ export function useMatrixData(v: Visual, extra: FilterRef[], revision: string, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, run]);
 
-  return queries && data.state === "empty" ? { state: "loading" } : data;
+  return !queries ? { state: "empty" } : data.state === "empty" ? { state: "loading" } : data;
 }

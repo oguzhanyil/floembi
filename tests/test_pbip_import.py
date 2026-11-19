@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import tempfile
 import zipfile
-
-from floem_bi.pbip_import import _text
+from pathlib import Path
+from floem_bi.document import Document
+from floem_bi.pbip_import import _text, import_report
 
 
 def test_import_small_text_preserves_source_size_and_font():
@@ -17,10 +18,6 @@ def test_import_small_text_preserves_source_size_and_font():
     assert style["fontSize"] == 12
     assert style["fontFamily"] == "Segoe UI"
     assert style["textOverflow"] == "wrap"
-from pathlib import Path
-
-from floem_bi.document import Document
-from floem_bi.pbip_import import import_report
 
 
 def _write(path: Path, value: dict) -> None:

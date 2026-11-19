@@ -1,7 +1,19 @@
 /* ---- Rapor görünümü ---- */
-.report-view { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 260px 240px; height: 100%; min-height: 0; }
+.report-view { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; height: 100%; min-height: 0; min-width: 0; container-type: inline-size; }
 .report-view.canvas-focus { grid-template-columns: minmax(0, 1fr); }
-.report-view.canvas-focus > .viz-pane, .report-view.canvas-focus > .data-pane { display: none; }
+.report-view.canvas-focus > .designer-panes { display: none; }
+.designer-panes { position: relative; display: grid; grid-template-columns: minmax(0, var(--viz-pane-width)) minmax(0, 1fr); min-height: 0; z-index: 50; background: var(--surface, #fff); }
+.designer-panes > .viz-pane, .designer-panes > .data-pane { min-width: 0; min-height: 0; overflow: auto; }
+.pane-resizer { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 55; cursor: col-resize; touch-action: none; }
+.pane-resizer.total { left: -3px; }
+.pane-resizer.split { left: calc(var(--viz-pane-width) - 3px); }
+.pane-resizer:hover, .pane-resizer:focus-visible { background: var(--accent, #0866e8); opacity: .5; }
+.designer-panes.stacked { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.designer-panes.stacked .pane-resizer { display: none; }
+@container (max-width: 999px) {
+  .report-main { grid-column: 1 / -1; }
+  .designer-panes { position: absolute; right: 0; top: 0; bottom: 0; max-width: 100%; box-shadow: -8px 0 24px #07142622; }
+}
 .report-main { display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; background: #e9e8e6; }
 .canvas-shell { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
 .page-outer { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; height: 100%; }
@@ -12,7 +24,7 @@
 .panes-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .canvas-mode-toggle { position: absolute; z-index: 40; left: 12px; top: 12px; }
 .canvas-mode-toggle.with-drill { top: 50px; }
-.report-view > .data-pane h3 { padding-right: 52px; }
+.designer-panes > .data-pane h3 { padding-right: 52px; }
 .fmt-actions { display: flex; gap: 5px; }
 .fmt-actions button { flex: 1; padding: 6px 3px; font-size: 11px; }
 .fmt-actions button:disabled { opacity: .4; }
