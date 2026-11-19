@@ -139,6 +139,16 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 parametrik tablo araçları
+
+Biçim → AG Grid tablo bölümünde sütun filtreleri, Tabloda ara, sütun seçici, CSV indirme ve
+satır sayısı her nesne için ayrı ayarlanır. `VisualFormat` içindeki `gridFilters`, `gridSearch`,
+`gridColumnChooser`, `gridExport`, `gridRowCount` Desktop/web ortak bileşeninde uygulanır;
+eksik değerler açık kabul edilir. Filtre/arama kapatıldığında etkin koşul temizlenir, sütun
+seçici kapatıldığında gizlenen sütunlar geri gelir. Tüm üst araçlar kapalıysa araç çubuğu kalkar.
+Chromium duman testi arama ve sütun filtresini uygulayıp kapatarak satırların geri geldiğini,
+sütun görünürlüğünün geri yüklendiğini ve araçların yeniden açıldığını doğrular.
+
 ### 19.11.2026 F01–F04 uygulandı
 
 [Uygulama ve yeni tasarım sırası](docs/f01-f04-uygulama-ve-tasarim-sirasi.md): metin taşma seçenekleri,

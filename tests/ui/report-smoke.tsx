@@ -1,8 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { StrictMode, useState } from "react";
-import { VisualBody, visualStyle, ReportViewer } from "../../packages/report/src/index";
+import { VisualBody, visualStyle, ReportViewer, AgDataGrid } from "../../packages/report/src/index";
 import { ReportDesigner } from "../../packages/designer/src/ReportDesigner";
-import type { ReportDefinition, Visual, VisualResult } from "../../packages/client/src/index";
+import type { ReportDefinition, Visual, VisualFormat, VisualResult } from "../../packages/client/src/index";
 
 const result = (value: number | null): VisualResult => ({
   columns: [{ name: "Tutar", kind: "value", type: "double" }], rows: [[value]], truncated: false,
@@ -32,9 +32,19 @@ const report: ReportDefinition = { version: 1, pages: [{ id: "p1", name: "Deneme
 ] }] };
 const save = async (value: ReportDefinition) => { Object.assign(window, { savedReport: value }); };
 const runReport = async () => result(42);
+const gridResult: VisualResult = {
+  columns: [{ name: "Müşteri", kind: "group", type: "string" }, { name: "Tutar", kind: "value", type: "double" }],
+  rows: [["Alpha", 1], ["Beta", 2], ["Gamma", 3]], total: [6], truncated: false,
+};
+function GridFixture() {
+  const [format, setFormat] = useState<VisualFormat>({});
+  Object.assign(window, { setGridOptions: (patch: VisualFormat) => setFormat((old) => ({ ...old, ...patch })) });
+  return <div className="grid-fixture" style={{ width: 700, height: 400 }}><AgDataGrid result={gridResult} format={format} /></div>;
+}
 function App() {
   const [mode, setMode] = useState("fixtures");
   Object.assign(window, { setTestMode: setMode });
+  if (mode === "grid") return <GridFixture />;
   if (mode !== "fixtures") return <div className="studio" style={{ height: "100vh" }}>
     {mode === "viewer" ? <ReportViewer report={report} run={runReport} /> :
       <ReportDesigner host={{ report, tables: [], dataRev: "test", run: runReport, save, onError: console.error }} />}

@@ -48,6 +48,13 @@ export function AgDataGrid({
   const hasSel = selected !== undefined || selectedKey !== undefined;
   const rowAction = format.rowAction;
   const actionIcon = safeActionIcon(rowAction?.iconData);
+  const filtersEnabled = format.gridFilters !== false;
+  const searchEnabled = format.gridSearch !== false;
+  const columnsEnabled = format.gridColumnChooser !== false;
+  const exportEnabled = format.gridExport !== false;
+  const countEnabled = format.gridRowCount !== false;
+  const activeSearch = searchEnabled ? search : "";
+  const showTools = searchEnabled || columnsEnabled || exportEnabled || countEnabled;
 
   const rowData = useMemo(() => rows.map((row) => Object.fromEntries(row.map((value, i) => [`c${i}`, value])) as GridRow), [rows]);
   const pinnedBottomRowData = useMemo(() => total ? [Object.fromEntries(columns.map((c, i) => [
@@ -57,10 +64,10 @@ export function AgDataGrid({
     ...columns.map((c: VisualResultColumn, i): ColDef<GridRow> => ({
       colId: `c${i}`, field: `c${i}`, headerName: c.name,
       minWidth: 88, width: Math.max(110, Math.min(280, c.name.length * 8 + 75)),
-      filter: isNumericType(c.type) ? "agNumberColumnFilter" : "agTextColumnFilter",
-      floatingFilter: format.gridFilters !== false,
+      filter: filtersEnabled ? (isNumericType(c.type) ? "agNumberColumnFilter" : "agTextColumnFilter") : false,
+      floatingFilter: filtersEnabled,
       sortable: true, resizable: true,
-      hide: hidden.includes(i),
+      hide: columnsEnabled && hidden.includes(i),
       pinned: i === 0 && format.gridPinFirstColumn ? "left" : undefined,
       sort: sort?.index === i ? (sort.desc ? "desc" : "asc") : undefined,
       cellClass: c.kind === "value" ? "v-ag-number" : undefined,
@@ -80,10 +87,21 @@ export function AgDataGrid({
         </button>;
       },
     } satisfies ColDef<GridRow>] : []),
-  ], [columns, hidden, format.gridFilters, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
+  ], [columns, hidden, filtersEnabled, columnsEnabled, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
 
   // Grid API'yi yalnız gridReady olayından sonra kullan.
   useEffect(() => { gridApi.current?.redrawRows(); }, [selected, selectedKey, rows]);
+  // Kapatılan araçlar görünmez bir filtre/sütun seçimi bırakmaz.
+  useEffect(() => {
+    if (!filtersEnabled) {
+      gridApi.current?.setFilterModel(null);
+      setColumnFiltered(false);
+    }
+  }, [filtersEnabled]);
+  useEffect(() => { if (!searchEnabled) setSearch(""); }, [searchEnabled]);
+  useEffect(() => {
+    if (!columnsEnabled) { setColumnsOpen(false); setHidden([]); }
+  }, [columnsEnabled]);
   const exportCsv = () => gridApi.current?.exportDataAsCsv({
     fileName: "floem-tablo.csv",
     skipPinnedBottom: true,
@@ -94,29 +112,29 @@ export function AgDataGrid({
   });
 
   return <div className="v-ag-wrap">
-    <div className="v-ag-tools" onPointerDown={(e) => e.stopPropagation()}>
-      <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder="Tabloda ara" aria-label="Tabloda ara" />
-      <div className="v-ag-column-menu">
+    {showTools && <div className="v-ag-tools" onPointerDown={(e) => e.stopPropagation()}>
+      {searchEnabled && <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+        placeholder="Tabloda ara" aria-label="Tabloda ara" />}
+      {columnsEnabled && <div className="v-ag-column-menu">
         <button type="button" onClick={() => setColumnsOpen(!columnsOpen)} aria-expanded={columnsOpen}>Sütunlar ▾</button>
         {columnsOpen && <div className="v-ag-column-list">
           {columns.map((c, i) => <label key={i}><input type="checkbox" checked={!hidden.includes(i)}
             onChange={(e) => setHidden((old) => e.target.checked ? old.filter((x) => x !== i) : [...old, i])} />{c.name}</label>)}
         </div>}
-      </div>
-      <button type="button" onClick={exportCsv} title="Görünen sütunları CSV olarak indir">CSV ↓</button>
-      <span className="v-ag-count">{displayCount.toLocaleString("tr-TR")}{displayCount !== rows.length ? ` / ${rows.length.toLocaleString("tr-TR")}` : ""} satır</span>
-    </div>
+      </div>}
+      {exportEnabled && <button type="button" onClick={exportCsv} title="Görünen sütunları CSV olarak indir">CSV ↓</button>}
+      {countEnabled && <span className="v-ag-count">{displayCount.toLocaleString("tr-TR")}{displayCount !== rows.length ? ` / ${rows.length.toLocaleString("tr-TR")}` : ""} satır</span>}
+    </div>}
     <div className="v-ag-grid">
       <AgGridProvider modules={modules}>
         <AgGridReact<GridRow> theme={theme} rowData={rowData} columnDefs={columnDefs}
           onGridReady={(event) => { gridApi.current = event.api; }}
           onGridPreDestroyed={() => { gridApi.current = null; }}
-          defaultColDef={{ suppressHeaderMenuButton: true }} quickFilterText={search}
-          rowHeight={30} headerHeight={34} floatingFiltersHeight={32}
+          defaultColDef={{ suppressHeaderMenuButton: true }} quickFilterText={activeSearch}
+          rowHeight={30} headerHeight={34} floatingFiltersHeight={filtersEnabled ? 32 : 0}
           pagination={format.gridPagination === true} paginationPageSize={Number(format.gridPageSize) || 100}
           paginationPageSizeSelector={false} animateRows={false}
-          pinnedBottomRowData={search || columnFiltered || format.showTotals === false ? [] : pinnedBottomRowData}
+          pinnedBottomRowData={activeSearch || (filtersEnabled && columnFiltered) || format.showTotals === false ? [] : pinnedBottomRowData}
           getRowClass={(params) => {
             if (params.node.rowPinned) return "v-ag-total";
             const row = params.data;

@@ -382,6 +382,12 @@ export interface VisualFormat {
   lineHeight?: number;
   fontFamily?: string;
   showTotals?: boolean;
+  /** Tablo araçları: belirtilmemiş seçenekler eski raporlarda açık kalır. */
+  gridFilters?: boolean;
+  gridSearch?: boolean;
+  gridColumnChooser?: boolean;
+  gridExport?: boolean;
+  gridRowCount?: boolean;
   showTitle?: boolean;
   backgroundColor?: string;
   borderColor?: string;

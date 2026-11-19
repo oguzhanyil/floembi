@@ -152,7 +152,12 @@ bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalışt
 - **Görselleştirmeler → Veri → Tablo**, AG Grid Community kullanır. Sütun başlığından sıralayın,
   başlığın altındaki alanlarla filtreleyin, sütunları sürükleyip yeniden sıralayın veya kenarından
   genişletin. Üst araç çubuğunda genel arama, sütun göster/gizle ve CSV indirme bulunur.
-  **Biçim → AG Grid tablo** altında ilk sütunu sabitleme ve sayfalama ayarları vardır.
+  **Biçim → AG Grid tablo** altında her tablo için **Sütun filtreleri**, **Tabloda ara**,
+  **Sütun seçici**, **CSV indirme** ve **Satır sayısını göster** ayrı ayrı açılıp kapatılır.
+  İlk sütunu sabitleme, genel toplam ve sayfalama ayarları da buradadır. Arama veya sütun
+  filtreleri kapatılınca ilgili etkin filtre temizlenir; sütun seçici kapatılınca tüm sütunlar
+  yeniden görünür. Tüm üst araçlar kapalıysa araç çubuğu yer kaplamaz. Ayarlar raporla kaydedilir
+  ve yayımlanan web raporunda da uygulanır; eski raporlarda bu araçlar varsayılan olarak açıktır.
 - **Görselleştirmeler → Veri → Ağaç tablo (Tree Grid)** görseline iki veya daha fazla alanı
   **Hiyerarşi düzeyleri** kutusuna sıralı koyun; en az bir ölçü/değer ekleyin. Düzeyleri tek tek
   veya topluca açıp kapatın, ağaçta arayın, kardeş düğümleri ada/değere göre sıralayın ve görünen

@@ -72,6 +72,27 @@ try {
   assert(await evaluate('document.querySelector("dialog[open]") !== null'));
   await evaluate('document.querySelector("dialog[open]").close(); window.repairVisual(); document.querySelector("[data-fixture=broken] .v-error button").click(); document.querySelector("[data-fixture=rejected] .v-error button").click()');
   await waitFor('document.querySelector("[data-fixture=broken] .v-card-value")?.textContent === "42" && document.querySelector("[data-fixture=rejected] .v-card-value")?.textContent === "42"');
+  await evaluate('window.setTestMode("grid")');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır" && document.querySelector(".ag-floating-filter input")');
+  const input = (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+  await input('.v-ag-tools input[type=search]', 'Alpha');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "1 / 3 satır"');
+  await evaluate('window.setGridOptions({gridSearch:false})');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır" && !document.querySelector(".v-ag-tools input[type=search]")');
+  await input('.ag-floating-filter input', 'Beta');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "1 / 3 satır"');
+  await evaluate('window.setGridOptions({gridFilters:false})');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır" && !document.querySelector(".ag-floating-filter input")');
+  await evaluate('document.querySelector(".v-ag-column-menu > button").click()');
+  await waitFor('document.querySelector(".v-ag-column-list input")');
+  await evaluate('document.querySelector(".v-ag-column-list input").click()');
+  await waitFor('!document.querySelector(".ag-header-cell[col-id=c0]")');
+  await evaluate('window.setGridOptions({gridColumnChooser:false,gridExport:false,gridRowCount:false})');
+  await waitFor('!document.querySelector(".v-ag-tools") && document.querySelector(".ag-header-cell[col-id=c0]")');
+  await evaluate('window.setGridOptions({gridSearch:true,gridFilters:true,gridColumnChooser:true,gridExport:true,gridRowCount:true})');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır" && document.querySelector(".ag-floating-filter input")');
+  assert.equal(await evaluate('document.querySelector(".v-ag-tools input[type=search]").value'), "");
+  assert.equal(await evaluate('document.querySelector(".ag-floating-filter input").value'), "");
   await evaluate('window.setTestMode("viewer")');
   await waitFor('document.querySelector(".viewer .canvas-zoom")');
   for (const [width, height, deviceScaleFactor] of [[1366,768,1], [1920,1080,1.25], [2560,1440,1.5], [1024,768,1.25], [768,1024,1.5], [390,844,2]]) {
@@ -103,7 +124,7 @@ try {
   await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: handle.x+40, y: handle.y+20, button: "left", buttons: 1, modifiers: 1 });
   await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: handle.x+40, y: handle.y+20, button: "left", clickCount: 1, modifiers: 1 });
   await waitFor('window.savedReport?.pages[0].visuals[0].x === 140 && window.savedReport?.pages[0].visuals[0].y === 120');
-  console.log("PASS: metin/taşma, sıfır/boş, hata yalıtımı/yeniden deneme; 6 viewport/DPR, zoom, panel çekmecesi/boyutu ve gerçek pointer ile nesne taşıma.");
+  console.log("PASS: tablo araçları ve kapatılan arama/filtrenin temizlenmesi; metin/taşma, sıfır/boş, hata yalıtımı; 6 viewport/DPR, zoom, panel ve nesne taşıma.");
   await call("Browser.close");
 } finally {
   ws?.close();

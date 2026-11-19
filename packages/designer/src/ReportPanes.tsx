@@ -527,6 +527,15 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
               onChange={(e) => set({ showTotals: e.target.checked })} />Genel toplamı göster</label>
             <label className="inline"><input type="checkbox" checked={f.gridFilters !== false}
               onChange={(e) => set({ gridFilters: e.target.checked })} />Sütun filtreleri</label>
+            <label className="inline"><input type="checkbox" checked={f.gridSearch !== false}
+              onChange={(e) => set({ gridSearch: e.target.checked })} />Tabloda ara</label>
+            <label className="inline"><input type="checkbox" checked={f.gridColumnChooser !== false}
+              onChange={(e) => set({ gridColumnChooser: e.target.checked })} />Sütun seçici</label>
+            <label className="inline"><input type="checkbox" checked={f.gridExport !== false}
+              onChange={(e) => set({ gridExport: e.target.checked })} />CSV indirme</label>
+            <label className="inline"><input type="checkbox" checked={f.gridRowCount !== false}
+              onChange={(e) => set({ gridRowCount: e.target.checked })} />Satır sayısını göster</label>
+            <p className="hint">Arama veya sütun filtreleri kapatılınca etkin filtreleri temizlenir.</p>
             <label className="inline"><input type="checkbox" checked={f.gridPinFirstColumn === true}
               onChange={(e) => set({ gridPinFirstColumn: e.target.checked })} />İlk sütunu sabitle</label>
             <label className="inline"><input type="checkbox" checked={f.gridPagination === true}
