@@ -139,6 +139,19 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 F07A tema altyapısı uygulandı
+
+[Kullanım, sözleşme ve kontroller](docs/f07a-tema-altyapisi.md). Beş aile × açık/koyu tema,
+uygulama/rapor ayrımı, dosyada sürümlü renk anlık görüntüsü, yerel nesne istisnaları ve Temadan al,
+yoğunluk ve azaltılmış hareket eklendi. Uygulama seçicisi Desktop başlığında ve web giriş/üst
+çubuğunda; rapor seçicisi Görselleştirmeler panelindedir. Karşılaştırma gerçek kart/grafik/grid/ağaç
+bileşenleriyle aynı veriyi gösterir. Tema ailesi marka kararı olarak kesinleştirilmedi.
+Kaynaklar `packages/report/src/theme.tsx`, `ThemeControls.tsx`, `theme.css` ve Python
+`report/schema.py:ThemeSnapshot`. Stil değerleri çizim anında çözülür, nesnelere kopyalanmaz.
+20 hedefli pytest, Chromium tema/kontrast/kalıcılık ve önceki UI regresyonları, typecheck,
+Desktop/web derlemeleri geçti. Fiziksel DPI ve bütün ürün ekranlarının görsel onayı bekliyor.
+**Sıradaki ana iş F10: PBIP uyumluluk ve kayıp raporu**, ardından F06 → F05 → F07B.
+
 ### 19.11.2026 matris hiyerarşisi ve Excel (F09)
 
 `matrix.tsx` ayrı satır sütunları ve birleşik çok düzeyli sütun başlıkları gösterir.
@@ -215,8 +228,9 @@ Yeni örnek `data/SAPB1Demo-Floem-F01-F04.floem`; 8 sayfa/150 nesne/83.218 satı
 Boş verili taslak `data/SAPB1Demo-Taslak-F01-F04.floem`. Eski dosyalar korunuyor; dış rapor yayımlanmadı.
 20 hedefli pytest, typecheck, Desktop/web derlemesi ve `node tests/ui/run-smoke.mjs` geçti.
 Chromium viewport/DPR simülasyonu yapıldı; fiziksel Windows DPI/çoklu monitör denemesi bekliyor.
-Marka eki ve Y logosu incelendi: **sıradaki iş F07A tema altyapısı/5 palet × açık-koyu karşılaştırması**,
-ardından F10, F06, F05 ve F07B kullanıcı bileşenleri. Renk ailesi henüz seçilmedi; marka adı değişmedi.
+Marka eki ve Y logosu incelendi. Bu teslimden sonra F07A tema altyapısı/5 palet × açık-koyu
+karşılaştırması uygulandı; sırada F10, F06, F05 ve F07B kullanıcı bileşenleri var.
+Renk ailesi henüz seçilmedi; marka adı değişmedi.
 
 ### 19.11.2026 rapor mantığı ve tasarım incelemesi
 

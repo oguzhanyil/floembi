@@ -88,8 +88,26 @@ class Page(_B):
     drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
 
 
+class ThemeSnapshot(_B):
+    id: str = Field(min_length=1, max_length=80)
+    version: Literal[1] = 1
+    mode: Literal["light", "dark"]
+    colors: dict[str, str] = Field(max_length=40)
+    series: list[str] = Field(min_length=1, max_length=16)
+    density: Literal["compact", "comfortable"] = "compact"
+    reducedMotion: bool = False
+
+    @model_validator(mode="after")
+    def _colors(self) -> "ThemeSnapshot":
+        import re
+        if any(not re.fullmatch(r"#[0-9a-fA-F]{6}", c) for c in [*self.colors.values(), *self.series]):
+            raise ValueError("Tema renkleri #RRGGBB biçiminde olmalı")
+        return self
+
+
 class Report(_B):
     version: int = 1
+    theme: ThemeSnapshot | None = None
     pages: list[Page] = Field(default_factory=list)
 
     @model_validator(mode="after")

@@ -17,13 +17,13 @@ const theme = themeQuartz.withParams({
   fontFamily: '"Segoe UI", system-ui, sans-serif',
   fontSize: 12,
   spacing: 5,
-  rowHeight: 30,
   headerHeight: 34,
-  foregroundColor: "#202d3e",
-  backgroundColor: "#ffffff",
-  headerBackgroundColor: "#f4f7fb",
-  borderColor: "#dce3ed",
-  accentColor: "#2563eb",
+  foregroundColor: "var(--text, #202d3e)",
+  backgroundColor: "var(--surface, #ffffff)",
+  headerBackgroundColor: "var(--surface-2, #f4f7fb)",
+  borderColor: "var(--border, #dce3ed)",
+  accentColor: "var(--accent, #2563eb)",
+  rowHeight: "var(--row-height, 30px)",
 });
 
 /** Community tablosu; sağ tık ve dışa aktarma Floem tarafından sağlanır. */

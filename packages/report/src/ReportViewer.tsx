@@ -1,3 +1,4 @@
+import { ReportThemeScope, themedVisual } from "./theme";
 import type { FilterRef, ReportDefinition, Visual, VisualAction, VisualState } from "@floem/client";
 import { useState } from "react";
 import { ReportViewport } from "./ReportViewport";
@@ -89,7 +90,7 @@ export function ReportViewer({
           />
         )}>
         {(scale) => (
-        <div className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
+        <ReportThemeScope theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {page.visuals.filter((v) => visualIsVisible(v, visibility[page.id] ?? {})).map((v) => {
             const title = visualTitle(v);
@@ -99,7 +100,7 @@ export function ReportViewer({
                 key={v.id}
                 data-visual-id={v.id}
                 className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
-                style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
+                style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v, report.theme)) }}
                 role={v.format.action && v.type !== "button" ? "button" : undefined}
                 tabIndex={0}
                 onKeyDown={(e) => { if (v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); runAction(v); } }}
@@ -138,7 +139,7 @@ export function ReportViewer({
               </VisualContextMenu>
             );
           })}
-        </div>)}
+        </ReportThemeScope>)}
       </ReportViewport>
       {report.pages.length > 1 && (
         <nav className="page-tabs" aria-label="Sayfalar">

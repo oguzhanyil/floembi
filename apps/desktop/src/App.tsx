@@ -1,3 +1,4 @@
+import { ApplicationThemeControl } from "@floem/report";
 import type { ConnectResult, Connection, ImportItem, ViewAs } from "@floem/client";
 import { useCallback, useEffect, useState } from "react";
 import { ClientProvider, toUiError, useClient } from "./api";
@@ -118,6 +119,7 @@ function Shell() {
           {doc?.dirty && <span className="dirty" title="Kaydedilmemiş değişiklikler var"> ●</span>}
         </span>
         {doc?.path && <span className="doc-path">{doc.path}</span>}
+      <ApplicationThemeControl />
       </header>
 
       <nav className="ribbon" aria-label="Giriş">

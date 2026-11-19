@@ -1,3 +1,4 @@
+import { ApplicationThemeControl } from "@floem/report";
 import {
   FloemApiError, type DatasetBindings, type DatasetDetails, type GatewaySource, type GatewaySourceStatus, type RefreshRun,
   type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
@@ -99,7 +100,7 @@ function Login() {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand-lg">floembi.app</div>
+        <div className="brand-lg">floembi.app</div><ApplicationThemeControl />
         <h1>Oturum açın</h1>
         <label>
           E-posta
@@ -138,7 +139,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="topbar">
         <Link to="/" className="brand">floembi.app</Link>
         <span className="spacer" />
-        <span className="who">{user?.name} · {user?.email}</span>
+        <ApplicationThemeControl /><span className="who">{user?.name} · {user?.email}</span>
         <button className="link light" onClick={logout}>Çıkış</button>
       </header>
       <nav className="sidenav" aria-label="Gezinti">

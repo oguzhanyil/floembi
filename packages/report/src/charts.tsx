@@ -12,6 +12,7 @@ import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { SERIES, formatCompact, formatValue, type VisualDef } from "./reportUtils";
+import { useReportTheme } from "./theme";
 
 echarts.use([
   BarChart, LineChart, PieChart, ScatterChart, TreemapChart, HeatmapChart, GaugeChart,
@@ -28,6 +29,7 @@ const AXISLINE = "#c8c6c4";
 
 /** ECharts örneğini React yaşam döngüsüne bağlar; boyut değişince yeniden çizer. */
 export function EChart({ option, onClick }: { option: echarts.EChartsCoreOption; onClick?: (p: { dataIndex: number; seriesIndex?: number; name: string }) => void }) {
+  const theme = useReportTheme();
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const click = useRef(onClick);
@@ -48,8 +50,22 @@ export function EChart({ option, onClick }: { option: echarts.EChartsCoreOption;
   }, []);
 
   useEffect(() => {
-    chart.current?.setOption(option, { notMerge: true });
-  }, [option]);
+    const recolor = (value: unknown): unknown => {
+      if (theme && typeof value === "string") {
+        if (value === INK || value === "#8a8886") return theme.colors.muted;
+        if (value === GRIDLINE || value === AXISLINE) return theme.colors.border;
+      }
+      if (Array.isArray(value)) return value.map(recolor);
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, recolor(v)]));
+      return value;
+    };
+    const resolved = theme ? { ...recolor(option) as echarts.EChartsCoreOption,
+      animation: !theme.reducedMotion && !matchMedia("(prefers-reduced-motion: reduce)").matches,
+      textStyle: { fontFamily: '"Segoe UI", system-ui, sans-serif', color: theme.colors.text },
+      tooltip: { ...(option.tooltip as object), backgroundColor: theme.colors.surface, borderColor: theme.colors.border, textStyle: { color: theme.colors.text } },
+    } : option;
+    chart.current?.setOption(resolved, { notMerge: true });
+  }, [option, theme]);
 
   return <div ref={ref} className="v-echart" />;
 }

@@ -5,6 +5,7 @@ import { ReportDesigner } from "../../packages/designer/src/ReportDesigner";
 import type { ReportDefinition, Visual, VisualFormat, VisualResult, VisualQuery, VisualType } from "../../packages/client/src/index";
 import { tableExportBlob, type TableExportKind } from "../../packages/report/src/tableExport";
 import { MatrixFixture } from "./MatrixFixture";
+import { ApplicationThemeControl, createTheme } from "../../packages/report/src/index";
 
 const result = (value: number | null): VisualResult => ({
   columns: [{ name: "Tutar", kind: "value", type: "double" }], rows: [[value]], truncated: false,
@@ -78,6 +79,9 @@ function App() {
   Object.assign(window, { setTestMode: setMode, menuTypes, setAllReport });
   if (mode === "grid") return <GridFixture />;
   if (mode === "matrix") return <MatrixFixture />;
+  if (mode === "theme") return <div className="studio theme-fixture" style={{ height: "100vh" }}><ApplicationThemeControl />
+    <ReportDesigner host={{ report: { ...report, theme: createTheme("electric", "light") }, tables: [], dataRev: "theme", run: runReport, save, onError: console.error }} />
+  </div>;
   if (mode !== "fixtures") return <div className="studio" style={{ height: "100vh" }}>
     {mode.endsWith("viewer") ? <ReportViewer report={mode.startsWith("all") ? allReport : report} run={mode.startsWith("all") ? runMenuReport : runReport} /> :
       <ReportDesigner host={{ report: mode.startsWith("all") ? allReport : report, tables: [], dataRev: "test", run: mode.startsWith("all") ? runMenuReport : runReport, save, onError: console.error }} />}

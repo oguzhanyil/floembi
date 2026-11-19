@@ -479,8 +479,19 @@ export interface ReportPage {
   drillthrough?: FieldRef[];
 }
 
+export interface ThemeSnapshot {
+  id: string;
+  version: 1;
+  mode: "light" | "dark";
+  colors: Record<string, string>;
+  series: string[];
+  density: "compact" | "comfortable";
+  reducedMotion: boolean;
+}
+
 export interface ReportDefinition {
   version: number;
+  theme?: ThemeSnapshot | null;
   pages: ReportPage[];
 }
 

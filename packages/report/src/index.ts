@@ -15,3 +15,6 @@ export * from "./charts2";
 export * from "./matrix";
 export * from "./VisualBody";
 export { ReportViewer } from "./ReportViewer";
+
+export * from "./theme";
+export * from "./ThemeControls";

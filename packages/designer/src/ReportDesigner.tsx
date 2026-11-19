@@ -1,3 +1,4 @@
+import { ReportThemeControls } from "@floem/report";
 import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualAction, VisualState, VisualType } from "@floem/client";
 import {
   DrillBanner, VISUAL_DEFS, crossFiltersFor, defaultAgg, defaultRole, newId, resolveVisualAction, runMeasureAction,
@@ -391,6 +392,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           <svg viewBox="1 1 23 23" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
         </button>
         <PageCanvas
+          theme={report.theme}
           page={page}
           previewActions={previewActions}
           visibleOverrides={previewVisibility[page.id] ?? {}}
@@ -488,6 +490,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
+        themeControls={<ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />}
         page={page}
         pages={report.pages}
         tables={tables}

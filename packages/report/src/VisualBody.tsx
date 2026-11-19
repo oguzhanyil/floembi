@@ -1,3 +1,4 @@
+import { themedVisual, useReportTheme } from "./theme";
 import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionGlyph } from "./ActionGlyph";
@@ -195,8 +196,10 @@ function TemplateVisual({ v }: { v: Visual }) {
 
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
 export function VisualBody(props: Parameters<typeof VisualBodyContent>[0]) {
+  const theme = useReportTheme();
+  const resolved = themedVisual(props.v, theme);
   return <VisualErrorBoundary resetKey={JSON.stringify([props.v, props.extra, props.dataRev, props.state])}>
-    <VisualBodyContent {...props} />
+    <VisualBodyContent {...props} v={resolved} />
   </VisualErrorBoundary>;
 }
 

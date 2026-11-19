@@ -82,7 +82,7 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
 | 1–4 | **F01 → F02 → F03 → F04** | Uygulandı; fiziksel DPI/çoklu monitör son kontrolü bekliyor. |
-| 5 | **F07A: tema/tipografi/boşluk/durum altyapısı ve karşılaştırma** | İleri nesnelerin görsel sözleşmesi önce kurulacak. |
+| 5 | **F07A: tema/tipografi/boşluk/durum altyapısı ve karşılaştırma** | Uygulandı; [kullanım ve doğrulama](f07a-tema-altyapisi.md). Nihai marka ailesi seçilmedi. |
 | 6 | **F10: PBIP uyumluluk ve kayıp raporu** | Kaynak biçim/ölçü/etkileşim kayıplarını görünür kılar. |
 | 7 | **F06: ortak model ve ölçü geçişi** | Bileşenlere bağlanacak alanların tane düzeyi ve anlamı doğrulanır. |
 | 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | F07A tokenlarını kullanır; serbest tasarımın düzen temeli. |

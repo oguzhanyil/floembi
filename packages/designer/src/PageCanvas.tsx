@@ -1,3 +1,5 @@
+import { ReportThemeScope, themedVisual } from "@floem/report";
+import type { ThemeSnapshot } from "@floem/client";
 import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
@@ -96,9 +98,10 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 export function PageCanvas({
   page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
   pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
-  onDuplicate, onShiftLayer, onFormat,
+  onDuplicate, onShiftLayer, onFormat, theme,
 }: {
   page: ReportPage;
+  theme?: ThemeSnapshot | null;
   previewActions: boolean;
   visibleOverrides: Record<string, boolean>;
   previewStates: Record<string, VisualState>;
@@ -190,7 +193,7 @@ export function PageCanvas({
     <ReportViewport width={page.width} height={page.height} banner={banner}
       onBackground={() => { if (!previewActions) onSelect(null); setCross(null); }}>
       {(scale) => (
-      <div
+      <ReportThemeScope theme={theme}
         className="page"
         style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
         onDragOver={(e) => {
@@ -241,7 +244,7 @@ export function PageCanvas({
               key={v.id}
               data-visual-id={v.id}
               className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
-              style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
+              style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v, theme)) }}
               role={previewActions && v.format.action && v.type !== "button" ? "button" : undefined}
               tabIndex={0}
               onKeyDown={(e) => { if (previewActions && v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAction(v); } }}
@@ -325,7 +328,7 @@ export function PageCanvas({
             </VisualContextMenu>
           );
         })}
-      </div>)}
+      </ReportThemeScope>)}
     </ReportViewport>
   );
 }

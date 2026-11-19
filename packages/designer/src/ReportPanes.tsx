@@ -127,6 +127,12 @@ function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: V
         </div>
       </Section>
       <Section title="Görünüm">
+        <button type="button" onClick={() => {
+          const format = { ...f };
+          for (const key of ["backgroundColor", "borderColor", "titleColor", "color", "fontFamily", "fontSize", "titleSize", "colors", "buttonColor", "buttonTextColor", "radius", "padding", "shadow", "animationDuration"])
+            delete format[key];
+          onChange({ ...visual, format });
+        }}>Temadan al</button>
         <div className="fmt-row">
           <label>Arka plan<input type="color" value={color(f.backgroundColor, "#ffffff")} onChange={(e) => set({ backgroundColor: e.target.value })} /></label>
           <label>Kenarlık<input type="color" value={color(f.borderColor, "#d6e0eb")} onChange={(e) => set({ borderColor: e.target.value })} /></label>
@@ -674,8 +680,9 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0,
+  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0, themeControls,
 }: {
+  themeControls?: ReactNode;
   page: ReportPage;
   pages: ReportPage[];
   tables: ModelTable[];
@@ -694,6 +701,7 @@ export function VisualizationsPane({
   return (
     <aside className="viz-pane">
       <h3>Görselleştirmeler</h3>
+      {themeControls}
       {VISUAL_GROUPS.map((g) => (
         <div key={g} className="viz-group">
           <div className="viz-group-label">{g}</div>

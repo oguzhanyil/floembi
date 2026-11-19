@@ -16,6 +16,11 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 (19.11.2026). F01–F04 sonuçları ve marka belgesine göre güncellenen geliştirme sırası:
 [Uygulama notu](docs/f01-f04-uygulama-ve-tasarim-sirasi.md).
 
+**F07A tema altyapısı hazır:** Desktop başlığında **◐ Tema**, Görselleştirmeler panelinde
+**Rapor teması** bulunur. Beş renk ailesinin açık/koyu sürümlerini **10 temayı karşılaştır** ile
+inceleyin. Uygulama ve rapor temaları bağımsızdır; nesnede **Biçim → Görünüm → Temadan al**
+ile özel stil temizlenir. [Kullanım ve doğrulama](docs/f07a-tema-altyapisi.md).
+
 Yeni demo: `data/SAPB1Demo-Floem-F01-F04.floem` (Desktop'ta Aç / Ctrl+O).
 Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı
 sürüklenebilir; sağ üstteki **Görselleştirmeler** ve **Veri** düğmeleriyle ayrı ayrı gizlenir.
