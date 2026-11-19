@@ -5,6 +5,7 @@ import {
   type CrossFilter,
 } from "./VisualBody";
 import { slicerFilters, type QueryFn } from "./useVisualData";
+import { visualMotion, visualStyle } from "./visualStyle";
 
 /**
  * Salt okunur ama etkileşimli rapor görüntüleyici (floembi.app): sayfa sekmeleri,
@@ -63,8 +64,8 @@ export function ReportViewer({
             return (
               <div
                 key={v.id}
-                className="visual readonly"
-                style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale }}
+                className={`visual readonly ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
+                style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale, ...visualStyle(v) }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="visual-head">

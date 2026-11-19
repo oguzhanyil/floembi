@@ -50,10 +50,10 @@ class TabloKaynak(_Base):
 class VeriKaynagi(_Base):
     """Kaynak sunucu (Power BI'daki veri kaynağı ayarları). Şifre burada tutulmaz."""
     id: str
-    tur: Literal["sqlserver"] = "sqlserver"
+    tur: Literal["sqlserver", "sqlite", "hana", "rest"] = "sqlserver"
     sunucu: str
     veritabani: str | None = None
-    kimlik: Literal["sql", "windows"] = "sql"
+    kimlik: Literal["sql", "windows", "none", "bearer"] = "sql"
     kullanici: str | None = None
 
 

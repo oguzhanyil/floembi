@@ -1,11 +1,30 @@
 /* Rapor görselleri ve sayfa (Desktop + floembi.app ortak). Renk tokenları uygulamanın :root'unda tanımlıdır. */
 .page { position: relative; background: var(--surface); box-shadow: 0 1px 4px #0002; }
 .page-hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 24px; line-height: 1.6; pointer-events: none; }
-.visual { position: absolute; display: flex; flex-direction: column; background: var(--surface); border: 1px solid transparent; border-radius: 4px; }
+.visual { position: absolute; display: flex; flex-direction: column; background: var(--surface); border: 1px solid transparent; border-radius: 8px; }
 .visual.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .visual-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px 0 10px; cursor: move; flex: none; touch-action: none; }
-.visual-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.visual-content { flex: 1; min-height: 0; position: relative; padding: 0 8px 8px; }
+.visual-title { flex: 1; font-size: var(--visual-title-size, 12px); font-weight: 600; color: var(--visual-title-color, var(--text)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visual-content { flex: 1; min-height: 0; position: relative; padding: 0 var(--visual-padding, 8px) var(--visual-padding, 8px); }
+.visual.shape-frame .visual-head { position: absolute; z-index: 2; inset: 0 0 auto; opacity: 0; }
+.visual.shape-frame:hover .visual-head, .visual.shape-frame.selected .visual-head { opacity: 1; background: rgba(255,255,255,.86); }
+.visual.shape-frame .visual-content { padding: 0; height: 100%; }
+.v-image { width: 100%; height: 100%; display: block; }
+.v-image-empty { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
+.v-shape { width: 100%; height: 100%; background: var(--shape-color, #2a78d6); display: grid; place-items: center; color: #fff; font-weight: 600; text-align: center; }
+.v-shape-pill { border-radius: 999px; }
+.v-shape-line { height: 2px; position: absolute; top: 50%; background: var(--shape-color, #2a78d6); }
+.v-ticker { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.v-ticker-value { font-size: clamp(24px, 3vw, 54px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
+.visual.motion-fade { animation: visual-fade var(--motion-duration, 500ms) ease-out both; }
+.visual.motion-rise { animation: visual-rise var(--motion-duration, 500ms) ease-out both; }
+.visual.motion-pulse { animation: visual-pulse var(--motion-duration, 500ms) ease-in-out infinite alternate; }
+@keyframes visual-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes visual-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes visual-pulse { from { filter: brightness(1); } to { filter: brightness(1.14); } }
+@media (prefers-reduced-motion: reduce) {
+  .visual.motion-fade, .visual.motion-rise, .visual.motion-pulse { animation: none; }
+}
 .visual .error-box { margin: 4px 0; font-size: 12px; }
 .v-body { height: 100%; transition: opacity 0.15s; }
 .v-body.loading { opacity: 0.6; }

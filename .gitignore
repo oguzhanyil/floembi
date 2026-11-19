@@ -9,5 +9,6 @@ dist/
 apps/desktop/release/
 # Kullanıcı rapor dosyaları gerçek şirket verisi içerebilir
 *.floem
+local-reports/
 node_modules/
 *.egg-info/

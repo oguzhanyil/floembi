@@ -1,6 +1,6 @@
 import type { Visual, VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SERIES, formatCompact, formatValue, isNumericType, valueLabel } from "./reportUtils";
 
 import type { CrossSelect } from "./charts";
@@ -159,6 +159,59 @@ export function CardVisual({ result, format, trend }: { result: VisualResult; fo
       {trend && <TrendStrip result={trend} higherIsBetter={format.higherIsBetter !== false} />}
     </div>
   );
+}
+
+/** Veriye bağlı sayı değişimini kısa bir sayma hareketiyle gösterir. */
+export function TickerVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
+  const column = result.columns[0];
+  const target = result.rows[0]?.[0] ?? null;
+  const [shown, setShown] = useState<Raw>(typeof target === "number" ? 0 : target);
+  const last = useRef<Raw>(typeof target === "number" ? 0 : target);
+  useEffect(() => {
+    if (typeof target !== "number" || format.animation === "none" ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      last.current = target;
+      setShown(target);
+      return;
+    }
+    const from = typeof last.current === "number" ? last.current : 0;
+    const duration = Math.max(150, Math.min(3000, format.animationDuration ?? 800));
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - progress) ** 3;
+      setShown(from + (target - from) * eased);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+      else last.current = target;
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, format.animation, format.animationDuration]);
+  return (
+    <div className="v-ticker" aria-label={`${column?.name ?? "Değer"}: ${column ? bigNumber(target, column) : ""}`}>
+      <span className="v-ticker-value">{column ? bigNumber(shown, column) : ""}</span>
+      {format.categoryLabel !== false && <span className="v-card-label">{column?.name}</span>}
+    </div>
+  );
+}
+
+/** Rapor yerleşimi için dikdörtgen, kapsül veya ayırıcı çizgi. */
+export function ShapeVisual({ format }: { format: VisualFormat }) {
+  const style = format.shapeStyle ?? "rectangle";
+  return (
+    <div className={`v-shape v-shape-${style}`}>
+      {typeof format.text === "string" && <span>{format.text}</span>}
+    </div>
+  );
+}
+
+export function ImageVisual({ format }: { format: VisualFormat }) {
+  const src = typeof format.imageData === "string" && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/i.test(format.imageData)
+    ? format.imageData : null;
+  return src ? <img className="v-image" src={src} alt={typeof format.altText === "string" ? format.altText : "Rapor görseli"}
+    style={{ objectFit: format.imageFit ?? "contain" }} /> :
+    <div className="v-image-empty">Görsel eklemek için Biçim bölmesini açın</div>;
 }
 
 /** Çok satırlı kart: kategori başına bir satır, her satırda değerler. */

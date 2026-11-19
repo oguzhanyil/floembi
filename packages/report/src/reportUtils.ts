@@ -136,6 +136,16 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
     label: "Metin kutusu", icon: "T", group: "Ekle", size: [360, 120],
     wells: [{ key: "values", label: "Dinamik değerler", optional: true }],
   },
+  shape: {
+    label: "Şekil", icon: "▢", group: "Ekle", size: [280, 120], wells: [],
+  },
+  image: {
+    label: "Görsel", icon: "▣", group: "Ekle", size: [320, 220], wells: [],
+  },
+  ticker: {
+    label: "Animasyonlu sayı", icon: "↗", group: "Kart", size: [280, 160],
+    wells: [{ key: "values", label: "Değer", max: 1 }],
+  },
 };
 
 export const VISUAL_GROUPS: VisualDef["group"][] = ["Grafik", "Kart", "Veri", "Etkileşim", "Ekle"];

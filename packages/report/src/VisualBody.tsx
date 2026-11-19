@@ -7,7 +7,7 @@ import { VISUAL_DEFS, formatValue, groupFields, valueLabel } from "./reportUtils
 import {
   currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
 } from "./useVisualData";
-import { CardVisual, DataGrid, KpiVisual, MultiCard, Slicer, TextVisual } from "./visuals";
+import { CardVisual, DataGrid, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
 
 type Scalar = string | number | boolean;
 
@@ -29,7 +29,7 @@ export function visualTitle(v: Visual): string {
   // Drill-down'da başlık o an görünen düzeyi gösterir (Power BI'daki gibi)
   const axis = supportsDrill(v) && v.group.length > 1 ? currentAxis(v) : undefined;
   const grp = axis ? [axis.column, ...(v.legend ?? []).map((g) => g.column)] : groupFields(v).map((g) => g.column);
-  if (v.type === "card" || v.type === "kpi" || v.type === "text") return "";
+  if (v.type === "card" || v.type === "kpi" || v.type === "text" || v.type === "shape" || v.type === "image" || v.type === "ticker") return "";
   if (v.type === "slicer") return grp[0] ?? VISUAL_DEFS.slicer.label;
   if (!vals.length && !grp.length) return VISUAL_DEFS[v.type].label;
   if (!vals.length) return grp.join(", ");
@@ -231,6 +231,8 @@ export function VisualBody({
   const selected = cross && cross.visualId === v.id ? cross.value : undefined;
   const outerSelection = detailReady ?? (!!cross && cross.visualId !== v.id);
 
+  if (v.type === "shape") return <ShapeVisual format={v.format} />;
+  if (v.type === "image") return <ImageVisual format={v.format} />;
   if (v.type === "text") {
     if (data.state === "error") return <ErrorView {...data.error} />;
     const r = data.state === "ready" ? data.result : data.state === "loading" ? data.previous : undefined;
@@ -299,6 +301,7 @@ export function VisualBody({
         />
       )}
       {v.type === "card" && <CardVisual result={result} format={v.format} trend={trend} />}
+      {v.type === "ticker" && <TickerVisual result={result} format={v.format} />}
       {v.type === "multicard" && <MultiCard result={result} selected={selected} onSelect={onCross} />}
       {v.type === "kpi" && <KpiVisual result={result} format={v.format} trend={trend} />}
       {v.type === "slicer" && (

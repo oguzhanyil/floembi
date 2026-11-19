@@ -17,7 +17,8 @@ export function SqlView({
   onImport?: (connectionId: string, database: string | undefined, sql: string, name: string) => Promise<boolean>;
 }) {
   const client = useClient();
-  const [connId, setConnId] = useState<string>(connections[0]?.id ?? "");
+  const sqlConnections = connections.filter((c) => c.kind !== "rest");
+  const [connId, setConnId] = useState<string>(sqlConnections[0]?.id ?? "");
   const [databases, setDatabases] = useState<string[]>([]);
   const [database, setDatabase] = useState<string>("");
   const [limit, setLimit] = useState(1000);
@@ -39,12 +40,12 @@ export function SqlView({
   }
 
   useEffect(() => {
-    if (!connId && connections[0]) setConnId(connections[0].id);
+    if (!sqlConnections.some((c) => c.id === connId)) setConnId(sqlConnections[0]?.id ?? "");
   }, [connections, connId]);
 
   useEffect(() => {
     if (!connId) return;
-    const conn = connections.find((c) => c.id === connId);
+    const conn = sqlConnections.find((c) => c.id === connId);
     setDatabases([]);
     client
       .databases(connId)
@@ -70,13 +71,13 @@ export function SqlView({
     }
   }
 
-  if (connections.length === 0) {
+  if (sqlConnections.length === 0) {
     return (
       <div className="empty-state">
         <h2>SQL sorgusu</h2>
-        <p>Sorgu yazmak için önce bir SQL Server bağlantısı ekleyin.</p>
+        <p>Sorgu yazmak için SQL Server, SAP HANA veya SQLite bağlantısı ekleyin.</p>
         <button className="primary" onClick={onNewConnection}>
-          SQL Server'a bağlan
+          Veri kaynağı ekle
         </button>
       </div>
     );
@@ -88,7 +89,7 @@ export function SqlView({
         <label>
           Bağlantı
           <select value={connId} onChange={(e) => setConnId(e.target.value)}>
-            {connections.map((c) => (
+            {sqlConnections.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.server} ({c.auth === "windows" ? "Windows" : c.user})
               </option>

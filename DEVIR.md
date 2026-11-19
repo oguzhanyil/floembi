@@ -124,6 +124,22 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 görsel tasarım ve kaynak genişletmesi
+
+Desktop simgesi kullanıcının Yıldırım Technologies görselindeki mavi Y işaretinden türetildi;
+`apps/desktop/build-resources/` altında PNG, ICO ve üretim betiği vardır. Görsel seçicide grafik
+simgeleri, dolu alan kutuları arasında sürükle-bırak, ortak Desktop/web görünüm stilleri, şekil,
+resim ve canlanan sayı eklendi. Yeni Desktop kaynakları SAP HANA ODBC, SQLite ve REST JSON'dur.
+Bu kaynaklar yayımlandığında veri anlık görüntü olarak gider; Floemway yenilemesi yalnızca SQL
+Server için uygulanmıştır. HANA canlı kaynağında henüz doğrulanmadı.
+
+Kullanıcının Power BI deposundaki yedi PBIP proje, seçtiği kapsam uyarınca **tasarım ve alan
+eşlemesi** olarak `local-reports/` altında `.floem` taslaklarına aktarıldı. Bu klasör ve `.floem`
+dosyaları git dışındadır. Taslaklarda gerçek veri ve kimlik bilgisi yoktur; boş model, sayfa
+yerleşimleri ve alan referansları vardır. Yeniden üretim komutu README'deki `pbip_import --all`.
+Desteklenmeyen Power BI görselleri yer tutucuya döner; ölçülerin FDX karşılığı ve canlı veri
+bağlantısı sonraki çalışmadır.
+
 ### Gerçek adresli tek alıcı pilotu (19.11.2026)
 
 `https://bi.floemdata.com` adresi için mevcut Windows bilgisayarında ayrı pilot sunucu ve

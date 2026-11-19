@@ -16,6 +16,9 @@ button.danger { color: var(--danger); border-color: #f1bbbc; }
 .job-table { width: 100%; border-collapse: collapse; }
 .job-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .job-icon { width: 22px; font-weight: 700; color: var(--muted); text-align: center; }
+.source-types { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.source-types button { padding: 8px 4px; font-size: 11px; border-radius: 7px; }
+.source-types button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .job-done .job-icon { color: #107c10; }
 .job-failed .job-icon, .job-failed .job-rows { color: var(--danger); }
 .job-running .job-icon { color: var(--accent); animation: job-spin 1.2s linear infinite; display: inline-block; }

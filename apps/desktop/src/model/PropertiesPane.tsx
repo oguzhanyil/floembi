@@ -83,7 +83,7 @@ export function PropertiesPane({
           <Section title="Veri kaynakları">
             {model.veri_kaynaklari.map((k) => (
               <p key={k.id} className="small">
-                SQL Server · <strong>{k.sunucu}</strong>
+                {{ sqlserver: "SQL Server", hana: "SAP HANA", sqlite: "SQLite", rest: "REST API" }[k.tur] ?? k.tur} · <strong>{k.sunucu}</strong>
                 {k.veritabani && ` / ${k.veritabani}`}
                 <br />
                 <span className="muted">{k.kimlik === "windows" ? "Windows kimliği" : k.kullanici}</span>

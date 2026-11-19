@@ -261,8 +261,8 @@ function Shell() {
               <p>Başlamak için bir kaynağa bağlanın. Yüklediğiniz tablolar burada görselleştirilebilecek.</p>
               <div className="start-actions">
                 <button className="tile" onClick={() => setGetData(true)}>
-                  <strong>SQL Server</strong>
-                  <span>Tabloları seç ve yükle</span>
+                  <strong>Veri al</strong>
+                  <span>SQL Server, HANA, SQLite veya REST</span>
                 </button>
                 <button className="tile" onClick={() => void open()}>
                   <strong>Dosya aç</strong>

@@ -81,6 +81,7 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
       return { group: [v.group[0], x], values: v.values.slice(0, 1), filters, limit: 5000 };
     }
     case "card":
+    case "ticker":
       if (!v.values.length) return null;
       return { group: [], values: v.values.slice(0, 1), filters, limit: 1 };
     case "multicard":
@@ -97,6 +98,9 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
       // Metin kutusu: yalnızca dinamik değer varsa sorgu (tek satır)
       if (!v.values.length) return null;
       return { group: [], values: v.values, filters, limit: 1 };
+    case "shape":
+    case "image":
+      return null;
     case "slicer": {
       const f = v.group[0];
       if (!f) return null;

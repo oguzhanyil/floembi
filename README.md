@@ -76,6 +76,37 @@ kendisi temizler; Electron'u elle başlatıyorsanız bu değişkeni kaldırın.
 Duman testi kancaları (yalnızca geliştirme): `FLOEM_OPEN=dosya.floem`,
 `FLOEM_START_VIEW=model`, `FLOEM_SCREENSHOT=cikti.png`, `FLOEM_SCREENSHOT_JS=...`.
 
+#### Yeni veri kaynakları ve rapor taslakları
+
+**Veri al** penceresinde SQL Server'a ek olarak üç kaynak seçilebilir:
+
+| Kaynak | Giriş | İçeri alınan veri |
+|---|---|---|
+| SAP HANA | Sunucu `adres:port`, isteğe bağlı şema, HANA kullanıcısı ve şifresi; makinede HDBODBC gerekir | Tablo veya görünüm; salt okunur sorgu |
+| SQLite | Yerel `.sqlite` / `.db` dosyasının tam yolu | Tablo veya görünüm; dosya salt okunur açılır |
+| REST API | HTTPS temel adresi, kaynak yolu; isteğe bağlı Bearer belirteci | JSON nesne listesi (`items`, `data`, `results`, `records`); aynı adres altındaki `next` sayfaları |
+
+Yeni kaynakların şifreleri `.floem` dosyasına yazılmaz. Bearer belirteci hatırlatılırsa Windows
+Kimlik Bilgisi Yöneticisi'nde saklanır. REST kaynağında SQL penceresi kullanılmaz. Bu üç kaynak
+Desktop'tan yayımlandığında veri anlık görüntü olarak gider; Floemway'in otomatik kaynak eşleme ve
+yenileme akışı şu an SQL Server içindir. SAP HANA bağlantısı için canlı sunucu kabul testi gerekir.
+
+PBIP raporlarından **tasarım ve alan eşlemesi** aktarımı için:
+
+```powershell
+.venv\Scripts\python -m floem_bi.pbip_import "C:\Raporlar\Ornek.Report" "C:\Raporlar\Ornek.floem"
+.venv\Scripts\python -m floem_bi.pbip_import --all "C:\Raporlar" "C:\Taslaklar"
+```
+
+Oluşan `.floem` dosyası Desktop'ta **Dosya aç** ile düzenlenir. Sayfa, görsel konumu, desteklenen
+görsel tipi ve alan bağları aktarılır. Model tabloları boş oluşturulur; gerçek veri, kaynak bağlantısı
+ve Power BI ölçü formülleri aktarılmaz. Desteklenmeyen görseller metin yer tutucusu olur. Veriyle
+çalıştırmak için ilgili kaynağı Desktop'ta yeniden bağlayıp ölçüleri FDX olarak uyarlayın.
+
+Desktop simgesi `apps/desktop/build-resources/floem-bi.ico` dosyasındadır. Kaynak görselden
+yeniden üretmek için `apps/desktop/build-resources/generate-icon.ps1` çalıştırılır; paketli Windows
+uygulamasında ve geliştirme penceresinde aynı simge kullanılır.
+
 #### Rapor görünümü (H4'ün çekirdeği)
 
 - Görseller: **Tablo** (toplam satırıyla), **Kümelenmiş sütun grafiği**, **Kart**.
@@ -90,6 +121,11 @@ Duman testi kancaları (yalnızca geliştirme): `FLOEM_OPEN=dosya.floem`,
   DAX'a çevrilip SQL'e derlenir ve ilişkiler üzerinden filtrelenir.
 - Rapor tanımı `.floem` içindeki `report.json`'dadır. Tablo ya da sütun yeniden adlandırılınca
   görsellerdeki referanslar da güncellenir.
+- Görsel türleri küçük grafik simgeleriyle seçilir. Satır, sütun, gösterge ve değer kutularına
+  yerleştirilmiş alanlar tekrar sürüklenerek sıralanabilir veya uygun kutular arasında taşınabilir.
+- **Biçim** panelinde hazır stiller, arka plan, kenarlık, köşe, gölge, boşluk ve başlık ayarlanır.
+  Şekil, görsel dosyası ve canlanan sayı nesneleri eklenebilir. Belirme, yükselme ve hafif vurgu
+  hareketleri Desktop ile web'de aynı çalışır; sistemin hareket azaltma tercihi uygulanır.
 
 ### floembi.app (yerel sunucu) ve yayımlama (H5)
 

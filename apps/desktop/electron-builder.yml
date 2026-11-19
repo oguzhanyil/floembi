@@ -17,9 +17,12 @@ files:
 extraResources:
   - from: ../../build/pyinstaller/dist/floem-service
     to: floem-service
+  - from: build-resources/floem-bi.png
+    to: floem-bi.png
 asar: true
 npmRebuild: false
 win:
+  icon: build-resources/floem-bi.ico
   target:
     - target: nsis
       arch: [x64]

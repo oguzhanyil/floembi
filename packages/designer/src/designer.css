@@ -34,6 +34,10 @@
 .well-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
 .well-empty { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 8px; font-size: 12px; color: var(--muted); text-align: center; }
 .well-item { display: flex; align-items: center; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px 3px 8px; margin-bottom: 4px; font-size: 12px; }
+.well-item[draggable="true"] { cursor: grab; }
+.well-item[draggable="true"]:active { cursor: grabbing; }
+.well-item.drop-before { border-top: 2px solid var(--accent); }
+.well-drop-end { height: 2px; background: var(--accent); border-radius: 2px; margin-top: -2px; }
 .well-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .well-item select { font-size: 11px; padding: 1px 2px; max-width: 96px; }
 .well-x { border: none; background: none; padding: 0 4px; font-size: 10px; color: var(--muted); }
@@ -47,6 +51,8 @@
 .viz-group .viz-types { grid-template-columns: repeat(5, 1fr); padding: 0; border: none; gap: 4px; }
 .viz-group .viz-type { padding: 4px 0; min-height: 34px; justify-content: center; }
 .viz-group .viz-type span { font-size: 18px; }
+.viz-type-icon { display: block; color: var(--accent); overflow: visible; }
+.viz-type:hover .viz-type-icon, .viz-type.active .viz-type-icon { color: #1456a8; }
 .viz-tabs { display: flex; border-bottom: 1px solid var(--border); margin-top: 6px; padding: 0 14px; gap: 4px; }
 .viz-tabs button { border: none; border-radius: 0; background: none; padding: 8px 10px; font-size: 12px; color: var(--muted); border-bottom: 2px solid transparent; }
 .viz-tabs button.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
@@ -57,6 +63,12 @@
 .fmt-body select, .fmt-body input[type="text"] { font-size: 12px; color: var(--text); }
 .fmt-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .fmt-color input { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 4px; background: none; cursor: pointer; }
+.fmt-presets { display: flex; gap: 4px; }
+.fmt-presets button { flex: 1; font-size: 11px; padding: 7px 3px; border-radius: 7px; }
+.fmt-row { display: flex; gap: 8px; }
+.fmt-row label { flex: 1; min-width: 0; }
+.fmt-body input[type="number"] { width: 100%; box-sizing: border-box; }
+.fmt-body input[type="color"] { width: 100%; height: 30px; cursor: pointer; }
 
 .well-opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
 

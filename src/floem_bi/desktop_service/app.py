@@ -32,10 +32,10 @@ from .publish import PublishClient
 
 
 class ConnectionIn(BaseModel):
-    kind: Literal["sqlserver"] = "sqlserver"
+    kind: Literal["sqlserver", "sqlite", "hana", "rest"] = "sqlserver"
     server: str = Field(min_length=1)
     database: str | None = None
-    auth: Literal["sql", "windows"] = "sql"
+    auth: Literal["sql", "windows", "none", "bearer"] = "sql"
     user: str | None = None
     password: str | None = None
     trust_server_certificate: bool = True
@@ -251,7 +251,8 @@ def create_app(
     def add_connection(c: ConnectionIn):
         spec = ConnectionSpec(
             kind=c.kind, server=c.server.strip(), database=(c.database or None), auth=c.auth,
-            user=c.user, password=c.password, trust_server_certificate=c.trust_server_certificate,
+            user=c.user, password=c.password if c.auth in ("sql", "bearer") else None,
+            trust_server_certificate=c.trust_server_certificate,
         )
         conn = connector_factory(spec)
         info = conn.test()                       # başarısızsa ConnectorError → 400
@@ -393,7 +394,7 @@ def create_app(
         d = doc()
         items = [
             ImportItem(
-                SourceRef(it.database or body.database, it.schema_ or "dbo", it.table, None) if it.table
+                SourceRef(it.database or body.database, it.schema_ or ("dbo" if spec.kind == "sqlserver" else "main"), it.table, None) if it.table
                 else SourceRef(it.database or body.database, sql=it.sql),
                 it.name,
             )
@@ -457,7 +458,7 @@ def create_app(
         sources = []
         used = {t.sorgu.kaynak for t in d.tanim.tablolar if t.sorgu}
         for k in d.tanim.veri_kaynaklari:
-            if k.id not in used:
+            if k.id not in used or k.tur != "sqlserver":
                 continue
             database = k.veritabani or next((t.sorgu.veritabani for t in d.tanim.tablolar
                                                if t.sorgu and t.sorgu.kaynak == k.id and t.sorgu.veritabani), "")

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
+import { moveWellItem } from "./wells";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -175,7 +176,10 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       ? { x: snap(Math.max(0, Math.min(page.width - w, at.x - w / 2))), y: snap(Math.max(0, Math.min(page.height - h, at.y - 20))) }
       : freeSpot(w, h);
     const ids = new Set(report.pages.flatMap((p) => p.visuals.map((v) => v.id)));
-    return { id: newId("v", ids), type, ...pos, w, h, group: [], values: [], filters: [], format: {} };
+    const format = type === "shape" ? { showTitle: false, backgroundColor: "#2a78d6", padding: 0 } :
+      type === "image" ? { showTitle: false, padding: 0 } :
+      type === "ticker" ? { animation: "count" as const, animationDuration: 800, shadow: true } : {};
+    return { id: newId("v", ids), type, ...pos, w, h, group: [], values: [], filters: [], format };
   }
 
   function insert(v: Visual) {
@@ -382,6 +386,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         onPickType={pickType}
         onChange={updateVisual}
         onDropToWell={(well, f) => selected && updateVisual(addField(selected, f, well.key, well.slot))}
+        onMoveWell={(from, to, index) => {
+          if (!selected) return;
+          const source = VISUAL_DEFS[selected.type].wells.find((w) => w.key === from.key && w.slot === from.slot);
+          if (source) updateVisual(moveWellItem(selected, source, from.index, to, index, columnOf));
+        }}
       />
       <FieldsPane tables={tables} visual={selected} onToggle={toggleField} onEditMeasure={host.onEditMeasure} />
     </div>

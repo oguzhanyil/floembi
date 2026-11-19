@@ -5,40 +5,24 @@ import {
 import { useState, type ReactNode } from "react";
 import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from "./fields";
 import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
+import { VisualTypeIcon } from "./VisualTypeIcon";
+import { WELL_MIME, readWellDrag, setWell, wellItems, type WellDrag } from "./wells";
 
 const readField = readPayload;
-
-/** Kutudaki öğeler: gruplama kutuları alan, değer kutuları ölçü/toplama tutar. */
-function wellItems(v: Visual, def: WellDef): (FieldRef | ValueRef)[] {
-  if (def.key === "group") return v.group;
-  if (def.key === "legend") return v.legend ?? [];
-  if (def.key === "target") return v.target ?? [];
-  // Yuvalı değer kutusu (dağılım X/Y/boyut, gösterge değer/en büyük): yalnızca o sıradaki değer
-  if (def.slot !== undefined) return v.values[def.slot] ? [v.values[def.slot]] : [];
-  return v.values;
-}
-
-function setWell(v: Visual, def: WellDef, items: (FieldRef | ValueRef)[]): Visual {
-  if (def.key === "values" && def.slot !== undefined) {
-    const values = [...v.values];
-    if (items.length) values[def.slot] = items[0] as ValueRef;
-    else values.splice(def.slot, 1);
-    return { ...v, values };
-  }
-  return { ...v, [def.key]: items } as Visual;
-}
 
 const isValueWell = (k: WellKey) => k === "values" || k === "target";
 
 function Well({
-  def, visual, onDrop, onChange,
+  def, visual, onDrop, onMove, onChange,
 }: {
   def: WellDef;
   visual: Visual;
   onDrop: (well: WellDef, field: FieldPayload) => void;
+  onMove: (from: WellDrag, to: WellDef, index: number) => void;
   onChange: (v: Visual) => void;
 }) {
   const [over, setOver] = useState(false);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
   const items = wellItems(visual, def);
   const remove = (i: number) => onChange(setWell(visual, def, items.filter((_, j) => j !== i)));
   const setAgg = (i: number, agg: Agg) =>
@@ -48,13 +32,30 @@ function Well({
     <div
       className={`well ${over ? "over" : ""}`}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(FIELD_MIME)) return;
+        if (!e.dataTransfer.types.includes(FIELD_MIME) && !e.dataTransfer.types.includes(WELL_MIME)) return;
         e.preventDefault();
         setOver(true);
+        const rows = [...e.currentTarget.querySelectorAll<HTMLElement>(".well-item")];
+        const at = rows.findIndex((row) => e.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2);
+        setDropIndex(at < 0 ? rows.length : at);
       }}
-      onDragLeave={() => setOver(false)}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setOver(false);
+        setDropIndex(null);
+      }}
       onDrop={(e) => {
         setOver(false);
+        const rows = [...e.currentTarget.querySelectorAll<HTMLElement>(".well-item")];
+        const before = rows.findIndex((row) => e.clientY < row.getBoundingClientRect().top + row.offsetHeight / 2);
+        const at = before < 0 ? rows.length : before;
+        setDropIndex(null);
+        const from = readWellDrag(e.dataTransfer.getData(WELL_MIME));
+        if (from && from.visualId === visual.id) {
+          e.preventDefault();
+          onMove(from, def, at);
+          return;
+        }
         const f = readField(e);
         if (f) {
           e.preventDefault();
@@ -68,7 +69,16 @@ function Well({
       </div>
       {items.length === 0 && <div className="well-empty">Veri alanlarını buraya ekleyin</div>}
       {items.map((it, i) => (
-        <div key={i} className="well-item">
+        <div
+          key={i}
+          className={`well-item ${dropIndex === i ? "drop-before" : ""}`}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(WELL_MIME, JSON.stringify({ visualId: visual.id, key: def.key, slot: def.slot, index: i } satisfies WellDrag));
+            e.dataTransfer.setData(FIELD_MIME, JSON.stringify("measure" in it ? { measure: it.measure } : { table: it.table, column: it.column }));
+            e.dataTransfer.effectAllowed = "move";
+          }}
+        >
           <span className="well-name" title={"measure" in it ? it.measure : `${it.table}[${it.column}]`}>
             {isValueWell(def.key) ? valueLabel(it as ValueRef) : (it as FieldRef).column}
           </span>
@@ -86,6 +96,7 @@ function Well({
           </button>
         </div>
       ))}
+      {dropIndex === items.length && items.length > 0 && <div className="well-drop-end" aria-hidden="true" />}
     </div>
   );
 }
@@ -96,6 +107,52 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <div className="well-label">{title}</div>
       <div className="fmt-body">{children}</div>
     </div>
+  );
+}
+
+function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: Visual) => void }) {
+  const f = visual.format;
+  const set = (patch: Partial<VisualFormat>) => onChange({ ...visual, format: { ...f, ...patch } });
+  const color = (value: string | undefined, fallback: string) => /^#[0-9a-f]{6}$/i.test(value ?? "") ? value! : fallback;
+  const presets: { label: string; format: Partial<VisualFormat> }[] = [
+    { label: "Sade", format: { backgroundColor: "#ffffff", borderColor: "#e4e9f1", borderWidth: 1, radius: 8, shadow: false } },
+    { label: "Yumuşak", format: { backgroundColor: "#f4f8ff", borderColor: "#c9dcf6", borderWidth: 1, radius: 16, shadow: true } },
+    { label: "Gece", format: { backgroundColor: "#10284c", borderColor: "#27496f", borderWidth: 1, radius: 14, shadow: true, titleColor: "#ffffff" } },
+  ];
+  return (
+    <>
+      <Section title="Hazır stiller">
+        <div className="fmt-presets">
+          {presets.map((preset) => <button key={preset.label} type="button" onClick={() => set(preset.format)}>{preset.label}</button>)}
+        </div>
+      </Section>
+      <Section title="Görünüm">
+        <div className="fmt-row">
+          <label>Arka plan<input type="color" value={color(f.backgroundColor, "#ffffff")} onChange={(e) => set({ backgroundColor: e.target.value })} /></label>
+          <label>Kenarlık<input type="color" value={color(f.borderColor, "#d6e0eb")} onChange={(e) => set({ borderColor: e.target.value })} /></label>
+        </div>
+        <div className="fmt-row">
+          <label>Köşe yarıçapı<input type="number" min="0" max="40" value={f.radius ?? 8} onChange={(e) => set({ radius: Number(e.target.value) })} /></label>
+          <label>İç boşluk<input type="number" min="0" max="32" value={f.padding ?? 8} onChange={(e) => set({ padding: Number(e.target.value) })} /></label>
+        </div>
+        <label className="inline"><input type="checkbox" checked={!!f.shadow} onChange={(e) => set({ shadow: e.target.checked })} /> Gölge</label>
+        <label>Başlık rengi<input type="color" value={color(f.titleColor, "#201f1e")} onChange={(e) => set({ titleColor: e.target.value })} /></label>
+        <label>Başlık boyutu<input type="number" min="10" max="28" value={f.titleSize ?? 12} onChange={(e) => set({ titleSize: Number(e.target.value) })} /></label>
+      </Section>
+      <Section title="Hareket">
+        <label>Animasyon
+          <select value={f.animation ?? (visual.type === "ticker" ? "count" : "none")} onChange={(e) => set({ animation: e.target.value as VisualFormat["animation"] })}>
+            <option value="none">Kapalı</option>
+            <option value="fade">Yumuşak görün</option>
+            <option value="rise">Yukarıdan gel</option>
+            <option value="pulse">Hafif vurgu</option>
+            {visual.type === "ticker" && <option value="count">Sayıyı canlandır</option>}
+          </select>
+        </label>
+        <label>Süre (ms)<input type="number" min="150" max="3000" step="50" value={f.animationDuration ?? (visual.type === "ticker" ? 800 : 500)} onChange={(e) => set({ animationDuration: Number(e.target.value) })} /></label>
+        <p className="hint">Sistem hareket azaltmayı seçtiyse animasyon gösterilmez.</p>
+      </Section>
+    </>
   );
 }
 
@@ -112,6 +169,8 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
   if (visual.type === "text") {
     const labels = visual.values.map(valueLabel);
     return (
+      <>
+      <AppearancePanel visual={visual} onChange={onChange} />
       <Section title="Metin">
         <textarea
           rows={7}
@@ -150,11 +209,51 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
           <input type="color" value={typeof f.color === "string" ? f.color : "#201f1e"} onChange={(e) => set({ color: e.target.value })} />
         </label>
       </Section>
+      </>
     );
   }
 
+  if (visual.type === "shape") return (
+    <>
+      <AppearancePanel visual={visual} onChange={onChange} />
+      <Section title="Şekil">
+        <label>Tür
+          <select value={f.shapeStyle ?? "rectangle"} onChange={(e) => set({ shapeStyle: e.target.value as VisualFormat["shapeStyle"] })}>
+            <option value="rectangle">Dikdörtgen</option>
+            <option value="pill">Kapsül</option>
+            <option value="line">Ayırıcı çizgi</option>
+          </select>
+        </label>
+        <label>Metin<input type="text" value={typeof f.text === "string" ? f.text : ""} onChange={(e) => set({ text: e.target.value })} /></label>
+      </Section>
+    </>
+  );
+
+  if (visual.type === "image") return (
+    <>
+      <AppearancePanel visual={visual} onChange={onChange} />
+      <Section title="Görsel dosyası">
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          if (file.size > 2_000_000) { window.alert("Görsel dosyası en fazla 2 MB olabilir."); return; }
+          const reader = new FileReader();
+          reader.onload = () => { if (typeof reader.result === "string") set({ imageData: reader.result }); };
+          reader.readAsDataURL(file);
+        }} />
+        <label>Yerleşim
+          <select value={f.imageFit ?? "contain"} onChange={(e) => set({ imageFit: e.target.value as VisualFormat["imageFit"] })}>
+            <option value="contain">Tamamını göster</option><option value="cover">Alanı doldur</option>
+          </select>
+        </label>
+        <label>Alternatif metin<input type="text" value={f.altText ?? ""} onChange={(e) => set({ altText: e.target.value })} /></label>
+      </Section>
+    </>
+  );
+
   return (
     <>
+      <AppearancePanel visual={visual} onChange={onChange} />
       <Section title="Başlık">
         <label className="inline">
           <input type="checkbox" checked={f.showTitle !== false} onChange={(e) => set({ showTitle: e.target.checked })} />
@@ -246,7 +345,7 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
           )}
         </Section>
       )}
-      {visual.type === "card" && (
+      {(visual.type === "card" || visual.type === "ticker") && (
         <Section title="Kart">
           <label className="inline">
             <input type="checkbox" checked={f.categoryLabel !== false} onChange={(e) => set({ categoryLabel: e.target.checked })} />
@@ -346,7 +445,7 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, onPageChange, visual, onPickType, onChange, onDropToWell,
+  page, onPageChange, visual, onPickType, onChange, onDropToWell, onMoveWell,
 }: {
   page: ReportPage;
   onPageChange: (p: ReportPage) => void;
@@ -354,6 +453,7 @@ export function VisualizationsPane({
   onPickType: (t: VisualType) => void;
   onChange: (v: Visual) => void;
   onDropToWell: (well: WellDef, field: FieldPayload) => void;
+  onMoveWell: (from: WellDrag, to: WellDef, index: number) => void;
 }) {
   const [tab, setTab] = useState<"fields" | "format">("fields");
   return (
@@ -373,7 +473,7 @@ export function VisualizationsPane({
                   aria-label={VISUAL_DEFS[t].label}
                   onClick={() => onPickType(t)}
                 >
-                  <span>{VISUAL_DEFS[t].icon}</span>
+                  <VisualTypeIcon type={t} />
                 </button>
               ))}
           </div>
@@ -392,7 +492,7 @@ export function VisualizationsPane({
           <div className="viz-selected">{VISUAL_DEFS[visual.type].label}</div>
           {tab === "fields" ? (
             VISUAL_DEFS[visual.type].wells.map((w) => (
-              <Well key={`${w.key}-${w.slot ?? ""}`} def={w} visual={visual} onDrop={onDropToWell} onChange={onChange} />
+              <Well key={`${w.key}-${w.slot ?? ""}`} def={w} visual={visual} onDrop={onDropToWell} onMove={onMoveWell} onChange={onChange} />
             ))
           ) : (
             <FormatPanel visual={visual} onChange={onChange} />

@@ -91,12 +91,16 @@ function stopService() {
 }
 
 function createWindow() {
+  const icon = app.isPackaged
+    ? path.join(process.resourcesPath, "floem-bi.png")
+    : path.join(__dirname, "..", "build-resources", "floem-bi.png");
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 640,
     title: "Floem BI Desktop",
+    icon,
     backgroundColor: "#f3f2f1",
     show: false,
     webPreferences: {

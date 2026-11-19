@@ -43,7 +43,7 @@ export function ModelView({
     return (
       <div className="empty-state">
         <h2>Model görünümü</h2>
-        <p>Modelde henüz tablo yok. Veri al → SQL Server ile tabloları seçip yükleyin.</p>
+        <p>Modelde henüz tablo yok. Veri al ile bir kaynak seçip tabloları yükleyin.</p>
         <button className="primary" onClick={onGetData}>
           Veri al
         </button>

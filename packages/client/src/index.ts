@@ -23,10 +23,12 @@ export class FloemApiError extends Error {
   }
 }
 
-export type AuthKind = "sql" | "windows";
+export type AuthKind = "sql" | "windows" | "none" | "bearer";
+
+export type ConnectionKind = "sqlserver" | "sqlite" | "hana" | "rest";
 
 export interface ConnectionInput {
-  kind: "sqlserver";
+  kind: ConnectionKind;
   server: string;
   database?: string | null;
   auth: AuthKind;
@@ -38,7 +40,7 @@ export interface ConnectionInput {
 
 export interface Connection {
   id: string;
-  kind: "sqlserver";
+  kind: ConnectionKind;
   server: string;
   database: string | null;
   auth: AuthKind;
@@ -294,7 +296,7 @@ export interface Relationship {
 
 export interface DataSource {
   id: string;
-  tur: "sqlserver";
+  tur: ConnectionKind;
   sunucu: string;
   veritabani?: string;
   kimlik: AuthKind;
@@ -336,7 +338,7 @@ export type VisualType =
   | "matrix"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text";
+  | "text" | "shape" | "image" | "ticker";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -376,6 +378,20 @@ export interface Visual {
 
 export interface VisualFormat {
   showTitle?: boolean;
+  backgroundColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  radius?: number;
+  shadow?: boolean;
+  padding?: number;
+  titleColor?: string;
+  titleSize?: number;
+  animation?: "none" | "fade" | "rise" | "pulse" | "count";
+  animationDuration?: number;
+  shapeStyle?: "rectangle" | "pill" | "line";
+  imageData?: string;
+  imageFit?: "contain" | "cover";
+  altText?: string;
   dataLabels?: boolean;
   legend?: "top" | "bottom" | "right" | "none";
   xAxisTitle?: boolean;

@@ -69,7 +69,7 @@ class ConnectionStore:
         spec = self._specs.get(cid)
         if spec is None:
             raise ConnectorError("Bağlantı bulunamadı", code="not_found")
-        if spec.auth == "sql" and not spec.password:
+        if spec.auth in ("sql", "bearer") and not spec.password:
             spec.password = self._secret(cid)
             if not spec.password:
                 raise ConnectorError("Bu bağlantının şifresi kayıtlı değil; tekrar giriş yapın", code="credentials_required")

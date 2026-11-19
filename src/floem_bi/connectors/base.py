@@ -30,10 +30,10 @@ class ConnectorError(Exception):
 
 @dataclass
 class ConnectionSpec:
-    kind: str                       # "sqlserver"
+    kind: str                       # sqlserver | sqlite | hana | rest
     server: str                     # "SUNUCU\\INSTANCE" veya "10.0.0.5,1433"
     database: str | None = None     # boşsa sunucudaki varsayılan
-    auth: str = "sql"               # "sql" | "windows"
+    auth: str = "sql"               # sql | windows | none | bearer
     user: str | None = None
     password: str | None = field(default=None, repr=False)
     trust_server_certificate: bool = True

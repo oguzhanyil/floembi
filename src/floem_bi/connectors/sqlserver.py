@@ -299,4 +299,13 @@ def _odbc_type(py_type) -> str:
 def make_connector(spec: ConnectionSpec):
     if spec.kind == "sqlserver":
         return SqlServerConnector(spec)
+    if spec.kind == "sqlite":
+        from .sqlite import SQLiteConnector
+        return SQLiteConnector(spec)
+    if spec.kind == "hana":
+        from .hana import HanaConnector
+        return HanaConnector(spec)
+    if spec.kind == "rest":
+        from .rest import RestConnector
+        return RestConnector(spec)
     raise ConnectorError(f"Desteklenmeyen kaynak türü: {spec.kind}", code="invalid")

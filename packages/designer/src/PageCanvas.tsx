@@ -1,6 +1,7 @@
 import type { FilterRef, ModelColumn, ReportPage, Visual } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
+  visualMotion, visualStyle,
   type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
 import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
@@ -223,8 +224,8 @@ export function PageCanvas({
           return (
             <div
               key={v.id}
-              className={`visual ${selected ? "selected" : ""} ${dropHover === v.id ? "drop" : ""}`}
-              style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale }}
+              className={`visual ${selected ? "selected" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
+              style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale, ...visualStyle(v) }}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onSelect(v.id);
