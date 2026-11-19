@@ -5,6 +5,18 @@ from __future__ import annotations
 import json
 import tempfile
 import zipfile
+
+from floem_bi.pbip_import import _text
+
+
+def test_import_small_text_preserves_source_size_and_font():
+    text, style = _text({"general": [{"properties": {"paragraphs": [{
+        "textRuns": [{"value": "Etkin", "textStyle": {"fontSize": "9pt", "fontFamily": "Segoe UI"}}]
+    }]}}]})
+    assert text == "Etkin"
+    assert style["fontSize"] == 12
+    assert style["fontFamily"] == "Segoe UI"
+    assert style["textOverflow"] == "wrap"
 from pathlib import Path
 
 from floem_bi.document import Document

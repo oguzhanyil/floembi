@@ -9,6 +9,8 @@ export function visualStyle(visual: Visual): CSSProperties {
   const f = visual.format;
   const radius = f.shapeStyle === "pill" ? 999 : clamp(f.radius, 0, 40, 8);
   return {
+    ...(visual.type === "text" && f.textOverflow === "grow" ? { height: "auto", minHeight: visual.h } : {}),
+    "--visual-content-height": visual.type === "text" && f.textOverflow === "grow" ? "auto" : "100%",
     backgroundColor: visual.type === "button" ? "transparent" : f.backgroundColor || undefined,
     borderColor: f.borderColor || undefined,
     borderWidth: clamp(f.borderWidth, 0, 8, 1),

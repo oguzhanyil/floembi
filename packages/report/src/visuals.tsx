@@ -227,20 +227,39 @@ export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualR
   });
   const fill = (line: string) =>
     line.replace(/\[([^\]]+)\]/g, (m, name: string) => values.get(name.trim().toLocaleLowerCase("tr")) || m);
+  const content = fill(text);
+  const ref = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  const policy = f.textOverflow ?? "wrap";
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1 ||
+      Array.from(el.children).some((child) => child.scrollWidth > child.clientWidth + 1));
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    let active = true;
+    void document.fonts.ready.then(() => { if (active) check(); });
+    return () => { active = false; observer.disconnect(); };
+  }, [content, f.fontSize, f.fontFamily, f.bold, f.lineHeight, policy]);
   if (!text.trim()) {
     return <div className="v-text v-text-empty">Metni Biçim bölmesindeki "Metin" alanına yazın</div>;
   }
   return (
-    <div
-      className="v-text"
+    <><div ref={ref}
+      className={`v-text v-text-${policy}`}
       style={{
         fontSize: Number(f.fontSize) || 14,
+        fontFamily: f.fontFamily || undefined,
+        lineHeight: Math.max(1, Math.min(2.5, f.lineHeight ?? 1.4)),
         textAlign: (f.align as "left" | "center" | "right") || "left",
         color: typeof f.color === "string" ? f.color : undefined,
         fontWeight: f.bold ? 600 : undefined,
       }}
     >
-      {text.split("\n").map((line, i) =>
+      {(policy === "ellipsis" ? [text.replace(/\n/g, " ")] : text.split("\n")).map((line, i) =>
         line.startsWith("# ") ? (
           <div key={i} className="v-text-h1">{fill(line.slice(2))}</div>
         ) : line.startsWith("## ") ? (
@@ -250,6 +269,11 @@ export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualR
         ),
       )}
     </div>
+    {overflows && policy !== "scroll" && policy !== "grow" && <button type="button" className="v-text-more"
+      onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); dialog.current?.showModal(); }}>Metni oku</button>}
+    <dialog ref={dialog} className="v-text-dialog" aria-label="Metnin tamamı" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <p>{content}</p><button type="button" onClick={() => dialog.current?.close()}>Kapat</button>
+    </dialog></>
   );
 }
 

@@ -224,7 +224,7 @@ def _base(page_id: str, title: str, subtitle: str) -> dict:
     visuals = [
         _visual("shape", f"{page_id}-header", "", 0, 0, PAGE_W, 100,
                 extra={"showTitle": False, "padding": 0, "backgroundColor": "#0b1f3b", "radius": 0, "shadow": False}),
-        _visual("text", f"{page_id}-title", "", 30, 16, 900, 43,
+        _visual("text", f"{page_id}-title", "", 30, 16, 900, 46,
                 extra={"showTitle": False, "padding": 0, "backgroundColor": "transparent",
                        "text": title, "fontSize": 30, "bold": True, "color": "#ffffff", "shadow": False}),
         _visual("text", f"{page_id}-subtitle", "", 32, 62, 1110, 28,

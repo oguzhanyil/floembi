@@ -346,8 +346,16 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
         </p>
         <label>
           Yazı boyutu
-          <input type="number" min={8} max={72} value={Number(f.fontSize) || 14} onChange={(e) => set({ fontSize: Number(e.target.value) })} />
+          <input type="number" min={8} max={144} value={Number(f.fontSize) || 14} onChange={(e) => set({ fontSize: Number(e.target.value) })} />
         </label>
+        <label>Metin yerleşimi
+          <select value={f.textOverflow ?? "wrap"} onChange={(e) => set({ textOverflow: e.target.value as VisualFormat["textOverflow"] })}>
+            <option value="wrap">Satıra böl</option><option value="grow">İçeriğe göre yüksekliği büyüt</option>
+            <option value="ellipsis">Tek satır · üç nokta</option><option value="scroll">Kutuda kaydır</option>
+          </select>
+        </label>
+        <label>Satır aralığı<input type="number" min={1} max={2.5} step={0.1} value={f.lineHeight ?? 1.4}
+          onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
         <label>
           Hizalama
           <select value={(f.align as string) || "left"} onChange={(e) => set({ align: e.target.value })}>

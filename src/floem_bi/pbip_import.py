@@ -146,11 +146,16 @@ def _text(objects: dict) -> tuple[str, dict]:
             size = first.get("fontSize", "")
             try:
                 points = float(str(size).replace("pt", ""))
-                style["fontSize"] = min(72, max(20, round(points * 4 / 3)))
+                style["fontSize"] = min(144, max(8, round(points * 4 / 3, 2)))
             except ValueError:
                 pass
             if isinstance(first.get("color"), str):
                 style["color"] = first["color"]
+            if isinstance(first.get("fontFamily"), str):
+                style["fontFamily"] = first["fontFamily"][:100]
+            if first.get("fontWeight") in ("bold", "600", "700"):
+                style["bold"] = True
+            style["textOverflow"] = "wrap"
             alignment = paragraph.get("horizontalTextAlignment")
             if alignment in ("left", "center", "right"):
                 style["align"] = alignment

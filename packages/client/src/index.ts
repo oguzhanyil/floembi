@@ -377,6 +377,11 @@ export interface Visual {
 }
 
 export interface VisualFormat {
+  /** Metin davranışı; kaydırma yalnız kullanıcı seçerse açılır. */
+  textOverflow?: "wrap" | "ellipsis" | "scroll" | "grow";
+  lineHeight?: number;
+  fontFamily?: string;
+  showTotals?: boolean;
   showTitle?: boolean;
   backgroundColor?: string;
   borderColor?: string;
