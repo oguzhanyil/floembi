@@ -82,6 +82,7 @@ class Page(_B):
     name: str = Field(min_length=1, max_length=120)
     width: int = 1280
     height: int = 720
+    backgroundColor: str | None = None
     visuals: list[Visual] = Field(default_factory=list)
     drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
 

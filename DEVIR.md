@@ -140,6 +140,15 @@ yerleşimleri ve alan referansları vardır. Yeniden üretim komutu README'deki 
 Desteklenmeyen Power BI görselleri yer tutucuya döner; ölçülerin FDX karşılığı ve canlı veri
 bağlantısı sonraki çalışmadır.
 
+Kullanıcı Pavezyum taslaklarının görünmediğini bildirdi. Nedeni PBIP'deki %100 şeffaf actionButton
+katmanlarının beyaz şekil olarak aktarılması ve 1920×1080 sayfada yalnızca dış kutu boyutunun
+ölçeklenmesi, iç metnin ölçeklenmemesiydi. İçe aktarıcı artık şeffaf katmanları atlar, sayfa arka
+planını ve görünüm biçimini korur; görselin tüm içeriği tuval ölçeğiyle birlikte küçülür. Boş verili
+grafiklerde açıkça taslak olarak işaretlenen önizlemeler gösterilir. Serbest tasarım çubuğunda sayfa
+rengi, katman, çoğaltma, kilit ve opaklık araçları bulunur. `local-reports/` altındaki yedi dosya
+yeniden üretildi; önceki sürümleri git dışındaki `data/pbip-before-repair/` klasörüne kopyalandı.
+Gerçek veriye bağlama yine ayrı iştir.
+
 ### Gerçek adresli tek alıcı pilotu (19.11.2026)
 
 `https://bi.floemdata.com` adresi için mevcut Windows bilgisayarında ayrı pilot sunucu ve

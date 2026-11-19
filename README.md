@@ -102,6 +102,10 @@ Oluşan `.floem` dosyası Desktop'ta **Dosya aç** ile düzenlenir. Sayfa, görs
 görsel tipi ve alan bağları aktarılır. Model tabloları boş oluşturulur; gerçek veri, kaynak bağlantısı
 ve Power BI ölçü formülleri aktarılmaz. Desteklenmeyen görseller metin yer tutucusu olur. Veriyle
 çalıştırmak için ilgili kaynağı Desktop'ta yeniden bağlayıp ölçüleri FDX olarak uyarlayın.
+Şeffaf PBIP tıklama katmanları içerik üstünü kapatmamaları için atlanır; sayfalar arası geçiş Floem
+sayfa sekmeleriyle yapılır. Veri bulunmayan grafik ve kartlar **TASLAK · VERİ BEKLENİYOR**
+önizlemesini gösterir; çubuklar gerçek veri değildir. 1920 piksel genişliğindeki raporlar açılırken
+tuval geniş görünür, **Panelleri göster** düğmesiyle alan ve biçim panelleri açılır.
 
 Desktop simgesi `apps/desktop/build-resources/floem-bi.ico` dosyasındadır. Kaynak görselden
 yeniden üretmek için `apps/desktop/build-resources/generate-icon.ps1` çalıştırılır; paketli Windows
@@ -126,6 +130,9 @@ uygulamasında ve geliştirme penceresinde aynı simge kullanılır.
 - **Biçim** panelinde hazır stiller, arka plan, kenarlık, köşe, gölge, boşluk ve başlık ayarlanır.
   Şekil, görsel dosyası ve canlanan sayı nesneleri eklenebilir. Belirme, yükselme ve hafif vurgu
   hareketleri Desktop ile web'de aynı çalışır; sistemin hareket azaltma tercihi uygulanır.
+- Tuval üstündeki **Serbest tasarım** araçlarıyla sayfa rengi değiştirilir. Seçili nesne çoğaltılır,
+  öne/geriye alınır, kilitlenir ve opaklığı ayarlanır. Nesneleri sürükleyip boyutlandırırken hizalama
+  çizgileri görünür; `Alt` basılıyken ızgaraya yapışmadan konumlandırılır.
 
 ### floembi.app (yerel sunucu) ve yayımlama (H5)
 

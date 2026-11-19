@@ -20,7 +20,9 @@ def test_pbip_import_creates_editable_empty_report(tmp_path):
     source = tmp_path / "Ornek.Report"
     pages = source / "definition" / "pages"
     _write(pages / "pages.json", {"pageOrder": ["p1"]})
-    _write(pages / "p1" / "page.json", {"displayName": "Özet", "width": 1280, "height": 720})
+    _write(pages / "p1" / "page.json", {"displayName": "Özet", "width": 1280, "height": 720,
+        "objects": {"background": [{"properties": {"color": {"solid": {"color": {
+            "expr": {"Literal": {"Value": "'#F4F6FA'"}}}}}}}]}})
     _write(pages / "p1" / "visuals" / "shape1" / "visual.json", {
         "name": "shape1", "position": {"x": 0, "y": 0, "width": 1280, "height": 80, "z": 1},
         "visual": {"visualType": "shape", "objects": {"fill": [{"properties": {
@@ -34,6 +36,14 @@ def test_pbip_import_creates_editable_empty_report(tmp_path):
         }]}}}},
         "connectionString": "gizli-baglanti-bilgisi"
     })
+    _write(pages / "p1" / "visuals" / "transparent_button" / "visual.json", {
+        "name": "transparent_button", "position": {"x": 40, "y": 100, "width": 280, "height": 150, "z": 3},
+        "visual": {"visualType": "actionButton", "objects": {
+            "fill": [{"selector": {"id": "default"}, "properties": {
+                "fillColor": {"solid": {"color": {"expr": {"Literal": {"Value": "'#FFFFFF'"}}}}},
+                "transparency": {"expr": {"Literal": {"Value": "100D"}}}}}],
+            "text": [{"selector": {"id": "default"}, "properties": {
+                "show": {"expr": {"Literal": {"Value": "false"}}}}}]}}})
     output = tmp_path / "rapor.floem"
     result = import_report(source, output)
     assert result == {"pages": 1, "visuals": 2, "tables": 1}
@@ -42,7 +52,9 @@ def test_pbip_import_creates_editable_empty_report(tmp_path):
         assert b"gizli-baglanti-bilgisi" not in report_bytes
         report = json.loads(report_bytes)
         assert [v["type"] for v in report["pages"][0]["visuals"]] == ["shape", "card"]
+        assert report["pages"][0]["backgroundColor"] == "#F4F6FA"
         assert report["pages"][0]["visuals"][0]["format"]["backgroundColor"] == "#123456"
+        assert report["pages"][0]["visuals"][1]["format"]["templatePreview"] is True
     with tempfile.TemporaryDirectory() as directory:
         doc = Document.open(Path(directory), output)
         try:

@@ -135,6 +135,7 @@ export function PageCanvas({
     if (e.button !== 0) return;
     e.stopPropagation();
     onSelect(v.id);
+    if (v.format.locked) return;
     try {
       (e.target as Element).setPointerCapture(e.pointerId);
     } catch {
@@ -188,7 +189,7 @@ export function PageCanvas({
       {banner}
       <div
         className="page"
-        style={{ width: page.width * scale, height: page.height * scale }}
+        style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes(FIELD_MIME)) e.preventDefault();
         }}
@@ -224,8 +225,8 @@ export function PageCanvas({
           return (
             <div
               key={v.id}
-              className={`visual ${selected ? "selected" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
-              style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale, ...visualStyle(v) }}
+              className={`visual ${selected ? "selected" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
+              style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onSelect(v.id);

@@ -40,6 +40,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const timer = useRef<number | null>(null);
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [canvasFocus, setCanvasFocus] = useState((host.report.pages[0]?.width ?? 0) >= 1600);
   const [cross, setCross] = useState<CrossFilter | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   // Detaya git (drill-through): hedef sayfa, filtreler, geri dönülecek sayfa
@@ -53,6 +54,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       reportRef.current = host.report;
       setReport(host.report);
       if (!host.report.pages.some((p) => p.id === pageId)) setPageId(host.report.pages[0]?.id ?? "p1");
+      setCanvasFocus((host.report.pages[0]?.width ?? 0) >= 1600);
     }
   }, [host.report, pageId]);
 
@@ -100,7 +102,27 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     update((r) => ({ ...r, pages: r.pages.map((p) => (p.id === page.id ? fn(p) : p)) }));
   const updateVisual = (v: Visual) => updatePage((p) => ({ ...p, visuals: p.visuals.map((x) => (x.id === v.id ? v : x)) }));
 
+  function duplicateVisual(v: Visual) {
+    const ids = new Set(page.visuals.map((item) => item.id));
+    const copy = { ...v, id: newId("v", ids), x: Math.min(page.width - v.w, v.x + 24),
+      y: Math.min(page.height - v.h, v.y + 24), format: { ...v.format, locked: false } };
+    updatePage((p) => ({ ...p, visuals: [...p.visuals, copy] }));
+    setSelectedId(copy.id);
+  }
+
+  function shiftLayer(id: string, direction: -1 | 1) {
+    updatePage((p) => {
+      const visuals = [...p.visuals];
+      const from = visuals.findIndex((v) => v.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= visuals.length) return p;
+      [visuals[from], visuals[to]] = [visuals[to], visuals[from]];
+      return { ...p, visuals };
+    });
+  }
+
   function deleteVisual(id: string) {
+    if (page.visuals.find((v) => v.id === id)?.format.locked) return;
     updatePage((p) => ({ ...p, visuals: p.visuals.filter((v) => v.id !== id) }));
     if (selectedId === id) setSelectedId(null);
     if (cross?.visualId === id) setCross(null);
@@ -289,8 +311,29 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
   return (
-    <div className="report-view">
+    <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}>
       <div className="report-main">
+        <div className="canvas-shell">
+        <div className="design-toolbar" aria-label="Serbest tasarım araçları">
+          <span className="design-toolbar-label">Serbest tasarım</span>
+          <button type="button" onClick={() => setCanvasFocus((current) => !current)}
+            aria-pressed={canvasFocus} title="Tuval için daha geniş alan aç">{canvasFocus ? "Panelleri göster" : "Tuvali genişlet"}</button>
+          <label className="design-page-color" title="Sayfa arka planı">Sayfa <input type="color" value={page.backgroundColor && /^#[0-9a-f]{6}$/i.test(page.backgroundColor) ? page.backgroundColor : "#ffffff"}
+            onChange={(e) => updatePage((p) => ({ ...p, backgroundColor: e.target.value }))} /></label>
+          {selected && <>
+            <span className="design-toolbar-separator" />
+            <button type="button" onClick={() => duplicateVisual(selected)} title="Seçili nesnenin kopyasını oluştur">Çoğalt</button>
+            <button type="button" onClick={() => shiftLayer(selected.id, -1)} disabled={page.visuals[0]?.id === selected.id} title="Bir katman geriye al">Geriye</button>
+            <button type="button" onClick={() => shiftLayer(selected.id, 1)} disabled={page.visuals.at(-1)?.id === selected.id} title="Bir katman öne al">Öne</button>
+            <button type="button" onClick={() => updateVisual({ ...selected, format: { ...selected.format, locked: !selected.format.locked } })}
+              aria-pressed={!!selected.format.locked} title="Nesneyi kilitle veya kilidi aç">{selected.format.locked ? "Kilidi aç" : "Kilitle"}</button>
+            <label className="design-opacity" title="Seçili nesnenin saydamlığı">Opaklık
+              <input type="range" min="0" max="100" value={Math.round((selected.format.opacity ?? 1) * 100)}
+                onChange={(e) => updateVisual({ ...selected, format: { ...selected.format, opacity: Number(e.target.value) / 100 } })} />
+              <span>{Math.round((selected.format.opacity ?? 1) * 100)}%</span>
+            </label>
+          </>}
+        </div>
         <PageCanvas
           page={page}
           selectedId={selectedId}
@@ -329,6 +372,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
             ) : undefined
           }
         />
+        </div>
         <nav className="page-tabs" aria-label="Sayfalar">
           {report.pages.map((p) =>
             renaming === p.id ? (

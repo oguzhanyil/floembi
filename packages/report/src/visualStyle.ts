@@ -14,6 +14,8 @@ export function visualStyle(visual: Visual): CSSProperties {
     borderWidth: clamp(f.borderWidth, 0, 8, 1),
     borderRadius: radius,
     boxShadow: f.shadow ? "0 10px 28px rgba(9, 32, 68, .18)" : undefined,
+    opacity: clamp(f.opacity, 0, 1, 1),
+    "--visual-opacity": clamp(f.opacity, 0, 1, 1),
     "--visual-padding": `${clamp(f.padding, 0, 32, 8)}px`,
     "--visual-title-color": f.titleColor || undefined,
     "--visual-title-size": `${clamp(f.titleSize, 10, 28, 12)}px`,

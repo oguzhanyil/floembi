@@ -156,6 +156,38 @@ function ErrorView({ message, detail }: { message: string; detail?: string }) {
   );
 }
 
+/** Boş verili PBIP taslaklarında alan eşlemesini gerçek veriymiş gibi göstermeden önizler. */
+function TemplateVisual({ v }: { v: Visual }) {
+  const fields = [...v.group.map((field) => field.column), ...v.values.map(valueLabel)];
+  const label = v.title || fields[0] || VISUAL_DEFS[v.type].label;
+  const hex = /^#[0-9a-f]{6}$/i.test(v.format.backgroundColor ?? "") ? v.format.backgroundColor! : "#ffffff";
+  const rgb = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+  const dark = rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722 < 135;
+  const theme = dark ? " dark" : "";
+  const badge = <span className="v-template-badge">TASLAK · VERİ BEKLENİYOR</span>;
+  if (["card", "multicard", "kpi", "gauge", "progress", "ticker"].includes(v.type)) {
+    if (v.h < 80) return <div className={`v-template-compact${theme}`} title={`${label}: veri bekleniyor`}><span>{label}</span><b>—</b></div>;
+    return <div className={`v-template v-template-card${theme}`}>{badge}<span className="v-template-label">{label}</span><span className="v-template-value">—</span></div>;
+  }
+  if (v.type === "table" || v.type === "matrix") {
+    const names = fields.slice(0, 4);
+    return <div className={`v-template${theme}`}>{badge}<div className="v-template-row v-template-label">{(names.length ? names : ["Alanlar"]).map((name, i) => <span key={i}>{name}</span>)}</div><div className="v-template-line" /><div className="v-template-line short" /><div className="v-template-line" /></div>;
+  }
+  if (v.type === "slicer") return <div className={`v-template${theme}`}>{badge}<span className="v-template-label">{label}</span><span className="v-template-chip">Seçim için veri bekleniyor</span></div>;
+  const graphic = v.type === "pie" || v.type === "donut" ?
+    <div className={`v-template-pie ${v.type}`} aria-hidden="true" /> :
+    v.type === "line" || v.type === "area" ?
+      <svg className="v-template-lineplot" viewBox="0 0 320 130" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 110 L52 78 L104 92 L160 46 L214 64 L265 26 L320 42" fill="none" stroke="#649ef0" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        {v.type === "area" && <path d="M0 110 L52 78 L104 92 L160 46 L214 64 L265 26 L320 42 L320 130 L0 130Z" fill="#dbeafe" opacity=".7" />}
+      </svg> :
+      v.type === "bar" || v.type === "stackedbar" ?
+        <div className="v-template-bars" aria-hidden="true"><i /><i /><i /><i /></div> :
+        v.type === "treemap" ? <div className="v-template-treemap" aria-hidden="true"><i /><i /><i /><i /></div> :
+        <div className="v-template-chart" aria-hidden="true"><i /><i /><i /><i /><i /></div>;
+  return <div className={`v-template${theme}`}>{badge}{graphic}<span className="v-template-label">{typeof v.format.previewLabel === "string" ? v.format.previewLabel : fields.slice(0, 2).join(" · ") || label}</span></div>;
+}
+
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
 export function VisualBody({
   v, extra, dataRev, cross, onCross, onCrossRow, detailReady, run, state, onState, fieldType,
@@ -253,6 +285,7 @@ export function VisualBody({
     }
     if (mdata.state === "error") return <ErrorView {...mdata.error} />;
     const parts = mdata.state === "ready" ? mdata.parts : mdata.previous;
+    if (v.format.templatePreview && (!parts || parts.every((part) => part.result.rows.length === 0))) return <TemplateVisual v={v} />;
     if (!parts) return <div className="v-empty v-loading">Yükleniyor…</div>;
     return (
       <div className={"v-body " + (mdata.state === "loading" ? "loading" : "")}>
@@ -271,6 +304,7 @@ export function VisualBody({
   }
   if (data.state === "error") return <ErrorView {...data.error} />;
   const result = data.state === "ready" ? data.result : data.previous;
+  if (v.format.templatePreview && (!result || result.rows.length === 0)) return <TemplateVisual v={v} />;
   if (!result) return <div className="v-empty v-loading">Yükleniyor…</div>;
   const def = VISUAL_DEFS[v.type];
   return (

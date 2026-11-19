@@ -63,10 +63,19 @@ def _literal(value: Any) -> Any:
 
 def _property(objects: dict, category: str, name: str) -> Any:
     for item in objects.get(category, []):
+        if item.get("selector", {}).get("id", "default") != "default":
+            continue
         props = item.get("properties", {})
         if name in props:
             return _literal(props[name])
     return None
+
+
+def _number(value: Any, fallback: float = 0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _field(field: dict) -> tuple[str, str, str] | None:
@@ -136,11 +145,15 @@ def _text(objects: dict) -> tuple[str, dict]:
             first = runs[0].get("textStyle", {})
             size = first.get("fontSize", "")
             try:
-                style["fontSize"] = min(72, max(8, int(float(str(size).replace("pt", "")))))
+                points = float(str(size).replace("pt", ""))
+                style["fontSize"] = min(72, max(20, round(points * 4 / 3)))
             except ValueError:
                 pass
             if isinstance(first.get("color"), str):
                 style["color"] = first["color"]
+            alignment = paragraph.get("horizontalTextAlignment")
+            if alignment in ("left", "center", "right"):
+                style["align"] = alignment
     return "\n".join(lines), style
 
 
@@ -162,7 +175,7 @@ def _projection(query: dict, role: str) -> list[dict]:
     return (query.get("queryState", {}).get(role) or {}).get("projections", [])
 
 
-def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict:
+def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | None:
     visual = raw.get("visual") or {}
     original_type = visual.get("visualType", "unknown")
     kind = TYPE_MAP.get(original_type, "text")
@@ -170,6 +183,13 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict:
     name = str(raw.get("name") or "gorsel")[:64]
     objects = visual.get("objects") or {}
     container = visual.get("visualContainerObjects") or {}
+    # PBIP gezinme/ayrıntı düğmelerinin çoğu tamamen şeffaf tıklama katmanıdır.
+    # Floem'de düğme eylemi aktarılmadığı için bu katmanları çizmek içeriği örter.
+    if original_type == "actionButton" and (
+        _property(objects, "fill", "show") is False or
+        _number(_property(objects, "fill", "transparency")) >= 99
+    ) and _property(objects, "text", "show") is not True:
+        return None
     fmt: dict[str, Any] = {}
     title = _property(container, "title", "text")
     if isinstance(title, str) and title:
@@ -178,7 +198,11 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict:
         title = None
     if kind in ("shape", "text", "image"):
         fmt["showTitle"] = False
-        fmt["padding"] = 0 if kind != "text" else 8
+        fmt["padding"] = 0
+    if kind in ("card", "multicard", "kpi") and _number(pos.get("height"), 200) < 80:
+        fmt["padding"] = 0
+    if kind == "text":
+        fmt["backgroundColor"] = "transparent"
     if kind == "shape":
         fill = _property(objects, "fill", "fillColor")
         if isinstance(fill, str) and re.fullmatch(r"#[0-9a-fA-F]{6,8}", fill):
@@ -201,13 +225,36 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict:
             fmt["imageData"] = data
         fmt["altText"] = name
     else:
+        fmt["templatePreview"] = True
         if kind in ("card", "ticker"):
             fmt["categoryLabel"] = True
     background = _property(container, "background", "color")
-    if isinstance(background, str) and re.fullmatch(r"#[0-9a-fA-F]{6,8}", background):
+    if _property(container, "background", "show") is not False and isinstance(background, str) and re.fullmatch(r"#[0-9a-fA-F]{6,8}", background):
         fmt["backgroundColor"] = background[:7]
+    if _property(container, "border", "show") is True:
+        border = _property(container, "border", "color")
+        if isinstance(border, str) and re.fullmatch(r"#[0-9a-fA-F]{6,8}", border):
+            fmt["borderColor"] = border[:7]
+            fmt["borderWidth"] = 1
+        fmt["radius"] = min(40, max(0, _number(_property(container, "border", "radius"), 8)))
+    fmt["shadow"] = _property(container, "dropShadow", "show") is True
+    transparency = _number(_property(objects, "fill", "transparency"))
+    if kind == "shape" and transparency > 0:
+        fmt["opacity"] = max(0, 1 - transparency / 100)
 
     query = visual.get("query") or {}
+    if kind not in ("shape", "text", "image"):
+        labels = [str(item["displayName"]) for role in ("Category", "Rows", "Values", "Y", "X")
+                  for item in _projection(query, role) if isinstance(item.get("displayName"), str)]
+        if labels:
+            fmt["previewLabel"] = " · ".join(dict.fromkeys(labels[:2]))[:160]
+        if title:
+            fmt["titleSize"] = 20
+    if kind in ("card", "multicard", "kpi", "gauge") and not title:
+        projection = _projection(query, "Values")
+        if projection and isinstance(projection[0].get("displayName"), str):
+            title = projection[0]["displayName"][:200]
+            fmt["showTitle"] = False
     group: list[dict] = []
     legend: list[dict] = []
     values: list[dict] = []
@@ -287,7 +334,8 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
         for path in (page_dir / "visuals").glob("*/visual.json"):
             raw = _read(path)
             inputs.append((float((raw.get("position") or {}).get("z", 0)), raw))
-        visuals = [_convert_visual(report_dir, raw, bindings) for _z, raw in sorted(inputs, key=lambda item: item[0])]
+        visuals = [converted for _z, raw in sorted(inputs, key=lambda item: item[0])
+                   if (converted := _convert_visual(report_dir, raw, bindings)) is not None]
         # PBIP bazı durumlarda aynı görsel adını bir sayfada tekrar kullanabilir.
         ids: set[str] = set()
         for visual in visuals:
@@ -296,8 +344,11 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
                 visual["id"] = f"{base[:58]}_{index}"
                 index += 1
             ids.add(visual["id"])
+        page_background = _property(info.get("objects") or {}, "background", "color")
         pages.append({"id": str(page_id)[:64], "name": str(info.get("displayName") or page_id)[:120],
                       "width": int(info.get("width") or 1280), "height": int(info.get("height") or 720),
+                      "backgroundColor": page_background if isinstance(page_background, str) and
+                      re.fullmatch(r"#[0-9a-fA-F]{6,8}", page_background) else "#FFFFFF",
                       "visuals": visuals})
         visual_total += len(visuals)
     report = Report.model_validate({"version": 1, "pages": pages}).model_dump(mode="json", exclude_none=True)

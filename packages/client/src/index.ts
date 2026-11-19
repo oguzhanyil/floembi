@@ -392,6 +392,11 @@ export interface VisualFormat {
   imageData?: string;
   imageFit?: "contain" | "cover";
   altText?: string;
+  /** Serbest tasarım: yarı saydamlık ve düzenleme kilidi. */
+  opacity?: number;
+  locked?: boolean;
+  /** PBIP gibi boş verili taslaklarda örnek görünüm göster. */
+  templatePreview?: boolean;
   dataLabels?: boolean;
   legend?: "top" | "bottom" | "right" | "none";
   xAxisTitle?: boolean;
@@ -421,6 +426,7 @@ export interface ReportPage {
   name: string;
   width: number;
   height: number;
+  backgroundColor?: string;
   visuals: Visual[];
   /** Detaya git (drill-through) alanları: başka sayfadan bu alanın değeriyle filtrelenerek açılır */
   drillthrough?: FieldRef[];

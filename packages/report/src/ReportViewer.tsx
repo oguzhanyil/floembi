@@ -57,15 +57,15 @@ export function ReportViewer({
             }}
           />
         )}
-        <div className="page" style={{ width: page.width * scale, height: page.height * scale }}>
+        <div className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {page.visuals.map((v) => {
             const title = visualTitle(v);
             return (
               <div
                 key={v.id}
-                className={`visual readonly ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
-                style={{ left: v.x * scale, top: v.y * scale, width: v.w * scale, height: v.h * scale, ...visualStyle(v) }}
+                className={`visual readonly ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
+                style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="visual-head">

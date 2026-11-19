@@ -1,7 +1,19 @@
 /* ---- Rapor görünümü ---- */
 .report-view { display: grid; grid-template-columns: minmax(0, 1fr) 260px 240px; height: 100%; min-height: 0; }
+.report-view.canvas-focus { grid-template-columns: minmax(0, 1fr); }
+.report-view.canvas-focus > .viz-pane, .report-view.canvas-focus > .data-pane { display: none; }
 .report-main { display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; background: #e9e8e6; }
-.page-outer { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; }
+.canvas-shell { display: grid; grid-template-rows: 44px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.page-outer { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; height: 100%; }
+.design-toolbar { position: relative; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 5px 8px; background: #f7f9fc; border-bottom: 1px solid #d7dfe9; white-space: nowrap; font-size: 11px; }
+.design-toolbar-label { font-weight: 700; color: #254063; padding: 0 4px; }
+.design-toolbar button { border: 0; border-radius: 6px; background: transparent; padding: 6px 8px; font-size: 11px; }
+.design-toolbar button:hover:not(:disabled), .design-toolbar button[aria-pressed="true"] { background: #eaf1ff; color: #2059ac; }
+.design-toolbar button:disabled { opacity: .35; }
+.design-toolbar-separator { width: 1px; height: 22px; background: #d9e2ee; margin: 0 4px; }
+.design-page-color, .design-opacity { display: flex; align-items: center; gap: 5px; color: #516276; }
+.design-page-color input { width: 25px; height: 25px; padding: 0; border: 0; background: none; cursor: pointer; }
+.design-opacity input { width: 80px; accent-color: #2563eb; }
 
 .visual:hover { border-color: var(--border-strong); }
 .visual.drop { border-color: var(--accent); background: var(--accent-soft); }
