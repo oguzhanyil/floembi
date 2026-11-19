@@ -131,16 +131,19 @@ Cloudflare tüneli kuruldu. Pilot SQLite/DuckDB verisi `%LOCALAPPDATA%\FloemBI\p
 altındadır; geliştirme kullanıcıları ve 8800 sunucusu kullanılmaz. `floemmodel.floem`
 Desktop yayınlama istemcisiyle pilot çalışma alanına gönderildi. GoDaddy SMTP test gönderimi
 ve gerçek alıcı daveti `sent` döndü. Cloudflare tüneli `healthy`; dış adreste rapor API'si
-yetkisiz isteğe 401, yönetici sorgusuna 200 döndü. Alıcının daveti kabul edip şifre
-belirlemesi ve web üzerinden görsel kabulü bekleniyor. Desktop penceresinde kaydedilmemiş
-değişiklik göstergesi görüldüğünden, son düzenlemeler kaydedildikten sonra yeniden yayımlama
-gerekiyor olabilir.
+yetkisiz isteğe 401 döndü. Alıcı daveti kabul edip şifresini belirledi; yalnızca rapora
+`viewer` erişimi var, çalışma alanı üyeliği yok. Desktop'taki son değişiklikler kaydedilip
+aynı raporun 2. sürümü yayımlandı. Alıcı rolüyle dış adreste görsel sorgusu 200 ve 66 satır,
+çalışma alanı isteği 403 döndü. Kullanıcı web görsellerini açıp Desktop dosyasını kaydettiğini
+bildirdi. Pilot yönetici şifresi kurulumda rastgele üretildi; kullanıcı bu şifrenin Windows
+Kimlik Bilgisi Yöneticisi'nde aynı kalmasını tercih etti.
 
 Kod: `src/floem_bi/server/pilot.py` (yönetici, tünel, şifre),
 `src/floem_bi/server/cloudflare_pilot.py` (idempotent DNS/tünel kurulumu),
-`README.md` (çalıştırma ve kullanıcı akışı). Geçici yönetici şifresi Windows Kimlik
-Bilgisi Yöneticisi'nde; kullanıcı `python -m floem_bi.server.pilot admin-password` ile
-kendi şifresini belirlemeli. Bu hesap ve SMTP şifresi depoda tutulmaz.
+`README.md` (çalıştırma ve kullanıcı akışı). Yönetici şifresi Windows Kimlik Bilgisi
+Yöneticisi'nde; manuel yönetici girişi gerektiğinde kullanıcı
+`python -m floem_bi.server.pilot admin-password` ile bildiği bir şifre belirleyebilir.
+Bu hesap ve SMTP şifresi depoda tutulmaz.
 
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
