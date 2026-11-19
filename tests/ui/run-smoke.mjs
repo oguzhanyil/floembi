@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { unzipSync, strFromU8 } from "fflate";
+import { testMatrix } from "./matrix-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -333,6 +334,7 @@ try {
   assert.doesNotMatch(await evaluate('document.querySelector(".v-context-menu").textContent'), /Çoğalt|Kilitle|Bir katman/);
   await dismissMenu();
   console.log(`PASS: ${types.length} nesnede tasarım/web sağ tık menüsü; çoğaltma, kilit, katman, silme, biçim, klavye, metin kopyalama; grafik/ağaç veri aktarımı; tablo PDF-XLSX-CSV; 6 viewport/DPR ve nesne taşıma.`);
+  await testMatrix({ call, evaluate, waitFor, openMenu, choose, input, dir });
   await call("Browser.close");
 } finally {
   ws?.close();

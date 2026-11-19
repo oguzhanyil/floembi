@@ -235,18 +235,20 @@
 
 /* Matris (pivot / ağaç tablo) */
 .v-matrix-wrap { height: 100%; overflow: auto; position: relative; }
-.v-matrix-tools { position: sticky; left: 0; display: flex; gap: 6px; padding: 0 0 4px; }
+.v-matrix-tools { position: sticky; left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 4px; }
 .v-matrix-tools button { border: 1px solid var(--border); background: var(--surface); border-radius: 3px; font-size: 11px; padding: 1px 6px; color: var(--muted); cursor: pointer; }
 .v-matrix-tools button:hover { color: var(--text); border-color: var(--border-strong); }
+.v-matrix-tools button:disabled, .v-matrix-toggle:disabled { opacity: .5; cursor: default; }
+.v-matrix-depth { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .v-matrix { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 100%; }
 .v-matrix th, .v-matrix td { padding: 3px 8px; white-space: nowrap; border-bottom: 1px solid var(--border); }
-.v-matrix thead th { position: sticky; top: 0; background: var(--surface); font-weight: 600; z-index: 2; }
-.v-matrix thead tr:nth-child(2) th { top: 22px; }
+.v-matrix thead th { position: sticky; top: 0; height: 24px; line-height: 16px; background: var(--surface); font-weight: 600; z-index: 2; }
 .v-matrix th.colgroup { text-align: center; border-bottom: 1px solid var(--border-strong); }
 .v-matrix th.rowhead { text-align: left; border-bottom: 1px solid var(--border-strong); }
 .v-matrix .num { text-align: right; }
 .v-matrix .total { background: #faf9f8; font-weight: 600; }
-.v-matrix td.rowlabel { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.v-matrix td.rowlabel { background: var(--surface); }
+.v-matrix td.rowlabel:first-child { position: sticky; left: 0; z-index: 1; }
 .v-matrix tr.subtotal td { font-weight: 600; }
 .v-matrix tr.lvl1.subtotal td { background: #faf9f8; }
 .v-matrix tr.lvl1.subtotal td.rowlabel { background: #faf9f8; }

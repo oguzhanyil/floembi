@@ -139,6 +139,29 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 matris hiyerarşisi ve Excel (F09)
+
+`matrix.tsx` ayrı satır sütunları ve birleşik çok düzeyli sütun başlıkları gösterir.
+`matrixRowLayout: "columns" | "compact"` Biçim panelinden ayarlanır; varsayılan matris için
+columns, ağaç tablo için compact'tır. +/− Düzey araçları ve sağ tık işlemleri bir basamak ilerler;
+tek dal kapatıldığında o dalın alt açılma durumları temizlenir, kardeş dallar korunur.
+Ağaç araması eşleşen yolları otomatik açar; arama sırasında düzey düğmeleri kapalıdır.
+
+`matrixExport.ts` Desktop/web ve XLSX için ortak başlık düzenini oluşturur. `ExportTable.excel`
+isteğe bağlı anlık görüntüsü, görünür PDF/CSV'den bağımsız olarak sorgulanmış kapalı detayları da
+aktarır. `matrixExcel.ts`, write-excel-file'ın MIT özellik arayüzüyle gerçek OpenXML
+`outlineLevel`, `hidden`, `collapsed`, `summaryBelow=0` satır grupları üretir. Excel'de her satır
+alanı ayrı sütundadır, sütun grupları birleşik hücrelerdir; başlık ve satır alanları sabitlenir.
+Toplam/ortalama değerleri mevcut düzey sorgularından alınır; tekrar toplanmaz. Kaynak sorgusu,
+RLS ve satır sınırları değişmez. Excel'in 8 düzey sınırından derin satırlar son grupta kalır.
+Yeni bağımlılık yoktur; modül yalnız Excel indirilirken yüklenir.
+
+`tests/ui/matrix-smoke.mjs` Chromium'da 3 satır × 2 sütun düzeyini, basamak açma/kapama,
+dal bağımsızlığı, tek/ayrı sütun görünümü ve ağaç aramasını doğrular. Gerçek indirilen XLSX'in
+birleşik başlıkları, outline/hidden/collapsed işaretleri, donmuş bölmeleri, kapalı detayları,
+sayısal sıfır/negatifler ve ortalama genel toplamı kontrol edilir. Mevcut 26 nesne menüsü ve tablo
+aktarım testleri, TypeScript kontrolü, Desktop/web derlemeleri geçti.
+
 ### 19.11.2026 tüm nesnelerde ortak sağ tık
 
 `ContextMenu.tsx` portal/klavye menüsü, `VisualContextMenu.tsx` nesne kapsamı ve işlem kayıt arayüzüdür.
@@ -151,8 +174,8 @@ ve aynı menüye ortak işlemleri ekler. Menü tıklaması nesnenin eylemini tet
 
 Yeni `contextMenu`, `exportData`, `exportPdf`, `exportExcel`, `exportCsv` ayarları tüm nesnelerde
 **Biçim → Sağ tık ve indirme** bölümündedir. Eski `gridContextMenu` / `gridExport*` değerleri yeni
-alan tanımlı değilse okunur. Grafik/kart/dilimleyici güncel sorgu sonucunu; matris/ağaç mevcut
-görünür hiyerarşiyi dışa aktarır. PDF grafik resmi değil veri dökümüdür. Statik şekil/resim/düğme
+alan tanımlı değilse okunur. Grafik/kart/dilimleyici güncel sorgu sonucunu; matris/ağaç PDF/CSV'de
+görünür hiyerarşiyi, Excel'de kapalı detayları da dışa aktarır. PDF grafik resmi değil veri dökümüdür. Statik şekil/resim/düğme
 için veri indirme gösterilmez. Matris/ağaç dosyalarında ara toplam satırları bulunduğundan tüm
 satırları toplamak doğru genel toplamı vermeyebilir.
 26 görsel türünün tamamında tasarım ve izleyici menüsü, gerçek çoğaltma/kilit/katman/silme/biçim,

@@ -382,6 +382,8 @@ export interface VisualFormat {
   lineHeight?: number;
   fontFamily?: string;
   showTotals?: boolean;
+  /** Matris varsayılanı ayrı sütunlar, ağaç tablo varsayılanı girintili tek sütundur. */
+  matrixRowLayout?: "columns" | "compact";
   /** Tablo araçları: belirtilmemiş seçenekler eski raporlarda açık kalır. */
   gridFilters?: boolean;
   gridSearch?: boolean;

@@ -159,11 +159,31 @@ bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalışt
   Veri içeren nesneler güncel sorgu sonucunu **PDF / Excel (.xlsx) / CSV** aktarır.
   **PDF veri dökümüdür**, grafik görüntüsünün çıktısı değildir. Sorgu sonucu yüklenirken veya hata
   durumundayken eski veri indirmeye sunulmaz. Düğmeye sağ tıklamak onun tıklama eylemini çalıştırmaz.
-- Matris ve ağaç tabloda **Tümünü genişlet / daralt** vardır. Aktarım, görüntülenen hiyerarşi
-  satırlarını ve sütunları izler; ağaç araması ve sıralaması uygulanır. Alt toplamlar ayrı satır olarak
-  yer alabilir; dosyadaki tüm satırları tekrar toplamak aynı veriyi birden çok kez sayabilir.
+- Matris ve ağaç tabloda **Bir düzey genişlet / daralt** ve **Tümünü genişlet / daralt** vardır.
+  PDF/CSV görünür satırları; Excel, kapalı detayları da içeren hiyerarşiyi aktarır. Ağaç araması ve
+  sıralaması uygulanır. Alt toplamlar ayrı satırlardır; dosyadaki tüm satırları tekrar toplamak
+  aynı veriyi birden çok kez sayabilir.
 - Ortak ayarlar **Görselleştirmeler → Biçim → Sağ tık ve indirme** bölümündedir. Menü ve indirme
   biçimleri nesne bazında kapatılabilir. Eski tablo raporlarının kapalı ayarları korunur.
+
+#### Matris hiyerarşisi ve Excel
+
+- Matris üstündeki **+ Düzey / − Düzey**, hiyerarşiyi birer basamak açar/kapatır.
+  Satırın + / − düğmesi yalnız o dalı değiştirir. Kapatıp yeniden açtığınız dal sadece sonraki
+  düzeyi gösterir; diğer dalların durumu korunur. Arama eşleşen yolları otomatik açtığından,
+  ağaç araması etkinken düzey düğmeleri devre dışıdır.
+- **Biçim → Matris / Ağaç tablo → Satır hiyerarşisi** ile **Her düzey ayrı sütun** veya
+  **Girintili tek sütun** seçilir. Matris varsayılan olarak ayrı sütun kullanır:
+  Bölge birinci, Şehir ikinci, Müşteri üçüncü sütundadır. Yıl → Ay gibi sütun kırılımları
+  birleşik üst başlıklarla, ölçüler onların altında gösterilir.
+- **Sağ tık → Excel (.xlsx) indir**: her satır düzeyi ayrı Excel sütununa yerleşir;
+  üst başlıklar birleşik hücrelerdir. Ara toplam satırları detayın üstündedir. Ekranda kapalı
+  detaylar dosyada kalır ve Excel'in solundaki **+ / −** grup düğmeleriyle açılır.
+  Başlıklar ve hiyerarşi sütunları sabitlenir. Sayılar sayısal hücre olarak, genel toplam ve
+  ortalama gibi ölçüler semantik sorgudan geldikleri hâliyle aktarılır.
+- Aktarım, rapor filtreleri/RLS ve mevcut sorgu sınırları içindeki veriyi kapsar; yeni kaynak
+  sorgusu çalıştırmaz. Excel'in en fazla 8 satır düzeyi sınırını aşan detaylar son grubun içinde
+  görünür satırlar olarak korunur. CSV/PDF'nin hiyerarşik aç/kapat özelliği yoktur.
 
 #### AG Grid tablo ve ağaç tablo
 

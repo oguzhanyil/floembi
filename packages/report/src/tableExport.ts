@@ -1,11 +1,21 @@
 import type { VisualFormat, VisualResultColumn } from "@floem/client";
 
 export type TableValue = string | number | boolean | null;
+export interface ExcelHeaderCell { value: string; columnSpan?: number; rowSpan?: number }
+export interface ExcelHierarchy {
+  columns: VisualResultColumn[];
+  headers: (ExcelHeaderCell | null)[][];
+  rows: TableValue[][];
+  outline: { level: number; hidden: boolean; collapsed: boolean; summary: boolean }[];
+  frozenColumns: number;
+}
 export interface ExportTable {
   title?: string;
   columns: VisualResultColumn[];
   rows: TableValue[][];
   truncated: boolean;
+  /** XLSX hiyerarşisi, CSV/PDF'nin görünür satırlarından bağımsız hazırlanır. */
+  excel?: () => ExcelHierarchy;
 }
 export type TableExportKind = "pdf" | "xlsx" | "csv";
 export const allowedExportKinds = (format: VisualFormat) => (["pdf", "xlsx", "csv"] as const).filter((kind) =>
@@ -26,6 +36,10 @@ export async function tableExportBlob(table: ExportTable, kind: TableExportKind)
     return new Blob(["\ufeff", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
   }
   if (kind === "xlsx") {
+    if (table.excel) {
+      const { hierarchyExcelBlob } = await import("./matrixExcel");
+      return hierarchyExcelBlob(table.excel());
+    }
     const { default: writeExcelFile } = await import("write-excel-file/universal");
     return writeExcelFile([
       table.columns.map((c) => ({ value: c.name, fontWeight: "bold" as const, backgroundColor: "#16324F", textColor: "#FFFFFF", wrap: true })),

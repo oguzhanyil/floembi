@@ -7,6 +7,7 @@ import { formatValue, valueLabel } from "./reportUtils";
 import type { MatrixPart } from "./useVisualData";
 import { useVisualExports, useVisualMenuSource } from "./VisualContextMenu";
 import { allowedExportKinds } from "./tableExport";
+import { matrixExcelLayout, matrixHeaderLayout, type MatrixExportRow } from "./matrixExport";
 
 type Raw = string | number | boolean | null;
 const MAX_RENDER_ROWS = 3000;
@@ -37,6 +38,8 @@ export function MatrixVisual({
   const C = v.type === "treegrid" ? 0 : (v.legend ?? []).length;
   const V = v.values.length;
   const treeMode = v.type === "treegrid";
+  const separateRows = (v.format.matrixRowLayout ?? (treeMode ? "compact" : "columns")) === "columns";
+  const rowHeaderCount = separateRows ? Math.max(1, R) : 1;
   const [search, setSearch] = useState("");
   const [treeSort, setTreeSort] = useState("source");
 
@@ -80,15 +83,20 @@ export function MatrixVisual({
         colPaths.push(path);
       }
     }
-    return { cells, root, colPaths, valueCols, rowCols, colCols };
+    return { cells, root, index, colPaths, valueCols, rowCols, colCols };
   }, [parts, R, C]);
 
   const expanded = new Set(state.expanded ?? []);
+  const clearBranch = (node: RowNode, next: Set<string>) => {
+    next.delete(k(node.path));
+    node.children.forEach((child) => clearBranch(child, next));
+  };
   const toggle = (path: Raw[]) => {
     const key = k(path);
     const next = new Set(expanded);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
+    const node = model.index.get(key);
+    if (node) clearBranch(node, next);
+    if (!expanded.has(key)) next.add(key);
     onState?.({ ...state, expanded: [...next] });
   };
   const expandAll = (open: boolean) => {
@@ -108,6 +116,10 @@ export function MatrixVisual({
     ...(C > 0 ? [{ label: "Toplam", path: null }] : [{ label: "", path: null }]),
   ];
   const valueNames = v.values.map(valueLabel);
+  const rowFields = v.group.map((g, i) => ({ ...rowCols[i], name: g.column, kind: "group" as const, type: rowCols[i]?.type ?? "string" as const }));
+  const columnGroups = colGroups.map((g) => ({ path: g.path, labels: g.path?.map((x, i) => formatValue(x, colCols[i]?.type, colCols[i]?.format) || "(Boş)") ?? (C ? ["Toplam"] : []) }));
+  const measures = valueNames.map((name, i) => ({ ...valueCols[i], name, kind: "value" as const }));
+  const headers = matrixHeaderLayout(separateRows ? rowFields : [{ name: v.group.map((g) => g.column).join(" / ") || "Satır", kind: "group", type: "string" }], columnGroups, measures, C).headers;
 
   const cellValues = (rowPath: Raw[], colPath: Raw[] | null) => cells.get(k(rowPath) + "|" + k(colPath ?? [])) ?? [];
   const fmtVal = (val: Raw | undefined, i: number) => formatValue(val ?? null, valueCols[i]?.type, valueCols[i]?.format);
@@ -138,6 +150,33 @@ export function MatrixVisual({
     }
   };
   walk(root);
+  const closedParents = visible.filter((n) => n.children.length && !expanded.has(k(n.path)));
+  const openParents = visible.filter((n) => n.children.length && expanded.has(k(n.path)));
+  const changeLevel = (open: boolean) => {
+    const next = new Set(expanded);
+    const deepestOpen = Math.max(0, ...openParents.map((n) => n.path.length));
+    const frontier = open ? closedParents : openParents.filter((n) => n.path.length === deepestOpen);
+    for (const node of frontier) {
+      clearBranch(node, next);
+      if (open) next.add(k(node.path));
+    }
+    onState?.({ ...state, expanded: [...next] });
+  };
+  const excelSnapshot = () => {
+    const rows: MatrixExportRow[] = [];
+    const valuesFor = (path: Raw[]) => colGroups.flatMap((g) => valueNames.map((_, i) => cellValues(path, g.path)[i] ?? null));
+    const visit = (n: RowNode, hidden: boolean) => {
+      for (const child of sortedChildren(n)) {
+        if (!matches(child)) continue;
+        // Excel en çok 8 satır düzeyi sunar; daha derin detaylar aynı grupta görünür kalır.
+        const collapsed = !needle && child.path.length < 8 && child.children.length > 0 && !expanded.has(k(child.path));
+        rows.push({ path: child.path, values: valuesFor(child.path), hidden, collapsed, summary: child.children.length > 0 });
+        visit(child, hidden || collapsed);
+      }
+    };
+    visit(root, false);
+    return matrixExcelLayout(rowFields, columnGroups, measures, rows, valuesFor([]), C);
+  };
   const hasSel = selected !== undefined;
   const rowHeader = v.group.map((g) => g.column).join(" / ");
   const exportCsv = () => {
@@ -157,8 +196,10 @@ export function MatrixVisual({
   };
   useVisualMenuSource("matrix", () => [
     ...(R > 1 && onState ? [
-      { label: "Tümünü genişlet", action: () => expandAll(true) },
-      { label: "Tümünü daralt", action: () => expandAll(false) },
+      { label: "Bir düzey genişlet", action: () => changeLevel(true), disabled: !!needle || !closedParents.length },
+      { label: "Bir düzey daralt", action: () => changeLevel(false), disabled: !!needle || !openParents.length },
+      { label: "Tümünü genişlet", action: () => expandAll(true), disabled: !!needle },
+      { label: "Tümünü daralt", action: () => expandAll(false), disabled: !!needle },
     ] : []),
     ...(treeMode ? [{ label: "Ağaç aramasını ve sıralamasını temizle", action: () => { setSearch(""); setTreeSort("source"); } }] : []),
   ]);
@@ -168,6 +209,7 @@ export function MatrixVisual({
       valueNames.map((name, i) => ({ ...valueCols[i], name: [g.label, name].filter(Boolean).join(" · "), kind: "value" as const })))],
     rows: visible.map((n) => [n.path.map(String).join(" / "), ...colGroups.flatMap((g) => valueNames.map((_, i) => cellValues(n.path, g.path)[i] ?? null))]),
     truncated: visible.length >= MAX_RENDER_ROWS || parts.some((p) => p.result.truncated),
+    excel: excelSnapshot,
   }));
 
   return (
@@ -184,56 +226,32 @@ export function MatrixVisual({
       </div>}
       {R > 1 && onState && (
         <div className="v-matrix-tools">
-          <button onClick={() => expandAll(true)} title="Tüm düzeyleri aç">⊞ Tümünü genişlet</button>
-          <button onClick={() => expandAll(false)} title="İlk düzeye dön">⊟ Daralt</button>
+          <button onClick={() => changeLevel(true)} aria-label="Bir düzey genişlet" disabled={!!needle || !closedParents.length}
+            title={needle ? "Düzey değiştirmek için aramayı temizleyin" : "Bir sonraki satır düzeyini aç"}>+ Düzey</button>
+          <button onClick={() => changeLevel(false)} aria-label="Bir düzey daralt" disabled={!!needle || !openParents.length}
+            title="En alttaki açık düzeyi kapat">− Düzey</button>
+          <span className="v-matrix-depth">Düzey {Math.max(1, ...visible.map((n) => n.path.length))}/{R}</span>
+          <button onClick={() => expandAll(true)} disabled={!!needle} title="Tüm düzeyleri aç">⊞ Tümünü genişlet</button>
+          <button onClick={() => expandAll(false)} disabled={!!needle} title="İlk düzeye dön">⊟ Daralt</button>
         </div>
       )}
       <table className="v-matrix">
         <thead>
-          {C > 0 && V === 1 ? (
-            // Tek değer + sütun grupları: tek başlık satırı (değer adı gereksiz)
-            <tr>
-              <th className="rowhead">{rowHeader}</th>
-              {colGroups.map((g, i) => (
-                <th key={i} className={`num ${g.path === null ? "total" : ""}`}>
-                  {g.label}
-                </th>
-              ))}
-              {v.format.rowAction && <th className="v-row-action-head" title={v.format.rowAction.label}>⋯</th>}
-            </tr>
-          ) : (
-            <>
-              {C > 0 && (
-                <tr>
-                  <th className="corner" />
-                  {colGroups.map((g, i) => (
-                    <th key={i} colSpan={V} className={`colgroup ${g.path === null ? "total" : ""}`}>
-                      {g.label}
-                    </th>
-                  ))}
-                  {v.format.rowAction && <th className="v-row-action-head" rowSpan={2} title={v.format.rowAction.label}>⋯</th>}
-                </tr>
-              )}
-              <tr>
-                <th className="rowhead">{rowHeader}</th>
-                {colGroups.flatMap((g, gi) =>
-                  valueNames.map((n, vi) => (
-                    <th key={`${gi}-${vi}`} className={`num ${g.path === null && C > 0 ? "total" : ""}`}>
-                      {n}
-                    </th>
-                  )),
-                )}
-                {v.format.rowAction && C === 0 && <th className="v-row-action-head" title={v.format.rowAction.label}>⋯</th>}
-              </tr>
-            </>
-          )}
+          {headers.map((row, ri) => <tr key={ri}>
+            {row.map((cell, ci) => cell && <th key={ci} rowSpan={cell.rowSpan} colSpan={cell.columnSpan}
+              style={{ top: ri * 24 }} scope={ci < rowHeaderCount ? "col" : cell.columnSpan && cell.columnSpan > 1 ? "colgroup" : "col"}
+              className={ci < rowHeaderCount ? "rowhead" : `colgroup ${C > 0 && ci >= rowHeaderCount + colPaths.length * V ? "total" : ""}`}>
+              {cell.value}
+            </th>)}
+            {ri === 0 && v.format.rowAction && <th className="v-row-action-head" rowSpan={headers.length} title={v.format.rowAction.label}>⋯</th>}
+          </tr>)}
         </thead>
         <tbody>
-          {treeMode && needle && visible.length === 0 && <tr><td colSpan={1 + valueNames.length + (v.format.rowAction ? 1 : 0)} className="v-tree-empty">Eşleşen satır yok</td></tr>}
+          {treeMode && needle && visible.length === 0 && <tr><td colSpan={rowHeaderCount + colGroups.length * V + (v.format.rowAction ? 1 : 0)} className="v-tree-empty">Eşleşen satır yok</td></tr>}
           {visible.map((n, rowIndex) => {
             const level = n.path.length;
             const leaf = level === R;
-            const open = expanded.has(k(n.path));
+            const open = !!needle || expanded.has(k(n.path));
             const rc = rowCols[level - 1];
             const isSel = hasSel && level === 1 && n.path[0] === selected;
             return (
@@ -241,9 +259,10 @@ export function MatrixVisual({
                 key={k(n.path)}
                 className={`lvl${Math.min(level, 4)} ${leaf ? "" : "subtotal"} ${v.format.banded !== false && rowIndex % 2 ? "band" : ""} ${hasSel && level === 1 ? (isSel ? "sel" : "dim") : ""}`}
               >
-                <td className="rowlabel" style={{ paddingLeft: 6 + (level - 1) * 16 }}>
-                  {!leaf ? (
-                    <button className="v-matrix-toggle" onClick={() => toggle(n.path)} aria-label={open ? "Daralt" : "Genişlet"} aria-expanded={open}>
+                {Array.from({ length: rowHeaderCount }, (_, i) => separateRows && i !== level - 1 ? <td key={i} className="rowlabel" /> : (
+                <td key={i} className="rowlabel" style={{ paddingLeft: 6 + (separateRows ? 0 : (level - 1) * 16) }}>
+                  {n.children.length > 0 ? (
+                    <button className="v-matrix-toggle" onClick={() => toggle(n.path)} disabled={!onState || !!needle} aria-label={open ? "Daralt" : "Genişlet"} aria-expanded={open}>
                       {open ? "−" : "+"}
                     </button>
                   ) : (
@@ -252,7 +271,7 @@ export function MatrixVisual({
                   <span className="v-matrix-label" onClick={level === 1 && onSelect ? () => onSelect(n.path[0]) : undefined}>
                     {formatValue(n.path[level - 1], rc?.type, rc?.format) || "(Boş)"}
                   </span>
-                </td>
+                </td>))}
                 {colGroups.flatMap((g, gi) => {
                   const vals = cellValues(n.path, g.path);
                   return valueNames.map((_, vi) => (
@@ -276,7 +295,7 @@ export function MatrixVisual({
         </tbody>
         <tfoot>
           <tr>
-            <td className="rowlabel">Toplam</td>
+            <td className="rowlabel" colSpan={rowHeaderCount}>Toplam</td>
             {colGroups.flatMap((g, gi) => {
               const vals = cellValues([], g.path);
               return valueNames.map((_, vi) => (

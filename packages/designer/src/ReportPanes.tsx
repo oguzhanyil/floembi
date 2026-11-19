@@ -521,8 +521,18 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
             <input type="checkbox" checked={f.banded !== false} onChange={(e) => set({ banded: e.target.checked })} />
             Satırları dönüşümlü renklendir
           </label>
-          <p className="hint">Sıralamak için sütun başlığına tıklayın.</p>
+          {visual.type !== "table" && <>
+            <label>Satır hiyerarşisi
+              <select value={f.matrixRowLayout ?? (visual.type === "matrix" ? "columns" : "compact")}
+                onChange={(e) => set({ matrixRowLayout: e.target.value as "columns" | "compact" })}>
+                <option value="columns">Her düzey ayrı sütun</option>
+                <option value="compact">Girintili tek sütun</option>
+              </select>
+            </label>
+            <p className="hint">+ / − Düzey düğmeleri bir basamak açar veya kapatır. Excel çıktısında düzeyler ayrı sütunlarda, kapalı detaylar açılabilir satır gruplarındadır.</p>
+          </>}
           {visual.type === "table" && <>
+            <p className="hint">Sıralamak için sütun başlığına tıklayın.</p>
             <label className="inline"><input type="checkbox" checked={f.showTotals !== false}
               onChange={(e) => set({ showTotals: e.target.checked })} />Genel toplamı göster</label>
             <label className="inline"><input type="checkbox" checked={f.gridFilters !== false}
