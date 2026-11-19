@@ -17,6 +17,7 @@ VisualType = Literal[
     "column", "bar", "stackedcolumn", "stackedbar", "line", "area",
     "pie", "donut",
     "matrix",                                   # pivot / ağaç tablo (satır + sütun grupları, alt toplamlar)
+    "treegrid",                                 # hiyerarşik ağaç tablo
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
     "text", "shape", "image", "button", "ticker", # tasarım nesneleri ve animasyonlu sayı kartı

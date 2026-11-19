@@ -124,6 +124,26 @@ def test_save_report_and_rename_updates_visuals(sap, tmp_path):
     assert opened["report"]["pages"][0]["visuals"][0]["values"][0]["column"] == "Satır Tutarı"
 
 
+def test_tree_grid_report_survives_save_and_open(sap, tmp_path):
+    report = {"version": 1, "pages": [{"id": "p1", "name": "Hiyerarşi", "visuals": [{
+        "id": "tree", "type": "treegrid",
+        "group": [{"table": "OCRD", "column": "CardName"}, {"table": "OINV", "column": "DocEntry"}],
+        "values": [{"table": "INV1", "column": "LineTotal", "agg": "avg"}],
+        "format": {"rowAction": {"label": "Aç", "icon": "arrow", "sourceIndex": 1,
+                                 "action": {"type": "page", "pageId": "p1"}}},
+    }]}]}
+    response = sap.put("/document/report", headers=H, json=report)
+    assert response.status_code == 200, response.text
+    path = sap.post("/document/save", headers=H, json={"path": str(tmp_path / "agac")}).json()["path"]
+    sap.post("/document/new", headers=H)
+    opened = sap.post("/document/open", headers=H, json={"path": path}).json()
+    visual = opened["report"]["pages"][0]["visuals"][0]
+    assert visual["type"] == "treegrid"
+    assert len(visual["group"]) == 2
+    assert visual["values"][0]["agg"] == "avg"
+    assert visual["format"]["rowAction"]["sourceIndex"] == 1
+
+
 def test_invalid_report_rejected(sap):
     bad = {"version": 1, "pages": [{"id": "p1", "name": "A", "visuals": [
         {"id": "v1", "type": "table"}, {"id": "v1", "type": "card"}]}]}

@@ -119,7 +119,7 @@ tuval geniş görünür; sağ üstteki ok Görselleştirmeler ve Veri panellerin
   Hedef nesneyi başlangıçta saklamak için onun **Biçim → Görünüm → Başlangıçta gizle** seçeneğini açın.
 - **Fonksiyon çalıştır** ile görünümü yeniden sorgulayın, seçimi temizleyin veya modelde kayıtlı
   bir FDX ölçüsünü hesaplayıp sonucunu ekranda gösterin. Özel JavaScript çalıştırılmaz.
-- Tablo veya matris için **Biçim → Satır eylemi** bölümünde her satıra ikonlu hücre ekleyin.
+- Tablo, matris veya ağaç tablo için **Biçim → Satır eylemi** bölümünde her satıra ikonlu hücre ekleyin.
   Hazır simge veya en fazla 256 KB PNG/JPG/WebP ikon seçilebilir. Satır alanı bir hedef sayfaya
   filtre değeri olarak taşınabilir; web adresinde `{value}` yer tutucusuyla kullanılabilir veya
   satır filtresiyle FDX ölçüsü hesaplanabilir. Web bağlantıları yalnızca HTTP(S) adreslerini açar.
@@ -128,13 +128,28 @@ tuval geniş görünür; sağ üstteki ok Görselleştirmeler ve Veri panellerin
   Kaydedilip yayımlanan raporda eylemler web görüntüleyicisinde de çalışır. Görünürlük ve filtre
   değişiklikleri yalnızca izleyicinin oturumundadır; rapor tasarımını değiştirmez.
 
+#### AG Grid tablo ve ağaç tablo
+
+- **Görselleştirmeler → Veri → Tablo**, AG Grid Community kullanır. Sütun başlığından sıralayın,
+  başlığın altındaki alanlarla filtreleyin, sütunları sürükleyip yeniden sıralayın veya kenarından
+  genişletin. Üst araç çubuğunda genel arama, sütun göster/gizle ve CSV indirme bulunur.
+  **Biçim → AG Grid tablo** altında ilk sütunu sabitleme ve sayfalama ayarları vardır.
+- **Görselleştirmeler → Veri → Ağaç tablo (Tree Grid)** görseline iki veya daha fazla alanı
+  **Hiyerarşi düzeyleri** kutusuna sıralı koyun; en az bir ölçü/değer ekleyin. Düzeyleri tek tek
+  veya topluca açıp kapatın, ağaçta arayın, kardeş düğümleri ada/değere göre sıralayın ve görünen
+  satırları CSV indirin. Ara toplamlar her düzeyde ayrı hesaplanır.
+- Arama, sütun filtreleri ve CSV mevcut sorgunun getirdiği satırlarda çalışır; tablo sorgusu en fazla
+  10.000 satır getirir. Yerel filtre açıkken genel toplam satırı gizlenir. Ağaç tablo 3.000 görünür
+  satırla sınırlıdır. Satır eylemi ve çapraz filtre
+  Desktop etkileşim önizlemesinde ve yayımlanan raporda çalışır.
+
 Desktop simgesi `apps/desktop/build-resources/floem-bi.ico` dosyasındadır. Kaynak görselden
 yeniden üretmek için `apps/desktop/build-resources/generate-icon.ps1` çalıştırılır; paketli Windows
 uygulamasında ve geliştirme penceresinde aynı simge kullanılır.
 
 #### Rapor görünümü (H4'ün çekirdeği)
 
-- Görseller: **Tablo** (toplam satırıyla), **Kümelenmiş sütun grafiği**, **Kart**.
+- Görseller: **AG Grid tablo** (toplam satırıyla), **Ağaç tablo**, **Matris**, grafikler ve kartlar.
 - Veri bölmesinden alanı işaretleyin ya da sürükleyin. Sayısal alanlar değer olarak "Toplam"
   özetiyle, diğerleri gruplama alanı olarak eklenir (Power BI'daki gibi). Görselleştirmeler
   bölmesinde alan kutuları var; değerin özeti (Toplam, Ortalama, En düşük, En yüksek, Say,

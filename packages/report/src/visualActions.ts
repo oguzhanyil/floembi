@@ -10,7 +10,7 @@ export function safeActionIcon(data: string | undefined): string | undefined {
 }
 
 export function rowActionValue(visual: Visual, index: number, value: ActionValue["value"]): ActionValue {
-  const field = visual.group[index] ?? (visual.type === "table" ? visual.values[index - visual.group.length] : undefined);
+  const field = visual.group[index] ?? (visual.type === "table" || visual.type === "treegrid" ? visual.values[index - visual.group.length] : undefined);
   return field && "table" in field ? { value, table: field.table, column: field.column } : { value };
 }
 

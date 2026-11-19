@@ -335,7 +335,7 @@ export type VisualType =
   | "card" | "multicard" | "kpi"
   | "column" | "bar" | "stackedcolumn" | "stackedbar" | "line" | "area"
   | "pie" | "donut"
-  | "matrix"
+  | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
   | "text" | "shape" | "image" | "button" | "ticker";

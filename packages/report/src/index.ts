@@ -6,6 +6,7 @@ export * from "./visualStyle";
 export * from "./visualActions";
 export * from "./useVisualData";
 export * from "./visuals";
+export * from "./AgDataGrid";
 export * from "./charts";
 export * from "./charts2";
 export * from "./matrix";

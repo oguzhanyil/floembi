@@ -1,6 +1,7 @@
 import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionGlyph } from "./ActionGlyph";
+import { AgDataGrid } from "./AgDataGrid";
 import { CategoryChart, PieChartVisual } from "./charts";
 import { GaugeVisual, HeatmapVisual, ScatterVisual, TreemapVisual, WaterfallVisual } from "./charts2";
 import { MatrixVisual, ProgressVisual } from "./matrix";
@@ -8,7 +9,7 @@ import { VISUAL_DEFS, formatValue, groupFields, valueLabel } from "./reportUtils
 import {
   currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
 } from "./useVisualData";
-import { CardVisual, DataGrid, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
+import { CardVisual, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
 
 type Scalar = string | number | boolean;
 
@@ -170,7 +171,7 @@ function TemplateVisual({ v }: { v: Visual }) {
     if (v.h < 80) return <div className={`v-template-compact${theme}`} title={`${label}: veri bekleniyor`}><span>{label}</span><b>—</b></div>;
     return <div className={`v-template v-template-card${theme}`}>{badge}<span className="v-template-label">{label}</span><span className="v-template-value">—</span></div>;
   }
-  if (v.type === "table" || v.type === "matrix") {
+  if (v.type === "table" || v.type === "matrix" || v.type === "treegrid") {
     const names = fields.slice(0, 4);
     return <div className={`v-template${theme}`}>{badge}<div className="v-template-row v-template-label">{(names.length ? names : ["Alanlar"]).map((name, i) => <span key={i}>{name}</span>)}</div><div className="v-template-line" /><div className="v-template-line short" /><div className="v-template-line" /></div>;
   }
@@ -215,7 +216,7 @@ export function VisualBody({
 }) {
   const st = state ?? v.state ?? {};
   const vq = st !== v.state ? { ...v, state: st } : v;
-  const isMatrix = v.type === "matrix";
+  const isMatrix = v.type === "matrix" || v.type === "treegrid";
   const data = useVisualData(vq, extra, dataRev, run, !isMatrix);
   const mdata = useMatrixData(vq, extra, dataRev, run, isMatrix);
   const tq = useMemo(() => trendQuery(vq, extra), [vq, extra]);
@@ -313,7 +314,7 @@ export function VisualBody({
     if (mdata.state === "empty") {
       return (
         <div className="v-empty">
-          {VISUAL_DEFS.matrix.icon}
+          {VISUAL_DEFS[v.type].icon}
           <span>Alan ekleyin</span>
         </div>
       );
@@ -363,7 +364,7 @@ export function VisualBody({
       )}
       {v.type === "progress" && <ProgressVisual result={result} />}
       {v.type === "table" && (
-        <DataGrid
+        <AgDataGrid
           result={result} selected={selected} onSelect={onCross} format={v.format}
           selectedKey={cross && cross.visualId === v.id ? cross.key : undefined}
           onSelectRow={onCrossRow}

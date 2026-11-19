@@ -132,9 +132,9 @@ export function trendQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
  * toplanamayan değerler de doğru çıkar (DAX'taki gibi).
  */
 export function matrixQueries(v: Visual, extra: FilterRef[]): { r: number; c: number; q: VisualQuery }[] | null {
-  if (!v.values.length) return null;
+  if (!v.values.length || (v.type === "treegrid" && !v.group.length)) return null;
   const rows = v.group;
-  const cols = v.legend ?? [];
+  const cols = v.type === "treegrid" ? [] : v.legend ?? [];
   const filters = [...v.filters, ...extra];
   const out: { r: number; c: number; q: VisualQuery }[] = [];
   // Sütunlarda yalnızca yaprak düzey ve genel toplam (ara sütun toplamları sonraki sürümde)

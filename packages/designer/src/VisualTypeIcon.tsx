@@ -25,7 +25,8 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
       break;
     case "table":
     case "matrix":
-      content = <><rect x="5" y="6" width="22" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M5 11h22M5 16h22M5 21h22M12 6v20M19 6v20" stroke="currentColor" strokeWidth="1" opacity=".8" />{type === "matrix" && <><rect x="5" y="6" width="22" height="5" fill="currentColor" opacity=".22" /><rect x="5" y="11" width="7" height="15" fill="currentColor" opacity=".22" /></>}</>;
+    case "treegrid":
+      content = <><rect x="5" y="6" width="22" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M5 11h22M5 16h22M5 21h22M12 6v20M19 6v20" stroke="currentColor" strokeWidth="1" opacity=".8" />{type === "matrix" && <><rect x="5" y="6" width="22" height="5" fill="currentColor" opacity=".22" /><rect x="5" y="11" width="7" height="15" fill="currentColor" opacity=".22" /></>}{type === "treegrid" && <path d="M7 13h4m-2-2v4m2 5h6m-3-3v6m3-6h8" stroke="currentColor" strokeWidth="1.3" />}</>;
       break;
     case "scatter":
       content = <><path d="M5 6v20h23" fill="none" stroke="currentColor" strokeWidth="1" opacity=".45" />{[[9, 22, 2], [13, 14, 3], [18, 19, 2], [22, 10, 3.5], [26, 14, 2]].map(([x, y, r]) => <circle key={x} cx={x} cy={y} r={r} fill="currentColor" opacity={x === 22 ? "1" : ".65"} />)}</>;

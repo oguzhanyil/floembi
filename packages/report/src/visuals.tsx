@@ -1,11 +1,8 @@
 import type { Visual, VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SERIES, formatCompact, formatValue, isNumericType, valueLabel } from "./reportUtils";
 
 import type { CrossSelect } from "./charts";
-import { ActionGlyph } from "./ActionGlyph";
-import { safeActionIcon } from "./visualActions";
 
 type Raw = string | number | boolean | null;
 
@@ -23,131 +20,6 @@ function useSize<T extends HTMLElement>() {
 }
 
 const fmt = (v: Raw | undefined, c: VisualResultColumn) => formatValue(v ?? null, c.type, c.format);
-
-// ------------------------------------------------------------------ Veri ızgarası (Tablo)
-const ROW_H = 26;
-
-/** Sanal kaydırmalı tablo: başlığa tıklayınca sıralar, toplam satırı, satıra tıklayınca çapraz filtre. */
-export function DataGrid({
-  result, selected, onSelect, selectedKey, onSelectRow, onRowAction, sort, onSort, format,
-}: {
-  result: VisualResult;
-  selected?: unknown;
-  onSelect?: CrossSelect;
-  /** Satır seçimi (ana-ayrıntı): seçili satırın gruplama değerleri (JSON) */
-  selectedKey?: string;
-  onSelectRow?: (row: Raw[]) => void;
-  onRowAction?: (value: Raw) => void;
-  sort?: VisualState["sort"];
-  onSort?: (s: VisualState["sort"]) => void;
-  format: VisualFormat;
-}) {
-  const { columns, rows, total } = result;
-  const groupCount = columns.filter((c) => c.kind === "group").length;
-  const scroller = useRef<HTMLDivElement>(null);
-  const v = useVirtualizer({ count: rows.length, getScrollElement: () => scroller.current, estimateSize: () => ROW_H, overscan: 12 });
-  const hasSel = selected !== undefined || selectedKey !== undefined;
-  const banded = format.banded !== false;
-
-  // Sütun genişliği: başlık ve ilk 200 değerin uzunluğuna göre. Sığmazsa önce metin
-  // sütunları daralır (en az 72 px); sayılar kesilmesin diye değer sütunlarına dokunulmaz.
-  const [boxW, setBoxW] = useState(0);
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setBoxW(e.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const natural = useMemo(
-    () =>
-      columns.map((c, ci) => {
-        let len = c.kind === "value" ? Math.min(c.name.length, 14) : c.name.length;
-        for (const r of rows.slice(0, 200)) len = Math.max(len, fmt(r[ci], c).length);
-        return Math.max(64, Math.min(320, len * 7.2 + 20));
-      }),
-    [columns, rows],
-  );
-  const widths = useMemo(() => {
-    const avail = boxW - 12;
-    const total = natural.reduce((s, w) => s + w, 0);
-    if (!boxW || total <= avail) return natural;
-    const textIdx = columns.map((c, i) => (c.kind === "group" ? i : -1)).filter((i) => i >= 0);
-    const textTotal = textIdx.reduce((s, i) => s + natural[i], 0);
-    const need = total - avail;
-    const shrinkable = textTotal - 72 * textIdx.length;
-    if (shrinkable <= 0) return natural;
-    const ratio = Math.min(1, need / shrinkable);
-    return natural.map((w, i) => (columns[i].kind === "group" ? w - (w - 72) * ratio : w));
-  }, [natural, boxW, columns]);
-  const rowAction = format.rowAction;
-  const template = widths.map((w) => `${w}px`).join(" ") + (rowAction ? " 48px" : "") + " 1fr";
-
-  return (
-    <div className="v-grid" ref={scroller}>
-      <div className="v-grid-head" style={{ gridTemplateColumns: template }}>
-        {columns.map((c, i) => {
-          const active = sort?.index === i;
-          return (
-            <div
-              key={i}
-              className={`v-grid-th ${c.kind === "value" ? "num" : ""} ${onSort ? "sortable" : ""}`}
-              title={onSort ? "Sıralamak için tıklayın" : undefined}
-              onClick={onSort ? () => onSort(active && sort?.desc ? undefined : { index: i, desc: active ? true : c.kind === "value" }) : undefined}
-            >
-              {c.name}
-              {active && <span className="sort-ind">{sort?.desc ? " ▼" : " ▲"}</span>}
-            </div>
-          );
-        })}
-        {rowAction && <div className="v-grid-th action" title={rowAction.label}>⋯</div>}
-      </div>
-      <div style={{ height: v.getTotalSize(), position: "relative" }}>
-        {v.getVirtualItems().map((it) => {
-          const r = rows[it.index];
-          const isSel = hasSel && groupCount > 0 &&
-            (selectedKey !== undefined ? JSON.stringify(r.slice(0, groupCount)) === selectedKey : r[0] === selected);
-          return (
-            <div
-              key={it.key}
-              className={`v-grid-row ${banded && it.index % 2 ? "band" : ""} ${hasSel ? (isSel ? "sel" : "dim") : ""}`}
-              style={{ gridTemplateColumns: template, transform: `translateY(${it.start}px)`, height: ROW_H }}
-              onClick={groupCount ? () => (onSelectRow ? onSelectRow(r) : onSelect?.(r[0])) : undefined}
-            >
-              {r.map((val, ci) => (
-                <div key={ci} className={columns[ci].kind === "value" ? "num" : ""}>
-                  {fmt(val, columns[ci])}
-                </div>
-              ))}
-              {rowAction && <div className="v-row-action-cell"><button type="button" title={rowAction.label}
-                aria-label={`${rowAction.label}: ${String(r[rowAction.sourceIndex] ?? "boş")}`}
-                disabled={rowAction.sourceIndex < 0 || rowAction.sourceIndex >= r.length}
-                onClick={(e) => { e.stopPropagation(); onRowAction?.(r[rowAction.sourceIndex] ?? null); }}>
-                {safeActionIcon(rowAction.iconData)
-                  ? <img className="v-row-action-image" src={safeActionIcon(rowAction.iconData)} alt="" /> : <ActionGlyph icon={rowAction.icon} />}
-              </button></div>}
-            </div>
-          );
-        })}
-      </div>
-      {total && (
-        <div className="v-grid-total" style={{ gridTemplateColumns: template }}>
-          {columns.map((c, ci) =>
-            c.kind === "group" ? (
-              <div key={ci}>{ci === 0 ? "Toplam" : ""}</div>
-            ) : (
-              <div key={ci} className="num">
-                {fmt(total[ci - groupCount], c)}
-              </div>
-            ),
-          )}
-          {rowAction && <div />}
-        </div>
-      )}
-      {result.truncated && <div className="v-note">İlk {rows.length.toLocaleString("tr-TR")} satır gösteriliyor</div>}
-    </div>
-  );
-}
 
 // ------------------------------------------------------------------ Kartlar
 function bigNumber(v: Raw, c: VisualResultColumn): string {

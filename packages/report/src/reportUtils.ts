@@ -116,6 +116,13 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
       { key: "values", label: "Değerler" },
     ],
   },
+  treegrid: {
+    label: "Ağaç tablo (Tree Grid)", icon: "☷", group: "Veri", size: [560, 340],
+    wells: [
+      { key: "group", label: "Hiyerarşi düzeyleri" },
+      { key: "values", label: "Değerler" },
+    ],
+  },
   card: {
     label: "Kart", icon: "▢", group: "Kart", size: [240, 140],
     wells: [{ key: "values", label: "Alan", max: 1 }, TREND],

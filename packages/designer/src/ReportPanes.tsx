@@ -272,7 +272,7 @@ function RowActionPanel({ visual, page, pages, measures, onChange }: {
   const [iconError, setIconError] = useState<string | null>(null);
   const rowAction = visual.format.rowAction;
   const sources = [...visual.group.map((f) => `${f.table}[${f.column}]`),
-    ...(visual.type === "table" ? visual.values.map(valueLabel) : [])];
+    ...(visual.type === "table" || visual.type === "treegrid" ? visual.values.map(valueLabel) : [])];
   const setRowAction = (patch: Partial<NonNullable<VisualFormat["rowAction"]>>) => {
     if (!rowAction) return;
     onChange({ ...visual, format: { ...visual.format, rowAction: { ...rowAction, ...patch } } });
@@ -506,13 +506,25 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
           </div>
         </Section>
       )}
-      {(visual.type === "table" || visual.type === "matrix") && (
-        <><Section title={visual.type === "matrix" ? "Matris" : "Tablo"}>
+      {(visual.type === "table" || visual.type === "matrix" || visual.type === "treegrid") && (
+        <><Section title={visual.type === "matrix" ? "Matris" : visual.type === "treegrid" ? "Ağaç tablo" : "AG Grid tablo"}>
           <label className="inline">
             <input type="checkbox" checked={f.banded !== false} onChange={(e) => set({ banded: e.target.checked })} />
             Satırları dönüşümlü renklendir
           </label>
-          <p className="hint">Sıralamak için tablo başlığına tıklayın.</p>
+          <p className="hint">Sıralamak için sütun başlığına tıklayın.</p>
+          {visual.type === "table" && <>
+            <label className="inline"><input type="checkbox" checked={f.gridFilters !== false}
+              onChange={(e) => set({ gridFilters: e.target.checked })} />Sütun filtreleri</label>
+            <label className="inline"><input type="checkbox" checked={f.gridPinFirstColumn === true}
+              onChange={(e) => set({ gridPinFirstColumn: e.target.checked })} />İlk sütunu sabitle</label>
+            <label className="inline"><input type="checkbox" checked={f.gridPagination === true}
+              onChange={(e) => set({ gridPagination: e.target.checked })} />Sayfalama</label>
+            {f.gridPagination === true && <label>Sayfa başına satır
+              <select value={Number(f.gridPageSize) || 100} onChange={(e) => set({ gridPageSize: Number(e.target.value) })}>
+                {[25, 50, 100, 250].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select></label>}
+          </>}
           {visual.type === "table" && (
             <>
               <label className="inline">

@@ -110,7 +110,6 @@
 .v-card-label { font-size: 12px; color: var(--muted); text-align: center; }
 .v-chart { position: relative; height: 100%; display: flex; flex-direction: column; }
 .v-chart svg { display: block; overflow: visible; }
-.v-grid { stroke: #edebe9; stroke-width: 1; }
 .v-axis { stroke: #c8c6c4; stroke-width: 1; }
 .v-tick { font-size: 10px; fill: var(--muted); }
 .v-axis-title { font-size: 11px; fill: var(--muted); }
@@ -146,21 +145,24 @@
 .v-tip i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
 
 /* Veri ızgarası */
-.v-grid { height: 100%; overflow: auto; position: relative; font-size: 12px; font-variant-numeric: tabular-nums; }
-.v-grid-head, .v-grid-row, .v-grid-total { display: grid; align-items: center; }
-.v-grid-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--border-strong); font-weight: 600; }
-.v-grid-head > div, .v-grid-row > div, .v-grid-total > div { padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.v-grid-th { height: 28px; line-height: 28px; }
-.v-grid-th.sortable { cursor: pointer; }
-.v-grid-th.sortable:hover { background: var(--surface-2); }
-.v-grid-row { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.v-grid-row.band { background: #faf9f8; }
-.v-grid-row:hover { background: #f3f2f1; }
-.v-grid-row.dim { color: #a19f9d; }
-.v-grid-row.sel { background: var(--accent-soft); }
-.v-grid-total { position: sticky; bottom: 0; z-index: 2; background: var(--surface); border-top: 1px solid var(--border-strong); font-weight: 700; height: 28px; }
-.v-grid .num { text-align: right; }
-.sort-ind { font-size: 9px; color: var(--accent); }
+.v-ag-wrap { height: 100%; min-height: 0; display: flex; flex-direction: column; font-size: 12px; }
+.v-ag-tools, .v-tree-tools { display: flex; align-items: center; gap: 6px; padding: 3px 4px 6px; flex: none; }
+.v-ag-tools input, .v-tree-tools input { min-width: 80px; width: min(180px, 38%); }
+.v-ag-tools input, .v-tree-tools input, .v-tree-tools select { border: 1px solid var(--border-strong); border-radius: 5px; padding: 4px 7px; background: var(--surface); color: var(--text); font: inherit; }
+.v-ag-tools button, .v-tree-tools button { border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; white-space: nowrap; }
+.v-ag-tools button:hover, .v-tree-tools button:hover { background: var(--surface-2); }
+.v-ag-count { margin-left: auto; color: var(--muted); white-space: nowrap; }
+.v-ag-grid { flex: 1; min-height: 0; }
+.v-ag-column-menu { position: relative; }
+.v-ag-column-list { position: absolute; z-index: 20; top: 100%; left: 0; width: 190px; max-height: 260px; overflow: auto; padding: 5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: 0 8px 22px #0002; }
+.v-ag-column-list label { display: flex; gap: 6px; align-items: center; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-ag-grid .ag-cell.v-ag-number { text-align: right; font-variant-numeric: tabular-nums; }
+.v-ag-grid .ag-row.v-ag-band { background: #fafbfe; }
+.v-ag-grid .ag-row.v-ag-selected { background: var(--accent-soft); }
+.v-ag-grid .ag-row.v-ag-dim { opacity: .5; }
+.v-ag-grid .ag-row.v-ag-total { font-weight: 700; background: #edf3fb; }
+.v-ag-action { width: 26px; height: 26px; margin: 1px auto; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #2563eb; cursor: pointer; }
+.v-ag-action:hover { background: #dbeafe; }
 
 /* Çok satırlı kart */
 .v-multicard { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -223,6 +225,8 @@
 .v-matrix tr.subtotal td { font-weight: 600; }
 .v-matrix tr.lvl1.subtotal td { background: #faf9f8; }
 .v-matrix tr.lvl1.subtotal td.rowlabel { background: #faf9f8; }
+.v-matrix tr.band td { background: #fafbfe; }
+.v-matrix td.v-tree-empty { padding: 16px; color: var(--muted); text-align: center; }
 .v-matrix tr.dim td { color: #a19f9d; }
 .v-matrix tr.sel td { background: var(--accent-soft); }
 .v-matrix tfoot td { position: sticky; bottom: 0; background: var(--surface); font-weight: 700; border-top: 1px solid var(--border-strong); }

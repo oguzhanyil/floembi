@@ -1,5 +1,5 @@
 import type { Visual, VisualResult, VisualState } from "@floem/client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { CrossSelect } from "./charts";
 import { ActionGlyph } from "./ActionGlyph";
 import { safeActionIcon } from "./visualActions";
@@ -31,8 +31,11 @@ export function MatrixVisual({
   onRowAction?: (value: Raw) => void;
 }) {
   const R = v.group.length;
-  const C = (v.legend ?? []).length;
+  const C = v.type === "treegrid" ? 0 : (v.legend ?? []).length;
   const V = v.values.length;
+  const treeMode = v.type === "treegrid";
+  const [search, setSearch] = useState("");
+  const [treeSort, setTreeSort] = useState("source");
 
   const model = useMemo(() => {
     // (satır yolu, sütun yolu) → değerler
@@ -106,21 +109,61 @@ export function MatrixVisual({
   const cellValues = (rowPath: Raw[], colPath: Raw[] | null) => cells.get(k(rowPath) + "|" + k(colPath ?? [])) ?? [];
   const fmtVal = (val: Raw | undefined, i: number) => formatValue(val ?? null, valueCols[i]?.type, valueCols[i]?.format);
 
-  // Görünür satırları sırayla düzleştir
+  // Ağaç tablo: kardeş düğümleri sırala, aramada üst yolları koru.
+  const needle = treeMode ? search.trim().toLocaleLowerCase("tr") : "";
+  const nodeLabel = (n: RowNode) => formatValue(n.path.at(-1), rowCols[n.path.length - 1]?.type, rowCols[n.path.length - 1]?.format) || "(Boş)";
+  const matches = (n: RowNode): boolean => !needle || nodeLabel(n).toLocaleLowerCase("tr").includes(needle) || n.children.some(matches);
+  const sortedChildren = (n: RowNode) => {
+    if (treeSort === "source") return n.children;
+    return [...n.children].sort((a, b) => {
+      if (treeSort === "az" || treeSort === "za") {
+        const order = nodeLabel(a).localeCompare(nodeLabel(b), "tr", { numeric: true });
+        return treeSort === "az" ? order : -order;
+      }
+      const av = Number(cellValues(a.path, null)[0] ?? 0);
+      const bv = Number(cellValues(b.path, null)[0] ?? 0);
+      return treeSort === "valueDesc" ? bv - av : av - bv;
+    });
+  };
   const visible: RowNode[] = [];
   const walk = (n: RowNode) => {
-    for (const ch of n.children) {
+    for (const ch of sortedChildren(n)) {
       if (visible.length >= MAX_RENDER_ROWS) return;
+      if (!matches(ch)) continue;
       visible.push(ch);
-      if (expanded.has(k(ch.path))) walk(ch);
+      if (needle || expanded.has(k(ch.path))) walk(ch);
     }
   };
   walk(root);
   const hasSel = selected !== undefined;
   const rowHeader = v.group.map((g) => g.column).join(" / ");
+  const exportCsv = () => {
+    const safeCell = (value: string) => {
+      const guarded = /^[\s]*[+\-=@\t\r]/.test(value) ? `'${value}` : value;
+      return `"${guarded.replaceAll('"', '""')}"`;
+    };
+    const lines = [[rowHeader, ...valueNames].map(safeCell).join(","),
+      ...visible.map((n) => [n.path.map(String).join(" / "), ...cellValues(n.path, null).map((x, i) => fmtVal(x, i))].map(safeCell).join(","))];
+    const href = URL.createObjectURL(new Blob(["\ufeff", lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "floem-agac-tablo.csv";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+  };
 
   return (
     <div className="v-matrix-wrap">
+      {treeMode && <div className="v-tree-tools">
+        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Ağaçta ara" aria-label="Ağaçta ara" />
+        <select value={treeSort} onChange={(e) => setTreeSort(e.target.value)} aria-label="Ağaç sıralaması">
+          <option value="source">Kaynak sırası</option><option value="az">Ad A–Z</option>
+          <option value="za">Ad Z–A</option><option value="valueDesc">Değer büyükten</option>
+          <option value="valueAsc">Değer küçükten</option>
+        </select>
+        <button type="button" onClick={exportCsv}>CSV ↓</button>
+      </div>}
       {R > 1 && onState && (
         <div className="v-matrix-tools">
           <button onClick={() => expandAll(true)} title="Tüm düzeyleri aç">⊞ Tümünü genişlet</button>
@@ -168,7 +211,8 @@ export function MatrixVisual({
           )}
         </thead>
         <tbody>
-          {visible.map((n) => {
+          {treeMode && needle && visible.length === 0 && <tr><td colSpan={1 + valueNames.length + (v.format.rowAction ? 1 : 0)} className="v-tree-empty">Eşleşen satır yok</td></tr>}
+          {visible.map((n, rowIndex) => {
             const level = n.path.length;
             const leaf = level === R;
             const open = expanded.has(k(n.path));
@@ -177,7 +221,7 @@ export function MatrixVisual({
             return (
               <tr
                 key={k(n.path)}
-                className={`lvl${Math.min(level, 4)} ${leaf ? "" : "subtotal"} ${hasSel && level === 1 ? (isSel ? "sel" : "dim") : ""}`}
+                className={`lvl${Math.min(level, 4)} ${leaf ? "" : "subtotal"} ${v.format.banded !== false && rowIndex % 2 ? "band" : ""} ${hasSel && level === 1 ? (isSel ? "sel" : "dim") : ""}`}
               >
                 <td className="rowlabel" style={{ paddingLeft: 6 + (level - 1) * 16 }}>
                   {!leaf ? (
@@ -201,9 +245,9 @@ export function MatrixVisual({
                 })}
                 {v.format.rowAction && <td className="v-row-action-cell">
                   {leaf && <button type="button" title={v.format.rowAction.label}
-                    aria-label={`${v.format.rowAction.label}: ${String(n.path[v.format.rowAction.sourceIndex] ?? "boş")}`}
-                    disabled={v.format.rowAction.sourceIndex < 0 || v.format.rowAction.sourceIndex >= n.path.length}
-                    onClick={(e) => { e.stopPropagation(); onRowAction?.(n.path[v.format.rowAction!.sourceIndex] ?? null); }}>
+                    aria-label={`${v.format.rowAction.label}: ${String((treeMode ? [...n.path, ...cellValues(n.path, null)] : n.path)[v.format.rowAction.sourceIndex] ?? "boş")}`}
+                    disabled={v.format.rowAction.sourceIndex < 0 || v.format.rowAction.sourceIndex >= (treeMode ? n.path.length + cellValues(n.path, null).length : n.path.length)}
+                    onClick={(e) => { e.stopPropagation(); onRowAction?.((treeMode ? [...n.path, ...cellValues(n.path, null)] : n.path)[v.format.rowAction!.sourceIndex] ?? null); }}>
                     {safeActionIcon(v.format.rowAction.iconData)
                       ? <img className="v-row-action-image" src={safeActionIcon(v.format.rowAction.iconData)} alt="" /> : <ActionGlyph icon={v.format.rowAction.icon} />}
                   </button>}
