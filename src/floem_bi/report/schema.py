@@ -19,7 +19,7 @@ VisualType = Literal[
     "matrix",                                   # pivot / ağaç tablo (satır + sütun grupları, alt toplamlar)
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
-    "text", "shape", "image", "ticker",          # tasarım nesneleri ve animasyonlu sayı kartı
+    "text", "shape", "image", "button", "ticker", # tasarım nesneleri ve animasyonlu sayı kartı
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 

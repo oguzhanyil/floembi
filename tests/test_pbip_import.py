@@ -19,7 +19,7 @@ def _write(path: Path, value: dict) -> None:
 def test_pbip_import_creates_editable_empty_report(tmp_path):
     source = tmp_path / "Ornek.Report"
     pages = source / "definition" / "pages"
-    _write(pages / "pages.json", {"pageOrder": ["p1"]})
+    _write(pages / "pages.json", {"pageOrder": ["p1", "p2"]})
     _write(pages / "p1" / "page.json", {"displayName": "Özet", "width": 1280, "height": 720,
         "objects": {"background": [{"properties": {"color": {"solid": {"color": {
             "expr": {"Literal": {"Value": "'#F4F6FA'"}}}}}}}]}})
@@ -44,9 +44,28 @@ def test_pbip_import_creates_editable_empty_report(tmp_path):
                 "transparency": {"expr": {"Literal": {"Value": "100D"}}}}}],
             "text": [{"selector": {"id": "default"}, "properties": {
                 "show": {"expr": {"Literal": {"Value": "false"}}}}}]}}})
+    _write(pages / "p1" / "visuals" / "navigation_button" / "visual.json", {
+        "name": "navigation_button", "position": {"x": 40, "y": 100, "width": 280, "height": 150, "z": 4},
+        "visual": {"visualType": "actionButton", "objects": {"fill": [{"properties": {
+            "show": {"expr": {"Literal": {"Value": "false"}}}}}]},
+            "visualContainerObjects": {"visualLink": [{"properties": {
+            "show": {"expr": {"Literal": {"Value": "true"}}},
+            "type": {"expr": {"Literal": {"Value": "'PageNavigation'"}}},
+            "navigationSection": {"expr": {"Literal": {"Value": "'p2'"}}}}}]}}})
+    _write(pages / "p2" / "page.json", {"displayName": "Detay", "width": 1280, "height": 720})
+    _write(pages / "p2" / "visuals" / "visible_button" / "visual.json", {
+        "name": "visible_button", "position": {"x": 40, "y": 40, "width": 140, "height": 48, "z": 2},
+        "visual": {"visualType": "actionButton", "objects": {
+            "fill": [{"properties": {"fillColor": {"solid": {"color": {"expr": {"Literal": {"Value": "'#123456'"}}}}}}}],
+            "text": [{"properties": {"show": {"expr": {"Literal": {"Value": "true"}}},
+                                    "text": {"expr": {"Literal": {"Value": "'Geri'"}}}}}]},
+            "visualContainerObjects": {"visualLink": [{"properties": {
+                "show": {"expr": {"Literal": {"Value": "true"}}},
+                "type": {"expr": {"Literal": {"Value": "'PageNavigation'"}}},
+                "navigationSection": {"expr": {"Literal": {"Value": "'p1'"}}}}}]}}})
     output = tmp_path / "rapor.floem"
     result = import_report(source, output)
-    assert result == {"pages": 1, "visuals": 2, "tables": 1}
+    assert result == {"pages": 2, "visuals": 3, "tables": 1}
     with zipfile.ZipFile(output) as archive:
         report_bytes = archive.read("report.json")
         assert b"gizli-baglanti-bilgisi" not in report_bytes
@@ -55,6 +74,9 @@ def test_pbip_import_creates_editable_empty_report(tmp_path):
         assert report["pages"][0]["backgroundColor"] == "#F4F6FA"
         assert report["pages"][0]["visuals"][0]["format"]["backgroundColor"] == "#123456"
         assert report["pages"][0]["visuals"][1]["format"]["templatePreview"] is True
+        assert report["pages"][0]["visuals"][1]["format"]["action"] == {"type": "page", "pageId": "p2"}
+        assert report["pages"][1]["visuals"][0]["type"] == "shape"
+        assert report["pages"][1]["visuals"][0]["format"]["action"] == {"type": "page", "pageId": "p1"}
     with tempfile.TemporaryDirectory() as directory:
         doc = Document.open(Path(directory), output)
         try:

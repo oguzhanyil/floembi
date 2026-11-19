@@ -1,4 +1,4 @@
-import type { FilterRef, ReportDefinition, VisualState } from "@floem/client";
+import type { FilterRef, ReportDefinition, Visual, VisualState } from "@floem/client";
 import { useLayoutEffect, useRef, useState } from "react";
 import {
   DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
@@ -6,6 +6,7 @@ import {
 } from "./VisualBody";
 import { slicerFilters, type QueryFn } from "./useVisualData";
 import { visualMotion, visualStyle } from "./visualStyle";
+import { resolveVisualAction, visualIsVisible } from "./visualActions";
 
 /**
  * Salt okunur ama etkileşimli rapor görüntüleyici (floembi.app): sayfa sekmeleri,
@@ -27,6 +28,7 @@ export function ReportViewer({
   const [drill, setDrill] = useState<{ pageId: string; from: string; filters: FilterRef[]; label: string } | null>(null);
   // İzleyicinin dilimleyici seçimleri ve sıralamaları yalnızca bu ekranda yaşar (raporu değiştirmez)
   const [states, setStates] = useState<Record<string, VisualState>>({});
+  const [visibility, setVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const outer = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
 
@@ -44,6 +46,28 @@ export function ReportViewer({
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
   const scale = box.w ? Math.max(0.2, Math.min((box.w - 32) / page.width, (box.h - 32) / page.height)) : 1;
 
+  function runAction(visual: Visual) {
+    const action = resolveVisualAction(visual, report.pages, page.id);
+    if (!action) return;
+    if (action.type === "page") {
+      setPageId(action.pageId);
+      setCross(null);
+      setDrill(null);
+    } else if (action.type === "reset") {
+      setCross(null);
+      setDrill(null);
+      setVisibility({});
+      setStates(Object.fromEntries(report.pages.flatMap((item) => item.visuals.filter((v) => v.type === "slicer").map((v) => [v.id, {}]))));
+    } else {
+      const target = page.visuals.find((item) => item.id === action.visualId);
+      if (!target) return;
+      setVisibility((current) => {
+        const before = current[page.id] ?? {};
+        return { ...current, [page.id]: { ...before, [target.id]: !visualIsVisible(target, before) } };
+      });
+    }
+  }
+
   return (
     <div className="viewer">
       <div className="viewer-stage" ref={outer} onClick={() => setCross(null)}>
@@ -59,14 +83,17 @@ export function ReportViewer({
         )}
         <div className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
-          {page.visuals.map((v) => {
+          {page.visuals.filter((v) => visualIsVisible(v, visibility[page.id] ?? {})).map((v) => {
             const title = visualTitle(v);
             return (
               <div
                 key={v.id}
-                className={`visual readonly ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
+                className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
                 style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
-                onClick={(e) => e.stopPropagation()}
+                role={v.format.action && v.type !== "button" ? "button" : undefined}
+                tabIndex={v.format.action && v.type !== "button" ? 0 : undefined}
+                onKeyDown={(e) => { if (v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); runAction(v); } }}
+                onClick={(e) => { e.stopPropagation(); if (v.format.action) runAction(v); }}
               >
                 <div className="visual-head">
                   <span className="visual-title">{title}</span>

@@ -142,6 +142,9 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   image: {
     label: "Görsel", icon: "▣", group: "Ekle", size: [320, 220], wells: [],
   },
+  button: {
+    label: "Düğme", icon: "▭", group: "Ekle", size: [180, 52], wells: [],
+  },
   ticker: {
     label: "Animasyonlu sayı", icon: "↗", group: "Kart", size: [280, 160],
     wells: [{ key: "values", label: "Değer", max: 1 }],

@@ -1,6 +1,7 @@
-import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualType } from "@floem/client";
+import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualState, VisualType } from "@floem/client";
 import {
-  DrillBanner, VISUAL_DEFS, defaultAgg, defaultRole, newId, sameField, snap, type CrossFilter, type QueryFn, type WellKey,
+  DrillBanner, VISUAL_DEFS, defaultAgg, defaultRole, newId, resolveVisualAction, sameField, snap, visualIsVisible,
+  type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
@@ -41,6 +42,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [canvasFocus, setCanvasFocus] = useState((host.report.pages[0]?.width ?? 0) >= 1600);
+  const [previewActions, setPreviewActions] = useState(false);
+  const [previewVisibility, setPreviewVisibility] = useState<Record<string, Record<string, boolean>>>({});
+  const [previewStates, setPreviewStates] = useState<Record<string, VisualState>>({});
   const [cross, setCross] = useState<CrossFilter | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   // Detaya git (drill-through): hedef sayfa, filtreler, geri dönülecek sayfa
@@ -55,6 +59,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       setReport(host.report);
       if (!host.report.pages.some((p) => p.id === pageId)) setPageId(host.report.pages[0]?.id ?? "p1");
       setCanvasFocus((host.report.pages[0]?.width ?? 0) >= 1600);
+      setPreviewActions(false);
+      setPreviewVisibility({});
+      setPreviewStates({});
     }
   }, [host.report, pageId]);
 
@@ -200,6 +207,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     const ids = new Set(report.pages.flatMap((p) => p.visuals.map((v) => v.id)));
     const format = type === "shape" ? { showTitle: false, backgroundColor: "#2a78d6", padding: 0 } :
       type === "image" ? { showTitle: false, padding: 0 } :
+      type === "button" ? { showTitle: false, padding: 0, text: "Düğme", buttonStyle: "solid" as const,
+        buttonColor: "#2563eb", buttonTextColor: "#ffffff", buttonIcon: "arrow" as const,
+        action: { type: "none" as const } } :
       type === "ticker" ? { animation: "count" as const, animationDuration: 800, shadow: true } : {};
     return { id: newId("v", ids), type, ...pos, w, h, group: [], values: [], filters: [], format };
   }
@@ -310,12 +320,38 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   if (!page) return null;
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
+  function runAction(v: Visual) {
+    const action = resolveVisualAction(v, report.pages, page.id);
+    if (!action) return;
+    if (action.type === "page") {
+      setPageId(action.pageId);
+      setSelectedId(null);
+      setCross(null);
+      setDrill(null);
+    } else if (action.type === "reset") {
+      setCross(null);
+      setDrill(null);
+      setPreviewVisibility({});
+      setPreviewStates(Object.fromEntries(report.pages.flatMap((item) => item.visuals.filter((v) => v.type === "slicer").map((v) => [v.id, {}]))));
+    } else {
+      const target = page.visuals.find((item) => item.id === action.visualId);
+      if (!target) return;
+      setPreviewVisibility((current) => {
+        const before = current[page.id] ?? {};
+        return { ...current, [page.id]: { ...before, [target.id]: !visualIsVisible(target, before) } };
+      });
+    }
+  }
+
   return (
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}>
       <div className="report-main">
         <div className="canvas-shell">
         <div className="design-toolbar" aria-label="Serbest tasarım araçları">
           <span className="design-toolbar-label">Serbest tasarım</span>
+          <button type="button" aria-pressed={previewActions} onClick={() => {
+            setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
+          }}>{previewActions ? "Tasarımı düzenle" : "Etkileşimi dene"}</button>
           <button type="button" onClick={() => setCanvasFocus((current) => !current)}
             aria-pressed={canvasFocus} title="Tuval için daha geniş alan aç">{canvasFocus ? "Panelleri göster" : "Tuvali genişlet"}</button>
           <label className="design-page-color" title="Sayfa arka planı">Sayfa <input type="color" value={page.backgroundColor && /^#[0-9a-f]{6}$/i.test(page.backgroundColor) ? page.backgroundColor : "#ffffff"}
@@ -336,6 +372,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </div>
         <PageCanvas
           page={page}
+          previewActions={previewActions}
+          visibleOverrides={previewVisibility[page.id] ?? {}}
+          previewStates={previewStates}
+          onPreviewState={(id, state) => setPreviewStates((current) => ({ ...current, [id]: state }))}
+          onAction={runAction}
           selectedId={selectedId}
           onSelect={setSelectedId}
           onChange={updateVisual}
@@ -425,6 +466,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       </div>
       <VisualizationsPane
         page={page}
+        pages={report.pages}
         onPageChange={(next) => updatePage(() => next)}
         visual={selected}
         onPickType={pickType}

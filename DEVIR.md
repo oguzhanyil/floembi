@@ -11,6 +11,13 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 
 ## 1. Proje ve kullanıcı
 
+**19.11.2026 etkileşim güncellemesi:** Rapor tasarımcısına `button` nesnesi, tıklama olayları
+(sayfaya git, sonraki/önceki, filtreleri sıfırla, nesne göster/gizle), başlangıçta gizlenen nesneler
+ve **Etkileşimi dene** modu eklendi. Aynı olaylar `packages/report/src/visualActions.ts` üzerinden
+Desktop ve web görüntüleyicisinde çözülür. PBIP içe aktarıcısı `PageNavigation` düğmelerini
+alttaki kart/metin/şekle bağlar; içerik yoksa saydam düğme üretir. Pavezyum yönetici panosunda
+menü ve yeni düğmeyle sayfa geçişi Desktop duman testinde doğrulandı. Taslaklarda gerçek veri yoktur.
+
 - **Floem BI**, Power BI'ın karşılığı olan, kendi sunucuda çalışan, ticari ve kapalı kaynak bir BI ürünü.
   - Üç parçası var: Desktop (Electron), floembi.app (web sunucusu) ve Floemway (şirket içi ağ geçidi).
 - **Kullanıcı (Oğuzhan)** Power BI'ı iyi biliyor, SQL Server ve SAP Business One üzerinde çalışıyor.

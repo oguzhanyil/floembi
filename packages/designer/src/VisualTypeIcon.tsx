@@ -63,6 +63,9 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     case "image":
       content = <><rect x="5" y="6" width="22" height="20" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" /><circle cx="11" cy="12" r="2" fill="currentColor" /><path d="m7 23 7-7 4 4 3-3 4 6" fill="none" stroke="currentColor" strokeWidth="1.7" /></>;
       break;
+    case "button":
+      content = <><rect x="5" y="10" width="22" height="13" rx="4" fill="currentColor" opacity=".85" /><path d="M10 16.5h12m-4-3 4 3-4 3" fill="none" stroke="var(--surface, #fff)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></>;
+      break;
     default:
       content = <circle cx="16" cy="16" r="9" fill="currentColor" />;
   }

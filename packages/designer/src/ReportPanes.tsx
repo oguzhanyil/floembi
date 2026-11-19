@@ -136,6 +136,7 @@ function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: V
           <label>İç boşluk<input type="number" min="0" max="32" value={f.padding ?? 8} onChange={(e) => set({ padding: Number(e.target.value) })} /></label>
         </div>
         <label className="inline"><input type="checkbox" checked={!!f.shadow} onChange={(e) => set({ shadow: e.target.checked })} /> Gölge</label>
+        <label className="inline"><input type="checkbox" checked={!!f.initiallyHidden} onChange={(e) => set({ initiallyHidden: e.target.checked })} /> Başlangıçta gizle</label>
         <label>Başlık rengi<input type="color" value={color(f.titleColor, "#201f1e")} onChange={(e) => set({ titleColor: e.target.value })} /></label>
         <label>Başlık boyutu<input type="number" min="10" max="28" value={f.titleSize ?? 12} onChange={(e) => set({ titleSize: Number(e.target.value) })} /></label>
       </Section>
@@ -156,8 +157,46 @@ function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: V
   );
 }
 
+function ActionPanel({ visual, page, pages, onChange }: {
+  visual: Visual; page: ReportPage; pages: ReportPage[]; onChange: (v: Visual) => void;
+}) {
+  const action = visual.format.action ?? { type: "none" as const };
+  const setAction = (next: VisualFormat["action"]) => onChange({ ...visual, format: { ...visual.format, action: next } });
+  const targets = page.visuals.filter((item) => item.id !== visual.id);
+  return <Section title="Tıklama olayı">
+    <label>Eylem
+      <select value={action.type} onChange={(e) => {
+        const type = e.target.value as NonNullable<VisualFormat["action"]>["type"];
+        setAction({ type,
+          pageId: type === "page" ? pages.find((item) => item.id !== page.id)?.id : undefined,
+          visualId: type === "toggle" ? targets[0]?.id : undefined });
+      }}>
+        <option value="none">Yok</option>
+        <option value="page">Sayfaya git</option>
+        <option value="next">Sonraki sayfa</option>
+        <option value="previous">Önceki sayfa</option>
+        <option value="reset">Filtreleri sıfırla</option>
+        <option value="toggle">Nesneyi göster / gizle</option>
+      </select>
+    </label>
+    {action.type === "page" && <label>Hedef sayfa
+      <select value={action.pageId ?? ""} onChange={(e) => setAction({ type: "page", pageId: e.target.value })}>
+        <option value="">Sayfa seçin</option>
+        {pages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select>
+    </label>}
+    {action.type === "toggle" && <label>Hedef nesne
+      <select value={action.visualId ?? ""} onChange={(e) => setAction({ type: "toggle", visualId: e.target.value })}>
+        <option value="">Nesne seçin</option>
+        {targets.map((item) => <option key={item.id} value={item.id}>{item.title || (typeof item.format.text === "string" ? item.format.text : "") || `${VISUAL_DEFS[item.type].label} · ${item.id}`}</option>)}
+      </select>
+    </label>}
+    <p className="hint">Desktop'ta “Etkileşimi dene” ile sınayın. Web raporunda tıklama doğrudan çalışır.</p>
+  </Section>;
+}
+
 /** Power BI "Görseli biçimlendir": türün desteklediği seçenekler. */
-function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visual) => void }) {
+function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: ReportPage; pages: ReportPage[]; onChange: (v: Visual) => void }) {
   const f = visual.format;
   const def = VISUAL_DEFS[visual.type];
   const set = (patch: Partial<VisualFormat>) => onChange({ ...visual, format: { ...f, ...patch } });
@@ -209,6 +248,7 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
           <input type="color" value={typeof f.color === "string" ? f.color : "#201f1e"} onChange={(e) => set({ color: e.target.value })} />
         </label>
       </Section>
+      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
       </>
     );
   }
@@ -226,6 +266,7 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
         </label>
         <label>Metin<input type="text" value={typeof f.text === "string" ? f.text : ""} onChange={(e) => set({ text: e.target.value })} /></label>
       </Section>
+      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
     </>
   );
 
@@ -248,6 +289,31 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
         </label>
         <label>Alternatif metin<input type="text" value={f.altText ?? ""} onChange={(e) => set({ altText: e.target.value })} /></label>
       </Section>
+      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+    </>
+  );
+
+  if (visual.type === "button") return (
+    <>
+      <AppearancePanel visual={visual} onChange={onChange} />
+      <Section title="Düğme">
+        <label>Yazı<input type="text" value={typeof f.text === "string" ? f.text : ""} onChange={(e) => set({ text: e.target.value })} /></label>
+        <label>Stil<select value={f.buttonStyle ?? "solid"} onChange={(e) => {
+          const buttonStyle = e.target.value as VisualFormat["buttonStyle"];
+          set({ buttonStyle, buttonTextColor: buttonStyle === "solid" ? "#ffffff" : f.buttonColor || "#2563eb" });
+        }}>
+          <option value="solid">Dolu</option><option value="outline">Çerçeveli</option><option value="ghost">Sade</option>
+        </select></label>
+        <label>Simge<select value={f.buttonIcon ?? "arrow"} onChange={(e) => set({ buttonIcon: e.target.value as VisualFormat["buttonIcon"] })}>
+          <option value="none">Yok</option><option value="arrow">İleri oku</option><option value="back">Geri oku</option>
+          <option value="refresh">Yenile</option><option value="eye">Göster</option>
+        </select></label>
+        <div className="fmt-row">
+          <label>Düğme rengi<input type="color" value={/^#[0-9a-f]{6}$/i.test(f.buttonColor ?? "") ? f.buttonColor : "#2563eb"} onChange={(e) => set({ buttonColor: e.target.value })} /></label>
+          <label>Yazı rengi<input type="color" value={/^#[0-9a-f]{6}$/i.test(f.buttonTextColor ?? "") ? f.buttonTextColor : "#ffffff"} onChange={(e) => set({ buttonTextColor: e.target.value })} /></label>
+        </div>
+      </Section>
+      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
     </>
   );
 
@@ -389,6 +455,8 @@ function FormatPanel({ visual, onChange }: { visual: Visual; onChange: (v: Visua
           </label>
         </Section>
       )}
+      {(visual.type === "card" || visual.type === "multicard" || visual.type === "kpi") &&
+        <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />}
     </>
   );
 }
@@ -445,9 +513,10 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, onPageChange, visual, onPickType, onChange, onDropToWell, onMoveWell,
+  page, pages, onPageChange, visual, onPickType, onChange, onDropToWell, onMoveWell,
 }: {
   page: ReportPage;
+  pages: ReportPage[];
   onPageChange: (p: ReportPage) => void;
   visual: Visual | null;
   onPickType: (t: VisualType) => void;
@@ -495,7 +564,7 @@ export function VisualizationsPane({
               <Well key={`${w.key}-${w.slot ?? ""}`} def={w} visual={visual} onDrop={onDropToWell} onMove={onMoveWell} onChange={onChange} />
             ))
           ) : (
-            <FormatPanel visual={visual} onChange={onChange} />
+            <FormatPanel visual={visual} page={page} pages={pages} onChange={onChange} />
           )}
         </>
       ) : (

@@ -338,7 +338,7 @@ export type VisualType =
   | "matrix"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "ticker";
+  | "text" | "shape" | "image" | "button" | "ticker";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -392,6 +392,15 @@ export interface VisualFormat {
   imageData?: string;
   imageFit?: "contain" | "cover";
   altText?: string;
+  /** Tıklama olayı; sayfa geçişi, filtre sıfırlama veya nesne görünürlüğü. */
+  action?: { type: "none" | "page" | "next" | "previous" | "reset" | "toggle"; pageId?: string; visualId?: string };
+  buttonStyle?: "solid" | "outline" | "ghost";
+  buttonColor?: string;
+  buttonTextColor?: string;
+  buttonIcon?: "none" | "arrow" | "back" | "refresh" | "eye";
+  buttonInvisible?: boolean;
+  /** Başka bir düğmenin göstereceği nesne başlangıçta saklanır. */
+  initiallyHidden?: boolean;
   /** Serbest tasarım: yarı saydamlık ve düzenleme kilidi. */
   opacity?: number;
   locked?: boolean;

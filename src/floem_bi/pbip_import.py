@@ -175,6 +175,27 @@ def _projection(query: dict, role: str) -> list[dict]:
     return (query.get("queryState", {}).get(role) or {}).get("projections", [])
 
 
+def _button_action(raw: dict, page_ids: set[str]) -> dict | None:
+    visual = raw.get("visual") or {}
+    if visual.get("visualType") != "actionButton":
+        return None
+    container = visual.get("visualContainerObjects") or {}
+    if _property(container, "visualLink", "show") is False:
+        return None
+    if _property(container, "visualLink", "type") != "PageNavigation":
+        return None
+    page_id = _property(container, "visualLink", "navigationSection")
+    return {"type": "page", "pageId": page_id} if isinstance(page_id, str) and page_id in page_ids else None
+
+
+def _inside(inner: dict, outer: dict) -> bool:
+    a, b = inner.get("position") or {}, outer.get("position") or {}
+    return (float(a.get("x", 0)) >= float(b.get("x", 0)) - 2 and
+            float(a.get("y", 0)) >= float(b.get("y", 0)) - 2 and
+            float(a.get("x", 0)) + float(a.get("width", 0)) <= float(b.get("x", 0)) + float(b.get("width", 0)) + 2 and
+            float(a.get("y", 0)) + float(a.get("height", 0)) <= float(b.get("y", 0)) + float(b.get("height", 0)) + 2)
+
+
 def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | None:
     visual = raw.get("visual") or {}
     original_type = visual.get("visualType", "unknown")
@@ -183,8 +204,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     name = str(raw.get("name") or "gorsel")[:64]
     objects = visual.get("objects") or {}
     container = visual.get("visualContainerObjects") or {}
-    # PBIP gezinme/ayrıntı düğmelerinin çoğu tamamen şeffaf tıklama katmanıdır.
-    # Floem'de düğme eylemi aktarılmadığı için bu katmanları çizmek içeriği örter.
+    # Tamamen şeffaf tıklama katmanları alttaki nesneye bağlanır; burada çizilmez.
     if original_type == "actionButton" and (
         _property(objects, "fill", "show") is False or
         _number(_property(objects, "fill", "transparency")) >= 99
@@ -334,8 +354,34 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
         for path in (page_dir / "visuals").glob("*/visual.json"):
             raw = _read(path)
             inputs.append((float((raw.get("position") or {}).get("z", 0)), raw))
-        visuals = [converted for _z, raw in sorted(inputs, key=lambda item: item[0])
-                   if (converted := _convert_visual(report_dir, raw, bindings)) is not None]
+        converted_items: list[tuple[float, dict, dict]] = []
+        buttons: list[tuple[float, dict, dict]] = []
+        for z, raw in sorted(inputs, key=lambda item: item[0]):
+            action = _button_action(raw, set(order))
+            converted = _convert_visual(report_dir, raw, bindings)
+            if converted is not None:
+                if action:
+                    converted["format"]["action"] = action
+                converted_items.append((z, raw, converted))
+            elif action:
+                buttons.append((z, raw, action))
+        for z, button, action in buttons:
+            underneath = [item for item_z, raw, item in converted_items
+                          if item_z < z and _inside(raw, button)]
+            if underneath:
+                for item in underneath:
+                    item["format"]["action"] = action
+            else:
+                pos = button.get("position") or {}
+                converted_items.append((z, button, {
+                    "id": str(button.get("name") or "dugme")[:64], "type": "button",
+                    "x": float(pos.get("x", 0)), "y": float(pos.get("y", 0)),
+                    "w": max(1, float(pos.get("width", 180))), "h": max(1, float(pos.get("height", 52))),
+                    "group": [], "values": [], "filters": [],
+                    "format": {"showTitle": False, "padding": 0, "text": "Sayfaya git", "buttonStyle": "ghost",
+                               "buttonInvisible": True, "action": action},
+                }))
+        visuals = [item for _z, _raw, item in sorted(converted_items, key=lambda entry: entry[0])]
         # PBIP bazı durumlarda aynı görsel adını bir sayfada tekrar kullanabilir.
         ids: set[str] = set()
         for visual in visuals:

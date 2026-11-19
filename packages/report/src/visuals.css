@@ -16,6 +16,20 @@
 .visual.shape-frame .visual-content { padding: 0; height: 100%; }
 .v-image { width: 100%; height: 100%; display: block; }
 .v-image-empty { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
+.v-action-button { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; border: 2px solid transparent; border-radius: inherit; font-size: 18px; font-weight: 650; cursor: pointer; transition: filter .16s ease, background-color .16s ease, transform .16s ease; }
+.v-action-button:hover { filter: brightness(1.08); }
+.v-action-button:active { transform: scale(.98); }
+.v-action-button.outline { background: transparent; }
+.v-action-button.ghost { background: transparent; border-color: transparent !important; }
+.v-action-button.ghost:hover { background: #dbeafe; }
+.v-action-button.hotspot { background: transparent; border: 0; color: transparent; }
+.visual:not(.preview):not(.readonly) .v-action-button.hotspot:hover { outline: 2px dashed #5b9cf2; }
+.v-action-icon { font-size: 1.25em; line-height: 1; }
+.visual.actionable { cursor: pointer; }
+.visual.initially-hidden { outline: 2px dashed #8f9aab; outline-offset: -2px; }
+.visual.preview .visual-del { display: none; }
+.visual.preview .visual-head { cursor: default; }
+.visual.preview.no-title .visual-head { display: none; }
 .v-shape { width: 100%; height: 100%; background: var(--shape-color, #2a78d6); display: grid; place-items: center; color: #fff; font-weight: 600; text-align: center; }
 .v-shape-pill { border-radius: 999px; }
 .v-shape-line { height: 2px; position: absolute; top: 50%; background: var(--shape-color, #2a78d6); }

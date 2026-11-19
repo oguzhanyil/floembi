@@ -102,10 +102,22 @@ Oluşan `.floem` dosyası Desktop'ta **Dosya aç** ile düzenlenir. Sayfa, görs
 görsel tipi ve alan bağları aktarılır. Model tabloları boş oluşturulur; gerçek veri, kaynak bağlantısı
 ve Power BI ölçü formülleri aktarılmaz. Desteklenmeyen görseller metin yer tutucusu olur. Veriyle
 çalıştırmak için ilgili kaynağı Desktop'ta yeniden bağlayıp ölçüleri FDX olarak uyarlayın.
-Şeffaf PBIP tıklama katmanları içerik üstünü kapatmamaları için atlanır; sayfalar arası geçiş Floem
-sayfa sekmeleriyle yapılır. Veri bulunmayan grafik ve kartlar **TASLAK · VERİ BEKLENİYOR**
+PBIP sayfa gezinme düğmelerinin hedefleri aktarılır. Şeffaf tıklama katmanı alttaki kart, metin ve
+şekle eylem olarak bağlanır; altta nesne yoksa görünmez bir düğme oluşturulur. Böylece menü ve kartlar
+tıklanabilir, katman içerik üstünü kapatmaz. Veri bulunmayan grafik ve kartlar **TASLAK · VERİ BEKLENİYOR**
 önizlemesini gösterir; çubuklar gerçek veri değildir. 1920 piksel genişliğindeki raporlar açılırken
 tuval geniş görünür, **Panelleri göster** düğmesiyle alan ve biçim panelleri açılır.
+
+#### Etkileşimli rapor nesneleri
+
+- **Görselleştirmeler → Ekle → Düğme** ile sayfaya düğme ekleyin. Nesneyi seçip **Biçim → Düğme**
+  bölümünden yazısını, simgesini, dolu/çerçeveli/sade stilini ve renklerini ayarlayın.
+- **Biçim → Tıklama olayı** bölümünde sayfaya git, sonraki/önceki sayfa, filtreleri sıfırla veya
+  nesneyi göster/gizle eylemini seçin. Metin, şekil, resim ve kartlara da tıklama olayı atanabilir.
+  Hedef nesneyi başlangıçta saklamak için onun **Biçim → Görünüm → Başlangıçta gizle** seçeneğini açın.
+- Desktop'ta **Etkileşimi dene** ile düğmeleri sınayın; **Tasarımı düzenle** ile tuvale dönün.
+  Kaydedilip yayımlanan raporda eylemler web görüntüleyicisinde de çalışır. Görünürlük ve filtre
+  değişiklikleri yalnızca izleyicinin oturumundadır; rapor tasarımını değiştirmez.
 
 Desktop simgesi `apps/desktop/build-resources/floem-bi.ico` dosyasındadır. Kaynak görselden
 yeniden üretmek için `apps/desktop/build-resources/generate-icon.ps1` çalıştırılır; paketli Windows

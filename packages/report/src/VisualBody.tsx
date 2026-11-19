@@ -29,7 +29,7 @@ export function visualTitle(v: Visual): string {
   // Drill-down'da başlık o an görünen düzeyi gösterir (Power BI'daki gibi)
   const axis = supportsDrill(v) && v.group.length > 1 ? currentAxis(v) : undefined;
   const grp = axis ? [axis.column, ...(v.legend ?? []).map((g) => g.column)] : groupFields(v).map((g) => g.column);
-  if (v.type === "card" || v.type === "kpi" || v.type === "text" || v.type === "shape" || v.type === "image" || v.type === "ticker") return "";
+  if (v.type === "card" || v.type === "kpi" || v.type === "text" || v.type === "shape" || v.type === "image" || v.type === "button" || v.type === "ticker") return "";
   if (v.type === "slicer") return grp[0] ?? VISUAL_DEFS.slicer.label;
   if (!vals.length && !grp.length) return VISUAL_DEFS[v.type].label;
   if (!vals.length) return grp.join(", ");
@@ -265,6 +265,18 @@ export function VisualBody({
 
   if (v.type === "shape") return <ShapeVisual format={v.format} />;
   if (v.type === "image") return <ImageVisual format={v.format} />;
+  if (v.type === "button") {
+    const label = typeof v.format.text === "string" ? v.format.text : "Düğme";
+    if (v.format.buttonInvisible) return <button type="button" className="v-action-button hotspot" aria-label={label} />;
+    const icon = v.format.buttonIcon === "none" ? "" : v.format.buttonIcon === "back" ? "←" :
+      v.format.buttonIcon === "refresh" ? "↻" : v.format.buttonIcon === "eye" ? "◉" : "→";
+    return <button type="button" className={`v-action-button ${v.format.buttonStyle ?? "solid"}`}
+      style={{ backgroundColor: v.format.buttonStyle === "solid" ? v.format.buttonColor || "#2563eb" : undefined,
+        color: v.format.buttonTextColor || (v.format.buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"),
+        borderColor: v.format.buttonColor || "#2563eb" }}>
+      <span>{label}</span>{icon && <span aria-hidden="true" className="v-action-icon">{icon}</span>}
+    </button>;
+  }
   if (v.type === "text") {
     if (data.state === "error") return <ErrorView {...data.error} />;
     const r = data.state === "ready" ? data.result : data.state === "loading" ? data.previous : undefined;

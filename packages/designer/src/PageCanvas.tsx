@@ -1,7 +1,8 @@
-import type { FilterRef, ModelColumn, ReportPage, Visual } from "@floem/client";
+import type { FilterRef, ModelColumn, ReportPage, Visual, VisualState } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
   visualMotion, visualStyle,
+  visualIsVisible,
   type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
 import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
@@ -94,9 +95,14 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 /** Sabit boyutlu rapor sayfası (Power BI'daki 16:9 tuval); görseller taşınır ve boyutlandırılır. */
 export function PageCanvas({
   page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
-  pages, pageFilters, onDrillThrough, banner,
+  pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
 }: {
   page: ReportPage;
+  previewActions: boolean;
+  visibleOverrides: Record<string, boolean>;
+  previewStates: Record<string, VisualState>;
+  onPreviewState: (id: string, state: VisualState) => void;
+  onAction: (visual: Visual) => void;
   /** Detaya git hedeflerini bulmak için tüm sayfalar */
   pages: ReportPage[];
   /** Detay sayfasına gelinmişse, gelinen değerin filtreleri */
@@ -134,6 +140,7 @@ export function PageCanvas({
   function start(e: RPointerEvent, v: Visual, mode: Drag["mode"]) {
     if (e.button !== 0) return;
     e.stopPropagation();
+    if (previewActions) return;
     onSelect(v.id);
     if (v.format.locked) return;
     try {
@@ -159,6 +166,9 @@ export function PageCanvas({
     // Kılavuza yapışmayan eksende 8 px ızgara
     const gx = (v: number) => (a?.snappedX ? v : e.altKey ? Math.round(v) : snap(v));
     const gy = (v: number) => (a?.snappedY ? v : e.altKey ? Math.round(v) : snap(v));
+    const compact = o.type === "button" || o.type === "text" || o.type === "shape";
+    const minW = compact ? 40 : o.type === "image" ? 48 : 120;
+    const minH = compact ? 28 : o.type === "image" ? 48 : 80;
     const next =
       drag.mode === "move"
         ? {
@@ -168,8 +178,8 @@ export function PageCanvas({
           }
         : {
             ...o,
-            w: Math.max(120, Math.min(page.width - o.x, gx(r.w))),
-            h: Math.max(80, Math.min(page.height - o.y, gy(r.h))),
+            w: Math.max(minW, Math.min(page.width - o.x, gx(r.w))),
+            h: Math.max(minH, Math.min(page.height - o.y, gy(r.h))),
           };
     setGuides(a?.guides ?? []);
     if (!drag.moved) setDrag({ ...drag, moved: true });
@@ -185,15 +195,17 @@ export function PageCanvas({
 
 
   return (
-    <div className="page-outer" ref={outer} onPointerDown={() => { onSelect(null); setCross(null); }}>
+    <div className="page-outer" ref={outer} onPointerDown={() => { if (!previewActions) onSelect(null); setCross(null); }}>
       {banner}
       <div
         className="page"
         style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
         onDragOver={(e) => {
+          if (previewActions) return;
           if (e.dataTransfer.types.includes(FIELD_MIME)) e.preventDefault();
         }}
         onDrop={(e) => {
+          if (previewActions) return;
           const f = readField(e);
           if (!f) return;
           e.preventDefault();
@@ -219,19 +231,24 @@ export function PageCanvas({
             }
           />
         ))}
-        {page.visuals.map((v) => {
+        {page.visuals.filter((v) => !previewActions || visualIsVisible(v, visibleOverrides)).map((v) => {
           const selected = v.id === selectedId;
           const title = visualTitle(v);
           return (
             <div
               key={v.id}
-              className={`visual ${selected ? "selected" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
+              className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
               style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
+              role={previewActions && v.format.action && v.type !== "button" ? "button" : undefined}
+              tabIndex={previewActions && v.format.action && v.type !== "button" ? 0 : undefined}
+              onKeyDown={(e) => { if (previewActions && v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAction(v); } }}
+              onClick={(e) => { if (previewActions && v.format.action) { e.stopPropagation(); onAction(v); } }}
               onPointerDown={(e) => {
                 e.stopPropagation();
-                onSelect(v.id);
+                if (!previewActions) onSelect(v.id);
               }}
               onDragOver={(e) => {
+                if (previewActions) return;
                 if (!e.dataTransfer.types.includes(FIELD_MIME)) return;
                 e.preventDefault();
                 e.stopPropagation();
@@ -239,6 +256,7 @@ export function PageCanvas({
               }}
               onDragLeave={() => setDropHover(null)}
               onDrop={(e) => {
+                if (previewActions) return;
                 const f = readField(e);
                 setDropHover(null);
                 if (!f) return;
@@ -270,19 +288,19 @@ export function PageCanvas({
               <div className="visual-content">
                 <VisualBody
                   v={v}
-                  extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, {}, v.id)]}
+                  extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, previewActions ? previewStates : {}, v.id)]}
                   detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
                   onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
                   dataRev={dataRev}
                   cross={cross}
                   onCross={(value) => setCross(toggleCross(v, cross, value))}
                   run={run}
-                  state={v.state}
-                  onState={(state) => onChange({ ...v, state })}
+                  state={previewActions ? previewStates[v.id] ?? v.state : v.state}
+                  onState={(state) => previewActions ? onPreviewState(v.id, state) : onChange({ ...v, state })}
                   fieldType={v.group[0] ? columnOf(v.group[0].table, v.group[0].column)?.tip : undefined}
                 />
               </div>
-              {selected && (
+              {selected && !previewActions && (
                 <div
                   className="visual-resize"
                   onPointerDown={(e) => start(e, v, "resize")}

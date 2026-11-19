@@ -9,7 +9,7 @@ export function visualStyle(visual: Visual): CSSProperties {
   const f = visual.format;
   const radius = f.shapeStyle === "pill" ? 999 : clamp(f.radius, 0, 40, 8);
   return {
-    backgroundColor: f.backgroundColor || undefined,
+    backgroundColor: visual.type === "button" ? "transparent" : f.backgroundColor || undefined,
     borderColor: f.borderColor || undefined,
     borderWidth: clamp(f.borderWidth, 0, 8, 1),
     borderRadius: radius,

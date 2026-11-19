@@ -100,6 +100,7 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
       return { group: [], values: v.values, filters, limit: 1 };
     case "shape":
     case "image":
+    case "button":
       return null;
     case "slicer": {
       const f = v.group[0];
