@@ -1,11 +1,13 @@
 import type { VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
 import { AllCommunityModule, themeQuartz, type ColDef, type GridApi } from "ag-grid-community";
 import { AgGridProvider, AgGridReact } from "ag-grid-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CrossSelect } from "./charts";
 import { ActionGlyph } from "./ActionGlyph";
 import { formatValue, isNumericType } from "./reportUtils";
 import { safeActionIcon } from "./visualActions";
+import { TableMenu, type TableMenuItem, type TableMenuPosition } from "./TableMenu";
+import { downloadTableBlob, tableExportBlob, type ExportTable, type TableExportKind } from "./tableExport";
 
 type Raw = string | number | boolean | null;
 type GridRow = Record<string, Raw>;
@@ -23,7 +25,7 @@ const theme = themeQuartz.withParams({
   accentColor: "#2563eb",
 });
 
-/** Community sürümünde sanallaştırma, sütun taşıma, sıralama, filtre ve CSV. */
+/** Community tablosu; sağ tık ve dışa aktarma Floem tarafından sağlanır. */
 export function AgDataGrid({
   result, selected, onSelect, selectedKey, onSelectRow, onRowAction, sort, onSort, format,
 }: {
@@ -43,6 +45,12 @@ export function AgDataGrid({
   const [hidden, setHidden] = useState<number[]>([]);
   const [displayCount, setDisplayCount] = useState(result.rows.length);
   const [columnFiltered, setColumnFiltered] = useState(false);
+  const [menu, setMenu] = useState<(TableMenuPosition & { exportsOnly?: boolean; colId?: string; row?: GridRow }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const exporting = useRef(false);
+  const closeMenu = useCallback(() => setMenu(null), []);
   const { columns, rows, total } = result;
   const groupCount = columns.filter((c) => c.kind === "group").length;
   const hasSel = selected !== undefined || selectedKey !== undefined;
@@ -51,7 +59,9 @@ export function AgDataGrid({
   const filtersEnabled = format.gridFilters !== false;
   const searchEnabled = format.gridSearch !== false;
   const columnsEnabled = format.gridColumnChooser !== false;
-  const exportEnabled = format.gridExport !== false;
+  const exportKinds = (["pdf", "xlsx", "csv"] as const).filter((kind) => format.gridExport !== false &&
+    (kind === "pdf" ? format.gridExportPdf !== false : kind === "xlsx" ? format.gridExportExcel !== false : format.gridExportCsv !== false));
+  const exportEnabled = exportKinds.length > 0;
   const countEnabled = format.gridRowCount !== false;
   const activeSearch = searchEnabled ? search : "";
   const showTools = searchEnabled || columnsEnabled || exportEnabled || countEnabled;
@@ -102,16 +112,82 @@ export function AgDataGrid({
   useEffect(() => {
     if (!columnsEnabled) { setColumnsOpen(false); setHidden([]); }
   }, [columnsEnabled]);
-  const exportCsv = () => gridApi.current?.exportDataAsCsv({
-    fileName: "floem-tablo.csv",
-    skipPinnedBottom: true,
-    processCellCallback: ({ value }) => {
-      const text = String(value ?? "");
-      return /^[\s]*[+\-=@\t\r]/.test(text) ? `'${text}` : text;
-    },
-  });
+  useEffect(() => {
+    if (menu && (menu.exportsOnly ? !exportEnabled : format.gridContextMenu === false)) closeMenu();
+  }, [menu, exportEnabled, format.gridContextMenu, closeMenu]);
+  const displayedColumns = () => (gridApi.current?.getAllDisplayedColumns() ?? [])
+    .map((c) => c.getColId()).filter((id) => /^c\d+$/.test(id));
+  const snapshot = (): ExportTable => {
+    const ids = displayedColumns();
+    const data: Raw[][] = [];
+    gridApi.current?.forEachNodeAfterFilterAndSort((node) => {
+      if (node.data && !node.rowPinned) data.push(ids.map((id) => node.data![id] ?? null));
+    });
+    return { columns: ids.map((id) => columns[Number(id.slice(1))]), rows: data, truncated: result.truncated };
+  };
+  const exportTable = async (kind: TableExportKind) => {
+    if (exporting.current || !exportKinds.includes(kind)) return;
+    exporting.current = true;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const blob = await tableExportBlob(snapshot(), kind);
+      downloadTableBlob(blob, kind);
+      setNotice("İndirme hazır.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Dosya oluşturulamadı. Yeniden deneyin."); }
+    finally { exporting.current = false; setBusy(false); }
+  };
+  const copy = async (text: string) => {
+    setError(""); setNotice("");
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const input = document.createElement("textarea");
+        input.value = text; input.style.position = "fixed"; input.style.opacity = "0";
+        document.body.append(input);
+        try { input.select(); if (!document.execCommand("copy")) throw new Error("Panoya kopyalama kullanılamıyor."); }
+        finally { input.remove(); }
+      }
+      setNotice("Panoya kopyalandı.");
+    } catch { setError("Panoya kopyalanamadı. Tarayıcının pano iznini kontrol edin."); }
+  };
+  const openContextMenu = (target: HTMLElement, x: number, y: number) => {
+    const cell = target.closest<HTMLElement>("[col-id]");
+    const colId = cell?.getAttribute("col-id") ?? undefined;
+    const rowEl = target.closest<HTMLElement>(".ag-row[row-index]");
+    const rowIndex = rowEl?.getAttribute("row-index");
+    const row = rowIndex && /^\d+$/.test(rowIndex) ? gridApi.current?.getDisplayedRowAtIndex(Number(rowIndex))?.data : undefined;
+    setMenu({ x, y, origin: cell ?? target, colId: colId && /^c\d+$/.test(colId) ? colId : undefined, row });
+  };
+  const menuItems: TableMenuItem[] = [];
+  if (menu && !menu.exportsOnly) {
+    const index = menu.colId ? Number(menu.colId.slice(1)) : -1;
+    if (menu.row && menu.colId) menuItems.push({ label: "Hücreyi kopyala", action: () => { void copy(formatValue(menu.row![menu.colId!] ?? null, columns[index].type, columns[index].format)); } });
+    if (menu.row) menuItems.push({ label: "Satırı kopyala", action: () => { void copy(displayedColumns().map((id) => {
+      const c = columns[Number(id.slice(1))]; return formatValue(menu.row![id] ?? null, c.type, c.format).replace(/[\t\r\n]+/g, " ");
+    }).join("\t")); } });
+    if (menu.colId) {
+      menuItems.push({ label: "Artan sırala", separator: true, action: () => { gridApi.current?.applyColumnState({ state: [{ colId: menu.colId!, sort: "asc" }], defaultState: { sort: null } }); } });
+      menuItems.push({ label: "Azalan sırala", action: () => { gridApi.current?.applyColumnState({ state: [{ colId: menu.colId!, sort: "desc" }], defaultState: { sort: null } }); } });
+    }
+    menuItems.push({ label: "Sıralamayı temizle", action: () => { gridApi.current?.applyColumnState({ defaultState: { sort: null } }); } });
+    if (filtersEnabled || searchEnabled) menuItems.push({ label: "Arama ve filtreleri temizle", action: () => { setSearch(""); gridApi.current?.setFilterModel(null); } });
+    if (columnsEnabled) {
+      if (menu.colId) menuItems.push({ label: "Bu sütunu gizle", separator: true, action: () => setHidden((old) => [...new Set([...old, index])]) });
+      menuItems.push({ label: "Tüm sütunları göster", action: () => setHidden([]) });
+    }
+  }
+  exportKinds.forEach((kind, i) => menuItems.push({ label: kind === "xlsx" ? "Excel (.xlsx) indir" : `${kind.toUpperCase()} indir`, disabled: busy,
+    separator: i === 0 && !menu?.exportsOnly, action: () => { void exportTable(kind); } }));
 
-  return <div className="v-ag-wrap">
+  return <div className="v-ag-wrap" onContextMenu={(e) => {
+    if (format.gridContextMenu === false || (e.target as HTMLElement).closest("input,textarea")) return;
+    e.preventDefault(); e.stopPropagation(); openContextMenu(e.target as HTMLElement, e.clientX, e.clientY);
+  }} onKeyDown={(e) => {
+    if (format.gridContextMenu === false || (e.target as HTMLElement).closest("input,textarea") || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+    e.preventDefault(); e.stopPropagation();
+    const target = e.target as HTMLElement; const rect = target.getBoundingClientRect();
+    openContextMenu(target, rect.left, rect.bottom);
+  }}>
     {showTools && <div className="v-ag-tools" onPointerDown={(e) => e.stopPropagation()}>
       {searchEnabled && <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
         placeholder="Tabloda ara" aria-label="Tabloda ara" />}
@@ -122,9 +198,14 @@ export function AgDataGrid({
             onChange={(e) => setHidden((old) => e.target.checked ? old.filter((x) => x !== i) : [...old, i])} />{c.name}</label>)}
         </div>}
       </div>}
-      {exportEnabled && <button type="button" onClick={exportCsv} title="Görünen sütunları CSV olarak indir">CSV ↓</button>}
+      {exportEnabled && <button type="button" disabled={busy} aria-haspopup="menu" aria-expanded={menu?.exportsOnly === true}
+        onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setMenu({ x: rect.left, y: rect.bottom, origin: e.currentTarget, exportsOnly: true }); }}
+        title="Filtrelenen satırları ve görünen sütunları indir">{busy ? "Hazırlanıyor…" : "İndir ▾"}</button>}
       {countEnabled && <span className="v-ag-count">{displayCount.toLocaleString("tr-TR")}{displayCount !== rows.length ? ` / ${rows.length.toLocaleString("tr-TR")}` : ""} satır</span>}
     </div>}
+    {(busy || notice) && <div className="v-table-feedback" role="status">{busy ? "Dosya hazırlanıyor…" : notice}</div>}
+    {error && <div className="v-table-feedback error" role="alert">{error}</div>}
+    {menu && <TableMenu position={menu} items={menuItems} onClose={closeMenu} />}
     <div className="v-ag-grid">
       <AgGridProvider modules={modules}>
         <AgGridReact<GridRow> theme={theme} rowData={rowData} columnDefs={columnDefs}

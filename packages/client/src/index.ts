@@ -387,6 +387,10 @@ export interface VisualFormat {
   gridSearch?: boolean;
   gridColumnChooser?: boolean;
   gridExport?: boolean;
+  gridExportPdf?: boolean;
+  gridExportExcel?: boolean;
+  gridExportCsv?: boolean;
+  gridContextMenu?: boolean;
   gridRowCount?: boolean;
   showTitle?: boolean;
   backgroundColor?: string;

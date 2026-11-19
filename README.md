@@ -151,18 +151,27 @@ bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalışt
 
 - **Görselleştirmeler → Veri → Tablo**, AG Grid Community kullanır. Sütun başlığından sıralayın,
   başlığın altındaki alanlarla filtreleyin, sütunları sürükleyip yeniden sıralayın veya kenarından
-  genişletin. Üst araç çubuğunda genel arama, sütun göster/gizle ve CSV indirme bulunur.
+  genişletin. Üst araç çubuğunda genel arama, sütun göster/gizle ve **İndir → PDF / Excel (.xlsx) / CSV** bulunur.
   **Biçim → AG Grid tablo** altında her tablo için **Sütun filtreleri**, **Tabloda ara**,
-  **Sütun seçici**, **CSV indirme** ve **Satır sayısını göster** ayrı ayrı açılıp kapatılır.
+  **Sütun seçici**, **Sağ tık menüsü**, **İndirmeye izin ver** ve **Satır sayısını göster** ayrı ayrı açılıp kapatılır.
+  PDF, Excel ve CSV indirmeleri de ayrı ayrı kapatılabilir.
   İlk sütunu sabitleme, genel toplam ve sayfalama ayarları da buradadır. Arama veya sütun
   filtreleri kapatılınca ilgili etkin filtre temizlenir; sütun seçici kapatılınca tüm sütunlar
   yeniden görünür. Tüm üst araçlar kapalıysa araç çubuğu yer kaplamaz. Ayarlar raporla kaydedilir
   ve yayımlanan web raporunda da uygulanır; eski raporlarda bu araçlar varsayılan olarak açıktır.
+- Tablo hücresine veya sütun başlığına **sağ tıklayın**: hücre/satır kopyalama, artan/azalan sıralama,
+  sıralamayı veya arama/filtreleri temizleme, sütun gizleme/tümünü gösterme ve indirme işlemleri bulunur.
+  Odaklı hücrede **Shift+F10** menüyü açar; ok tuşlarıyla seçin, Enter ile çalıştırın, Esc ile kapatın.
+  Kapalı araçların işlemleri sağ tık menüsünde de gösterilmez.
+  İndirme, mevcut sorgunun filtrelenmiş ve sıralanmış **tüm sayfalardaki** satırlarını, görünen sütunların
+  ekrandaki sırasıyla alır; toplam ve eylem hücreleri dışarı aktarılmaz. Excel sayısal hücreleri korur.
+  PDF'de Türkçe yazı tipi gömülür, başlıklar her sayfada tekrarlanır; geniş tablolar sütun gruplarına
+  ayrılır ve ilk sütun referans için tekrarlanır. Dosyalar cihazda üretilir.
 - **Görselleştirmeler → Veri → Ağaç tablo (Tree Grid)** görseline iki veya daha fazla alanı
   **Hiyerarşi düzeyleri** kutusuna sıralı koyun; en az bir ölçü/değer ekleyin. Düzeyleri tek tek
   veya topluca açıp kapatın, ağaçta arayın, kardeş düğümleri ada/değere göre sıralayın ve görünen
   satırları CSV indirin. Ara toplamlar her düzeyde ayrı hesaplanır.
-- Arama, sütun filtreleri ve CSV mevcut sorgunun getirdiği satırlarda çalışır; tablo sorgusu en fazla
+- Arama, sütun filtreleri ve indirmeler mevcut sorgunun getirdiği satırlarda çalışır; tablo sorgusu en fazla
   10.000 satır getirir. Yerel filtre açıkken genel toplam satırı gizlenir. Ağaç tablo 3.000 görünür
   satırla sınırlıdır. Satır eylemi ve çapraz filtre
   Desktop etkileşim önizlemesinde ve yayımlanan raporda çalışır.

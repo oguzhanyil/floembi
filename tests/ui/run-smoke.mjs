@@ -2,13 +2,14 @@
 // Kullanıcının tarayıcısı/profili kullanılmaz; yalnız bu testin süreci kapatılır.
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, readdir, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join, relative, isAbsolute } from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
+import { unzipSync, strFromU8 } from "fflate";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -24,10 +25,12 @@ try {
     build: { outDir: dir, emptyOutDir: false, minify: false,
       lib: { entry: join(root, "tests/ui/report-smoke.tsx"), formats: ["es"], fileName: () => "app.js", cssFileName: "app" } },
     define: { "process.env.NODE_ENV": '"development"' } });
-  await writeFile(join(dir, "index.html"), '<!doctype html><html lang="tr"><meta charset="utf-8"><link rel="stylesheet" href="/app.css"><style>*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,sans-serif;--surface:#fff;--text:#172033;--muted:#64748b;--border:#cbd5e1}.fixtures{display:flex;flex-wrap:wrap;gap:20px;padding:20px}section{padding:5px}</style><div id="root"></div><script type="module" src="/app.js"></script></html>');
+  const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; connect-src http://127.0.0.1:*";
+  await writeFile(join(dir, "index.html"), `<!doctype html><html lang="tr"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><link rel="stylesheet" href="/app.css"><style>*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,sans-serif;--surface:#fff;--text:#172033;--muted:#64748b;--border:#cbd5e1}.fixtures{display:flex;flex-wrap:wrap;gap:20px;padding:20px}section{padding:5px}</style><div id="root"></div><script type="module" src="/app.js"></script></html>`);
+  const served = new Set((await readdir(dir)).filter((name) => /\.(html|m?js|css)$/.test(name)));
   server = createServer(async (req, res) => {
     const path = req.url === "/" ? "index.html" : req.url?.slice(1);
-    if (!["index.html", "app.js", "app.css"].includes(path)) { res.writeHead(404).end(); return; }
+    if (!served.has(path)) { res.writeHead(404).end(); return; }
     res.setHeader("Content-Type", path.endsWith("js") ? "text/javascript" : path.endsWith("css") ? "text/css" : "text/html");
     res.end(await readFile(join(dir, path)));
   });
@@ -41,9 +44,11 @@ try {
   await new Promise((done) => ws.addEventListener("open", done, { once: true }));
   let nextId = 0;
   const pending = new Map();
+  const browserErrors = [];
   ws.addEventListener("message", ({ data }) => {
     const message = JSON.parse(data);
     if (message.id) { pending.get(message.id)?.(message); pending.delete(message.id); }
+    if (message.method === "Runtime.exceptionThrown") browserErrors.push(message.params.exceptionDetails.exception?.description?.slice(0, 700));
   });
   const call = (method, params = {}) => new Promise((done, reject) => {
     const id = ++nextId;
@@ -58,8 +63,9 @@ try {
   };
   const waitFor = async (expression) => {
     for (let i = 0; i < 100; i++) { if (await evaluate(`Boolean(${expression})`)) return; await delay(100); }
-    throw new Error(`Koşul sağlanmadı: ${expression}`);
+    throw new Error(`Koşul sağlanmadı: ${expression}\n${browserErrors.join('\n')}`);
   };
+  await call('Runtime.enable');
   await call("Page.navigate", { url: `http://127.0.0.1:${server.address().port}` });
   await waitFor('document.querySelector("[data-fixture=broken] .v-error") && document.querySelector("[data-fixture=zero] .v-card-value")');
   assert.equal(await evaluate('document.querySelector("[data-fixture=zero] .v-card-value").textContent'), "0");
@@ -93,6 +99,111 @@ try {
   await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır" && document.querySelector(".ag-floating-filter input")');
   assert.equal(await evaluate('document.querySelector(".v-ag-tools input[type=search]").value'), "");
   assert.equal(await evaluate('document.querySelector(".ag-floating-filter input").value'), "");
+  const openMenu = async (selector = '.ag-row[row-index="0"] .ag-cell[col-id="c0"]') => {
+    await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.x+10,clientY:r.y+10}))})()`);
+    await waitFor('document.querySelector(".v-table-menu")');
+  };
+  const choose = (label) => evaluate(`([...document.querySelectorAll('.v-table-menu button')].find(e=>e.textContent===${JSON.stringify(label)})).click()`);
+  await openMenu();
+  assert.match(await evaluate('document.querySelector(".v-table-menu").textContent'), /Hücreyi kopyala.*Satırı kopyala.*PDF indir.*Excel \(.xlsx\) indir.*CSV indir/);
+  await evaluate('Object.defineProperty(navigator.clipboard,"writeText",{configurable:true,value:async text=>{window.copiedText=text}})');
+  await choose('Hücreyi kopyala');
+  assert.equal(await evaluate('window.copiedText'), 'Alpha');
+  await openMenu();
+  await choose('Azalan sırala');
+  await waitFor(`document.querySelector('.ag-row[row-index="0"] .ag-cell[col-id=c0]')?.textContent === 'Gamma'`);
+  await input('.v-ag-tools input[type=search]', 'Beta');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "1 / 3 satır"');
+  await openMenu(); await choose('Arama ve filtreleri temizle');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır"');
+  await openMenu(); await choose('Bu sütunu gizle');
+  await waitFor('!document.querySelector(".ag-header-cell[col-id=c0]")');
+  await openMenu('.ag-header-cell[col-id=c1]'); await choose('Tüm sütunları göster');
+  await waitFor('document.querySelector(".ag-header-cell[col-id=c0]")');
+  await evaluate('window.setGridOptions({gridExport:false,gridFilters:false,gridSearch:false,gridColumnChooser:false})');
+  await openMenu();
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-table-menu").textContent'), /indir|filtreleri|sütunu gizle|sütunları göster/);
+  await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+  await waitFor('!document.querySelector(".v-table-menu")');
+  await evaluate('window.setGridOptions({gridContextMenu:false})');
+  assert(await evaluate('document.querySelector(".v-ag-wrap").dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true}))'));
+  await evaluate('window.setGridOptions({gridContextMenu:true,gridExport:true,gridFilters:true,gridSearch:true,gridColumnChooser:true})');
+  await evaluate('document.querySelector(".ag-cell[col-id=c0]").dispatchEvent(new KeyboardEvent("keydown",{key:"F10",shiftKey:true,bubbles:true,cancelable:true}))');
+  await waitFor('document.activeElement?.getAttribute("role") === "menuitem"');
+  await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"End",bubbles:true}))');
+  assert.equal(await evaluate('document.activeElement.textContent'), 'CSV indir');
+  await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+  await waitFor('!document.querySelector(".v-table-menu")');
+  await evaluate('window.setGridOptions({gridExportPdf:false,gridExportExcel:false})');
+  await openMenu();
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-table-menu").textContent'), /PDF|Excel/);
+  await evaluate('document.body.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}))');
+  await waitFor('!document.querySelector(".v-table-menu")');
+  await evaluate('window.setGridOptions({gridExportPdf:true,gridExportExcel:true})');
+  const downloads = join(dir, 'downloads'); await mkdir(downloads);
+  await call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+  await evaluate(`window.setGridResult({columns:[{name:'Müşteri',kind:'group',type:'string'},{name:'Tutar',kind:'value',type:'double'}], rows:[['İstanbul Şubesi',-3.5],['=1+1',0],['İzmir',12.75]],truncated:false})`);
+  await input('.v-ag-tools input[type=search]', 'İstanbul');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "1 / 3 satır"');
+  for (const [kind, label] of [['csv','CSV indir'],['xlsx','Excel (.xlsx) indir'],['pdf','PDF indir']]) {
+    await evaluate('document.querySelector(".v-ag-tools button[aria-haspopup=menu]").click()');
+    await waitFor('document.querySelector(".v-table-menu")');
+    await choose(label);
+    const path = join(downloads, `floem-tablo.${kind}`);
+    for (let i=0; i<150 && !existsSync(path); i++) await delay(100);
+    assert(existsSync(path), `${kind} dosyası inmedi: ${await evaluate('document.querySelector("[role=alert]")?.textContent')}`);
+    const bytes = await readFile(path);
+    if (kind === 'csv') { assert.match(bytes.toString('utf8'), /İstanbul Şubesi/); assert.doesNotMatch(bytes.toString('utf8'), /İzmir/); assert.match(bytes.toString('utf8'), /-3.5/); }
+    else assert(bytes.subarray(0, 4).toString() === (kind === 'pdf' ? '%PDF' : 'PK\x03\x04'));
+    if (kind === 'xlsx') {
+      const zip = unzipSync(bytes);
+      const sheet = strFromU8(zip['xl/worksheets/sheet1.xml']);
+      const strings = strFromU8(zip['xl/sharedStrings.xml']);
+      assert.match(sheet, /<v>-3.5<\/v>/); assert.match(strings, /İstanbul Şubesi/); assert.doesNotMatch(strings, /İzmir/);
+    }
+    await waitFor('!document.querySelector(".v-ag-tools button[aria-haspopup=menu]").disabled');
+  }
+  await input('.v-ag-tools input[type=search]', '');
+  await waitFor('document.querySelector(".v-ag-count")?.textContent === "3 satır"');
+  await openMenu('.ag-header-cell[col-id=c1]'); await choose('Azalan sırala');
+  await openMenu(); await choose('Bu sütunu gizle');
+  await evaluate('window.setGridOptions({gridPagination:true,gridPageSize:1})');
+  await waitFor('document.querySelector(".ag-paging-panel") && !document.querySelector(".ag-header-cell[col-id=c0]")');
+  // Farklı klasör: önceki indirmelerin varlığı başarı sayılmasın.
+  const sortedDownloads = join(dir, 'sorted-downloads'); await mkdir(sortedDownloads);
+  await call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: sortedDownloads });
+  await openMenu('.ag-header-cell[col-id=c1]'); await choose('CSV indir');
+  const sortedCsv = join(sortedDownloads, 'floem-tablo.csv');
+  for (let i=0; i<100 && !existsSync(sortedCsv); i++) await delay(100);
+  assert.equal((await readFile(sortedCsv,'utf8')).replace(/^\uFEFF/,''), '"Tutar"\r\n"12.75"\r\n"0"\r\n"-3.5"');
+  await openMenu('.ag-header-cell[col-id=c1]'); await choose('Tüm sütunları göster');
+  await waitFor('document.querySelector(".ag-header-cell[col-id=c0]")');
+  await openMenu(); await choose('Excel (.xlsx) indir');
+  const fullXlsx = join(sortedDownloads, 'floem-tablo.xlsx');
+  for (let i=0; i<100 && !existsSync(fullXlsx); i++) await delay(100);
+  const fullZip = unzipSync(await readFile(fullXlsx));
+  assert.match(strFromU8(fullZip['xl/sharedStrings.xml']), /=1\+1/);
+  assert.doesNotMatch(strFromU8(fullZip['xl/worksheets/sheet1.xml']), /<f[ >]/);
+  await waitFor('!document.querySelector(".v-ag-tools button[aria-haspopup=menu]").disabled');
+  await rm(sortedCsv);
+  await openMenu(); await choose('CSV indir');
+  for (let i=0; i<100 && !existsSync(sortedCsv); i++) await delay(100);
+  assert.match(await readFile(sortedCsv,'utf8'), /"'=1\+1"/);
+  await openMenu();
+  await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+  await evaluate('document.querySelector(".ag-cell[col-id=c0]").dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:innerWidth-1,clientY:innerHeight-1}))');
+  await waitFor('document.querySelector(".v-table-menu")');
+  assert(await evaluate('(()=>{const r=document.querySelector(".v-table-menu").getBoundingClientRect();return r.right<=innerWidth && r.bottom<=innerHeight && r.left>=0 && r.top>=0})()'));
+  await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+  if (process.env.FLOEM_UI_ARTIFACT_DIR) {
+    const output = resolve(process.env.FLOEM_UI_ARTIFACT_DIR); await mkdir(output, { recursive: true });
+    for (const name of await readdir(downloads)) await writeFile(join(output, name), await readFile(join(downloads, name)));
+    const pdf = await evaluate('window.exportSample("pdf")');
+    await writeFile(join(output, 'table-multipage.pdf'), Buffer.from(pdf.split(',')[1], 'base64'));
+    await openMenu();
+    const screenshot = await call('Page.captureScreenshot', { format: 'png' });
+    await writeFile(join(output, 'table-menu.png'), Buffer.from(screenshot.data, 'base64'));
+  }
   await evaluate('window.setTestMode("viewer")');
   await waitFor('document.querySelector(".viewer .canvas-zoom")');
   for (const [width, height, deviceScaleFactor] of [[1366,768,1], [1920,1080,1.25], [2560,1440,1.5], [1024,768,1.25], [768,1024,1.5], [390,844,2]]) {
@@ -124,7 +235,7 @@ try {
   await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: handle.x+40, y: handle.y+20, button: "left", buttons: 1, modifiers: 1 });
   await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: handle.x+40, y: handle.y+20, button: "left", clickCount: 1, modifiers: 1 });
   await waitFor('window.savedReport?.pages[0].visuals[0].x === 140 && window.savedReport?.pages[0].visuals[0].y === 120');
-  console.log("PASS: tablo araçları ve kapatılan arama/filtrenin temizlenmesi; metin/taşma, sıfır/boş, hata yalıtımı; 6 viewport/DPR, zoom, panel ve nesne taşıma.");
+  console.log("PASS: sağ tık/klavye/kopyalama, araç izinleri, filtre/sıralama/sütun/sayfalama ile PDF-XLSX-CSV indirme ve formül güvenliği; metin/taşma, hata yalıtımı; 6 viewport/DPR, zoom, panel ve nesne taşıma.");
   await call("Browser.close");
 } finally {
   ws?.close();

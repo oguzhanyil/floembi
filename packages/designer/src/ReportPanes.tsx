@@ -532,7 +532,17 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
             <label className="inline"><input type="checkbox" checked={f.gridColumnChooser !== false}
               onChange={(e) => set({ gridColumnChooser: e.target.checked })} />Sütun seçici</label>
             <label className="inline"><input type="checkbox" checked={f.gridExport !== false}
-              onChange={(e) => set({ gridExport: e.target.checked })} />CSV indirme</label>
+              onChange={(e) => set({ gridExport: e.target.checked })} />İndirmeye izin ver</label>
+            {f.gridExport !== false && <>
+              <label className="inline"><input type="checkbox" checked={f.gridExportPdf !== false}
+                onChange={(e) => set({ gridExportPdf: e.target.checked })} />PDF indirme</label>
+              <label className="inline"><input type="checkbox" checked={f.gridExportExcel !== false}
+                onChange={(e) => set({ gridExportExcel: e.target.checked })} />Excel indirme</label>
+              <label className="inline"><input type="checkbox" checked={f.gridExportCsv !== false}
+                onChange={(e) => set({ gridExportCsv: e.target.checked })} />CSV indirme</label>
+            </>}
+            <label className="inline"><input type="checkbox" checked={f.gridContextMenu !== false}
+              onChange={(e) => set({ gridContextMenu: e.target.checked })} />Sağ tık menüsü</label>
             <label className="inline"><input type="checkbox" checked={f.gridRowCount !== false}
               onChange={(e) => set({ gridRowCount: e.target.checked })} />Satır sayısını göster</label>
             <p className="hint">Arama veya sütun filtreleri kapatılınca etkin filtreleri temizlenir.</p>

@@ -3,6 +3,7 @@ import { StrictMode, useState } from "react";
 import { VisualBody, visualStyle, ReportViewer, AgDataGrid } from "../../packages/report/src/index";
 import { ReportDesigner } from "../../packages/designer/src/ReportDesigner";
 import type { ReportDefinition, Visual, VisualFormat, VisualResult } from "../../packages/client/src/index";
+import { tableExportBlob, type TableExportKind } from "../../packages/report/src/tableExport";
 
 const result = (value: number | null): VisualResult => ({
   columns: [{ name: "Tutar", kind: "value", type: "double" }], rows: [[value]], truncated: false,
@@ -38,9 +39,18 @@ const gridResult: VisualResult = {
 };
 function GridFixture() {
   const [format, setFormat] = useState<VisualFormat>({});
-  Object.assign(window, { setGridOptions: (patch: VisualFormat) => setFormat((old) => ({ ...old, ...patch })) });
-  return <div className="grid-fixture" style={{ width: 700, height: 400 }}><AgDataGrid result={gridResult} format={format} /></div>;
+  const [data, setData] = useState(gridResult);
+  Object.assign(window, { setGridResult: setData, setGridOptions: (patch: VisualFormat) => setFormat((old) => ({ ...old, ...patch })) });
+  return <div className="grid-fixture" style={{ width: 700, height: 400 }}><AgDataGrid result={data} format={format} /></div>;
 }
+Object.assign(window, { exportSample: async (kind: TableExportKind) => {
+  const table = {
+    columns: Array.from({ length: 8 }, (_, i) => ({ name: i === 0 ? "Müşteri / Açıklama" : `Ölçü ${i}`, kind: i === 0 ? "group" as const : "value" as const, type: i === 0 ? "string" : "double" })),
+    rows: Array.from({ length: 120 }, (_, i) => [`İstanbul Şubesi ${i + 1} - Çığ ÖĞÜŞİ ıçi uzun açıklama`, ...Array.from({ length: 7 }, (_, j) => (i + 1) * (j + 1))]), truncated: true,
+  };
+  const blob = await tableExportBlob(table, kind);
+  return new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(blob); });
+} });
 function App() {
   const [mode, setMode] = useState("fixtures");
   Object.assign(window, { setTestMode: setMode });

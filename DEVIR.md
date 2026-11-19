@@ -141,13 +141,28 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ### 19.11.2026 parametrik tablo araçları
 
-Biçim → AG Grid tablo bölümünde sütun filtreleri, Tabloda ara, sütun seçici, CSV indirme ve
+Biçim → AG Grid tablo bölümünde sütun filtreleri, Tabloda ara, sütun seçici, indirme ve
 satır sayısı her nesne için ayrı ayarlanır. `VisualFormat` içindeki `gridFilters`, `gridSearch`,
 `gridColumnChooser`, `gridExport`, `gridRowCount` Desktop/web ortak bileşeninde uygulanır;
 eksik değerler açık kabul edilir. Filtre/arama kapatıldığında etkin koşul temizlenir, sütun
 seçici kapatıldığında gizlenen sütunlar geri gelir. Tüm üst araçlar kapalıysa araç çubuğu kalkar.
 Chromium duman testi arama ve sütun filtresini uygulayıp kapatarak satırların geri geldiğini,
 sütun görünürlüğünün geri yüklendiğini ve araçların yeniden açıldığını doğrular.
+
+**Sağ tık ve dışa aktarma:** Ortak AG Grid tablosunda Floem'in kendi portal menüsü hücre/satır kopyalar,
+sıralar, filtreleri temizler ve sütun gizler/gösterir. Shift+F10, oklar, Enter, Esc ve dışarı tıklama
+desteklenir; kapatılmış araçlar menüden de çalıştırılamaz. `gridContextMenu`, `gridExportPdf`,
+`gridExportExcel`, `gridExportCsv` ayrı ayarlardır; eski `gridExport:false` tüm indirmeleri kapatır.
+`tableExport.ts` canlı grid'den alınan filtre/sıra/görünür sütun anlık görüntüsünü işler;
+sayfalama sınırı uygulanmaz, toplam ve eylem hücreleri alınmaz. PDF ve XLSX modülleri ihtiyaçta yüklenir.
+PDF için pdfmake 0.3.14 (MIT), Excel için write-excel-file 4.1.1 (MIT), tipler @types/pdfmake 0.3.3 (MIT).
+Yeni geçişli bağımlılıkların lisansları MIT; @swc/helpers Apache-2.0. Npm paketi LICENSE içermeyen
+fontkit/dfa/brotli için paket README'si ve package.json MIT bildirimi doğrulandı.
+Roboto **v2.138** (Apache-2.0) fontu kaynak/lisansıyla `packages/report/src/fonts` içindedir;
+pdfmake'in güncel OFL font paketi kullanılmaz. Font lisansı PDF Subject üstverisinde de taşınır.
+Chromium testi gerçek PDF/XLSX/CSV dosyalarını indirip filtre, sıralama, gizli sütun, sayfalama,
+sayısal hücre ve formül metni davranışını kontrol eder. `FLOEM_UI_ARTIFACT_DIR` verilirse inceleme
+dosyaları ve çok sayfalı örnek PDF o klasöre bırakılır. Türkçe PDF metni ve sayfa görselleri incelendi.
 
 ### 19.11.2026 F01–F04 uygulandı
 
