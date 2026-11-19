@@ -141,6 +141,12 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ### 20.11.2026 F10 PBIP uyumluluk raporu uygulandı
 
+**Geliştirme girdisi:** Kullanıcının isteğiyle görünüm bulguları
+[F10A-01–04 iş maddelerine](docs/pbip-bulgularindan-gelistirme-listesi.md) dönüştürüldü.
+`displayOption`, sayfa zemin şeffaflığı ve tuval dışı renk/şeffaflık için öncelik, bağımlılık,
+hedef davranış ve kabul ölçütleri yazıldı. Durumları planlandı; bu ayarlar henüz uygulanmadı.
+F04/F07A iyileştirmesi olarak F08 öncesine bağlandı. Ana sıradaki F06 değişmedi.
+
 [Kullanım ve yerel inceleme](docs/f10-pbip-uyumluluk.md). İçe aktarıcı `prepare_report` ve
 `import_report` olarak ayrıldı. `pbip_compatibility.py`, kaynak/gerçek hedef nesne ve alan
 başvuruları üzerinden tür, filtre, ölçü, toplama, hiyerarşi, sorgu, eylem ve biçim kayıplarını listeler.

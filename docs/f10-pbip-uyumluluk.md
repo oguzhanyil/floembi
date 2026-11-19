@@ -1,5 +1,8 @@
 # F10: Power BI aktarımında uyumluluk ve kayıp raporu
 
+Uyumluluk bulgularını sonraki işlere dönüştüren [geliştirme listesi](pbip-bulgularindan-gelistirme-listesi.md):
+başlangıç görünümü, tuval zemini ve tuval dışı alanın renk/şeffaflık desteği; öncelik ve kabul ölçütleriyle planlandı.
+
 ## Kullanım
 
 Yeni içe aktarılan dosyada **Görselleştirmeler → Power BI aktarım raporu** açılır. Sayfa,

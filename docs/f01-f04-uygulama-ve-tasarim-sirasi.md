@@ -79,6 +79,9 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 
 ## Güncel geliştirme sırası
 
+PBIP sayfa görünümü bulguları için [F10A-01–04 alt işleri](pbip-bulgularindan-gelistirme-listesi.md)
+planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak; ana sıradaki F06 değişmedi.
+
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
 | 1–4 | **F01 → F02 → F03 → F04** | Uygulandı; fiziksel DPI/çoklu monitör son kontrolü bekliyor. |
