@@ -13,7 +13,12 @@ Mimari kararlar ve gerekçeleri `research/notes/99-floem-bi-sentez.md` dosyasın
 
 Power BI dallarının iş mantığı, güncel demoların farkları, metin/çözünürlük sorunları ve
 öncelikli 15 geliştirme maddesi: [Tasarım ve ürün incelemesi](docs/floem-bi-tasarim-ve-urun-incelemesi.md)
-(19.11.2026; analiz ve öneri, uygulama tamamlanma listesi değildir).
+(19.11.2026). F01–F04 sonuçları ve marka belgesine göre güncellenen geliştirme sırası:
+[Uygulama notu](docs/f01-f04-uygulama-ve-tasarim-sirasi.md).
+
+Yeni demo: `data/SAPB1Demo-Floem-F01-F04.floem` (Desktop'ta Aç / Ctrl+O).
+Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı
+sürüklenebilir; sağ üst okla gizlenir. UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.
 
 ## Kurulum ve çalıştırma
 

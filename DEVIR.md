@@ -137,6 +137,18 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 F01–F04 uygulandı
+
+[Uygulama ve yeni tasarım sırası](docs/f01-f04-uygulama-ve-tasarim-sirasi.md): metin taşma seçenekleri,
+PBIP font düzeltmesi, demo ölçü/anahtar düzeltmeleri, görsel başına hata yalıtımı ve yeniden deneme,
+ortak Desktop/web zoom ve kaydırma, boyutlandırılabilir sağ paneller/dar ekran çekmecesi tamamlandı.
+Yeni örnek `data/SAPB1Demo-Floem-F01-F04.floem`; 8 sayfa/150 nesne/83.218 satır, 62 sorgu sonuç verdi.
+Boş verili taslak `data/SAPB1Demo-Taslak-F01-F04.floem`. Eski dosyalar korunuyor; dış rapor yayımlanmadı.
+20 hedefli pytest, typecheck, Desktop/web derlemesi ve `node tests/ui/run-smoke.mjs` geçti.
+Chromium viewport/DPR simülasyonu yapıldı; fiziksel Windows DPI/çoklu monitör denemesi bekliyor.
+Marka eki ve Y logosu incelendi: **sıradaki iş F07A tema altyapısı/5 palet × açık-koyu karşılaştırması**,
+ardından F10, F06, F05 ve F07B kullanıcı bileşenleri. Renk ailesi henüz seçilmedi; marka adı değişmedi.
+
 ### 19.11.2026 rapor mantığı ve tasarım incelemesi
 
 [Tasarım ve ürün incelemesi](docs/floem-bi-tasarim-ve-urun-incelemesi.md), Power BI dalları,
@@ -148,8 +160,8 @@ Yeni bulgular: PBIP metin aktarımında en az 20 px zorlaması, tüm metinlerde 
 çalışan demonun 8 başlığında satır yüksekliğinden 1 px kısa içerik alanı; sabit paneller ve
 sayfaya sığdırmanın okunabilirliğe etkisi. Sayılar statik incelemeye dayanır; bu turda ekran
 testi yapılmadı. Demo sorgularında açık sipariş etiketi, birleşik miktar ve yürüyen bakiye
-toplamı gibi anlam farkları da belgelendi. F01–F15 işleri öneridir; henüz uygulanmadı.
-Önerilen ilk teslim F01–F03 ve temel zoom; sonraki teslim grup/bileşen/tema ve ölçü eşlemesi.
+toplamı gibi anlam farkları da belgelendi. Bu paragraf ilk incelemeyi kaydeder; F01–F04'ün sonraki
+uygulaması ve kalan işlerin güncellenmiş sırası yukarıdaki bağlantıdadır.
 
 ### 19.11.2026 görsel tasarım ve kaynak genişletmesi
 

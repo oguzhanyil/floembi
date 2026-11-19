@@ -1,6 +1,6 @@
 # Floem BI: rapor mantığı, tasarım sorunları ve geliştirme sırası
 
-**İnceleme tarihi:** 19.11.2026. **Durum:** kaynak incelemesi ve geliştirme önerisi; aşağıdaki işler henüz uygulanmadı.
+**İnceleme tarihi:** 19.11.2026. **Güncel durum:** F01–F04 uygulandı; aşağıdaki ilk incelemenin bulguları uygulama öncesi durumu anlatır. Sonuçlar ve marka belgesiyle güncellenen sıra [uygulama notunda](f01-f04-uygulama-ve-tasarim-sirasi.md). Diğer geliştirmeler öneri aşamasında.
 
 ## 1. Sonuç ve ürün yönü
 

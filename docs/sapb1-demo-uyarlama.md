@@ -1,5 +1,9 @@
 # SAP B1 Demo → Floem BI uyarlaması
 
+**Güncelleme:** F01–F04 ile düzeltilen veri demosu `data/SAPB1Demo-Floem-F01-F04.floem` dosyasıdır.
+Önceki dosyalar korunur. Ölçü kapsamı, yeni kontroller ve tasarım sırası
+[uygulama notunda](f01-f04-uygulama-ve-tasarim-sirasi.md); aşağıdaki ilk aktarım bilgileri tarihsel kayıttır.
+
 Kaynak: yerel `powerbi-main/Demo/SAPB1Demo.pbip` ve maskelenmiş LocalDB `DEMO_FIRMA1`.
 PBIP 18 sayfa ve 963 görsel tanımlar. Sayfalardan biri özel `asistan` görselidir.
 
