@@ -64,9 +64,13 @@ export function ReportViewport({ width, height, children, banner, onBackground }
         <option value="fit">Sayfaya sığdır</option><option value="width">Genişliğe sığdır</option><option value="actual">%100</option>
         {typeof zoom === "number" && <option value="manual">Özel ölçek</option>}
       </select>
-      <button type="button" onClick={() => change(-0.1)} disabled={scale <= 0.1} aria-label="Uzaklaştır">−</button>
+      <button type="button" onClick={() => change(-0.1)} disabled={scale <= 0.1} aria-label="Uzaklaştır">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 6 6M7.5 10.5h6" /></svg>
+      </button>
       <output aria-live="polite">%{Math.round(scale * 100)}</output>
-      <button type="button" onClick={() => change(0.1)} disabled={scale >= 4} aria-label="Yakınlaştır">+</button>
+      <button type="button" onClick={() => change(0.1)} disabled={scale >= 4} aria-label="Yakınlaştır">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 6 6M7.5 10.5h6M10.5 7.5v6" /></svg>
+      </button>
       <button type="button" onClick={() => setZoom(1)} title="Gerçek boyut (Ctrl+0)">%100</button>
     </div>
   </div>;

@@ -144,7 +144,8 @@
 .report-scroll-space > .page { flex: none; }
 .canvas-zoom { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 8px; border-top: 1px solid var(--border, #cbd5e1); background: var(--surface, #fff); color: var(--text, #172033); font: 12px system-ui; }
 .canvas-zoom select, .canvas-zoom button { min-height: 28px; border: 1px solid var(--border, #cbd5e1); border-radius: 5px; background: var(--surface, #fff); color: inherit; padding: 3px 6px; font: inherit; }
-.canvas-zoom button { min-width: 28px; cursor: pointer; }
+.canvas-zoom button { min-width: 28px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.canvas-zoom button svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-zoom output { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 .visual.readonly .visual-head { cursor: default; }
 .visual.readonly:hover { border-color: var(--border); }
