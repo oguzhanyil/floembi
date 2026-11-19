@@ -10,6 +10,7 @@ import { auditReport } from "./import-audit-fixture";
 import { LayoutFixture } from "./LayoutFixture";
 import { ComponentFixture } from "./ComponentFixture";
 import { AppearanceFixture } from "./AppearanceFixture";
+import { ResponsiveFixture } from "./ResponsiveFixture";
 
 const result = (value: number | null): VisualResult => ({
   columns: [{ name: "Tutar", kind: "value", type: "double" }], rows: [[value]], truncated: false,
@@ -86,6 +87,7 @@ function App() {
   if (mode === "layout") return <LayoutFixture />;
   if (mode === "components") return <ComponentFixture />;
   if (mode === "appearance") return <AppearanceFixture />;
+  if (mode === "responsive") return <ResponsiveFixture />;
   if (mode === "audit") return <div className="studio" style={{ height: "100vh" }}><ReportDesigner host={{ report: auditReport, tables: [], dataRev: "audit", run: runReport, save, onError: console.error }} /></div>;
   if (mode === "theme") return <div className="studio theme-fixture" style={{ height: "100vh" }}><ApplicationThemeControl />
     <ReportDesigner host={{ report: { ...report, theme: createTheme("electric", "light") }, tables: [], dataRev: "theme", run: runReport, save, onError: console.error }} />

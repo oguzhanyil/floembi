@@ -135,7 +135,7 @@
 .v-error-more { border: none; background: none; padding: 2px 0; color: var(--accent); font-size: 11px; cursor: pointer; }
 .v-error pre { white-space: pre-wrap; font-size: 10px; color: var(--text); margin: 4px 0 0; }
 .v-loading { font-size: 12px; }
-.viewer { position: relative; display: grid; grid-template-rows: 1fr auto; height: 100%; min-height: 0; background: #e9e8e6; }
+.viewer { position: relative; display: grid; grid-template-rows: 1fr auto; height: 100%; min-height: 0; min-width: 0; background: #e9e8e6; }
 .viewer-stage { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; }
 .viewer-empty { padding: 24px; color: var(--muted); }
 .report-viewport { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; height: 100%; }
@@ -148,6 +148,8 @@
 .canvas-zoom button { min-width: 28px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .canvas-zoom button svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-zoom output { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.viewer-layout-choice { margin-right: auto; display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.viewer-layout-choice select { max-width: min(220px, 65vw); }
 .visual.readonly .visual-head { cursor: default; }
 .visual.readonly:hover { border-color: var(--border); }
 

@@ -1,7 +1,7 @@
 import { ReportThemeScope, themedVisual } from "./theme";
 import { ImportCompatibility } from "./ImportCompatibility";
 import type { FilterRef, ReportDefinition, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
-import { useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ReportViewport } from "./ReportViewport";
 import { pageBackground } from "./pageAppearance";
 import { VisualContextMenu } from "./VisualContextMenu";
@@ -14,6 +14,7 @@ import { visualMotion, visualStyle } from "./visualStyle";
 import { resolveVisualAction, rowActionValue, runMeasureAction, visualIsVisible, type ActionValue } from "./visualActions";
 import { usePageLayout } from "./usePageLayout";
 import { visibleInLayout, inheritedLayoutStyle } from "./layout";
+import { choosePageLayout, resolvePageVariant } from "./pageLayouts";
 
 const emptyPage: ReportPage = { id: "empty", name: "", width: 1280, height: 720, visuals: [] };
 
@@ -41,8 +42,21 @@ export function ReportViewer({
   const [actionRev, setActionRev] = useState(0);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
-  const layout = usePageLayout(page ?? emptyPage, JSON.stringify(visibility[page?.id ?? ""] ?? {}));
+  const root = useRef<HTMLDivElement>(null);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [choices, setChoices] = useState<Record<string, string>>({});
+  const base = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
+  useLayoutEffect(() => {
+    const element = root.current; if (!element) return;
+    const resize = () => setAvailableWidth(element.clientWidth);
+    const observer = new ResizeObserver(resize); observer.observe(element); resize();
+    return () => observer.disconnect();
+  }, [!!base]);
+  const choice = choices[base?.id ?? ""] ?? "auto";
+  const variantId = base ? choice === "auto" ? choosePageLayout(base, availableWidth) : base.layouts?.some((v) => v.id === choice) ? choice : null : null;
+  const page = useMemo(() => base && resolvePageVariant(base, variantId), [base, variantId]);
+  const viewKey = `${page?.id}:${variantId ?? "base"}`;
+  const layout = usePageLayout(page ?? emptyPage, JSON.stringify(visibility[page?.id ?? ""] ?? {}), viewKey);
   if (!page) return <div className="viewer-empty">Bu raporda sayfa yok.</div>;
   // Power BI "Sayfaya sığdır" görünümü
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
@@ -85,9 +99,13 @@ export function ReportViewer({
   }
 
   return (
-    <div className="viewer">
+    <div className="viewer" ref={root} data-layout-id={variantId ?? "base"}>
       <ImportCompatibility audit={report.importAudit} />
-      <ReportViewport page={page} theme={report.theme} width={page.width} height={page.height} onBackground={() => setCross(null)} banner={drill && pageFilters.length > 0 && (
+      <ReportViewport page={page} theme={report.theme} viewKey={viewKey} width={page.width} height={layout.height} onBackground={() => setCross(null)}
+        tools={base.layouts?.length ? <label className="viewer-layout-choice">Düzen <select aria-label="Görüntüleme düzeni" value={choice} onChange={(e) => setChoices((old) => ({ ...old, [page.id]: e.target.value }))}>
+          <option value="auto">Otomatik · {base.layouts.find((v) => v.id === variantId)?.name ?? "Ana"}</option>
+          <option value="base">Ana düzen</option>{base.layouts.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select></label> : undefined} banner={drill && pageFilters.length > 0 && (
           <DrillBanner
             label={drill.label}
             onBack={() => {
@@ -98,7 +116,7 @@ export function ReportViewer({
           />
         )}>
         {(scale) => (
-        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: pageBackground(page, report.theme) }}>
+        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, report.theme) }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {layout.visuals.filter((v) => visibleInLayout(page, v, visibility[page.id] ?? {})).map((v) => {
             const raw = page.visuals.find((node) => node.id === v.id)!;
@@ -135,7 +153,7 @@ export function ReportViewer({
                     onRowAction={v.format.rowAction ? (value) => runAction(v, v.format.rowAction!.action,
                       rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
                     onAction={(chosen) => runAction(v, chosen)}
-                    pageWidth={page.width} pageHeight={page.height}
+                    pageWidth={page.width} pageHeight={layout.height}
                     dataRev={`${dataRev}:${actionRev}`}
                     cross={cross}
                     onCross={(value) => setCross(toggleCross(v, cross, value))}

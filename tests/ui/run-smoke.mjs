@@ -16,6 +16,7 @@ import { testImportAudit } from "./import-audit-smoke.mjs";
 import { testLayouts } from "./layout-smoke.mjs";
 import { testComponents } from "./component-smoke.mjs";
 import { testAppearance } from "./appearance-smoke.mjs";
+import { testResponsive } from "./responsive-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -73,7 +74,10 @@ try {
   };
   await call('Runtime.enable');
   await call("Page.navigate", { url: `http://127.0.0.1:${server.address().port}` });
-  if (process.env.FLOEM_UI_LAYOUT_ONLY) {
+  if (process.env.FLOEM_UI_RESPONSIVE_ONLY) {
+    await waitFor('window.setTestMode');
+    await testResponsive({ call, evaluate, waitFor, input: (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event("input",{bubbles:true}))})()`) });
+  } else if (process.env.FLOEM_UI_LAYOUT_ONLY) {
     await waitFor('window.setTestMode');
     await testLayouts({ call, evaluate, waitFor, input: (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event("input",{bubbles:true}))})()`) });
   } else if (process.env.FLOEM_UI_APPEARANCE_ONLY) {
@@ -355,6 +359,7 @@ try {
   await testLayouts({ call, evaluate, waitFor, input });
   await testComponents({ call, evaluate, waitFor, input, dir });
   await testAppearance({ call, evaluate, waitFor, input });
+  await testResponsive({ call, evaluate, waitFor, input });
   if (process.env.FLOEM_UI_LAYOUT_REPORT) {
     const definition = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_LAYOUT_REPORT), 'utf8'));
     await evaluate(`window.setAllReport(${JSON.stringify(definition)});window.setTestMode('all-viewer')`);

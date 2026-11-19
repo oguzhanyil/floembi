@@ -2,7 +2,8 @@ import type { ReportPage, Visual } from "@floem/client";
 import { ancestors, containerOptions, descendants, lockedInLayout, selectionRoots } from "@floem/report";
 import { alignSelection, canGroup, reparent, type Alignment } from "./layoutEditing";
 
-export function LayoutControls({ page, resolved, selection, onSelect, onChange, onVisual, onGroup, onUngroup }: {
+export function LayoutControls({ page, resolved, selection, onSelect, onChange, onVisual, onGroup, onUngroup, allowStructure = true }: {
+  allowStructure?: boolean;
   resolved: Visual[];
   page: ReportPage; selection: string[]; onSelect: (ids: string[]) => void; onChange: (page: ReportPage) => void;
   onVisual: (visual: Visual) => void; onGroup: (frame?: boolean) => void; onUngroup: (id: string) => void;
@@ -13,16 +14,16 @@ export function LayoutControls({ page, resolved, selection, onSelect, onChange, 
   const overflows = placed && resolved.some((node) => node.parentId === placed.id && (node.x < placed.x || node.y < placed.y || node.x + node.w > placed.x + placed.w + .5 || node.y + node.h > placed.y + placed.h + .5));
   const o = v ? containerOptions(v) : null;
   const parent = page.visuals.find((node) => node.id === v?.parentId);
-  const flow = parent && containerOptions(parent).mode !== "free";
+  const flow = parent ? containerOptions(parent).mode !== "free" : page.rootLayout && page.rootLayout.mode !== "free";
   const setContainer = (patch: Partial<NonNullable<Visual["container"]>>) => v && onVisual({ ...v, container: { ...o!, ...patch } });
   return <details className="layout-controls" open>
     <summary>Düzen ve katmanlar</summary>
     <div className="layout-actions">
-      <button type="button" disabled={!canGroup(page, selection)} onClick={() => onGroup()}>Grupla</button>
-      <button type="button" disabled={!canGroup(page, selection)} onClick={() => onGroup(true)}>Kapsayıcıya al</button>
-      <button type="button" disabled={roots.length !== 1 || v?.type !== "container" || lockedInLayout(page, v.id)} onClick={() => v && onUngroup(v.id)}>Grubu çöz</button>
+      <button type="button" disabled={!allowStructure || !canGroup(page, selection)} onClick={() => onGroup()}>Grupla</button>
+      <button type="button" disabled={!allowStructure || !canGroup(page, selection)} onClick={() => onGroup(true)}>Kapsayıcıya al</button>
+      <button type="button" disabled={!allowStructure || roots.length !== 1 || v?.type !== "container" || lockedInLayout(page, v.id)} onClick={() => v && onUngroup(v.id)}>Grubu çöz</button>
     </div>
-    {roots.length > 1 && <label className="layout-align">Seçimi hizala<select aria-label="Seçimi hizala" value="" onChange={(e) => onChange(alignSelection(page, selection, e.target.value as Alignment, resolved))}>
+    {roots.length > 1 && <label className="layout-align">Seçimi hizala<select aria-label="Seçimi hizala" disabled={!!page.rootLayout && page.rootLayout.mode !== "free" && roots.some((v) => !v.parentId)} value="" onChange={(e) => onChange(alignSelection(page, selection, e.target.value as Alignment, resolved))}>
       <option value="" disabled>Hizalama seçin</option><option value="left">Sola</option><option value="center">Yatay ortala</option><option value="right">Sağa</option>
       <option value="top">Üste</option><option value="middle">Dikey ortala</option><option value="bottom">Alta</option>
       {roots.length > 2 && <><option value="horizontal">Yatay eşit aralık</option><option value="vertical">Dikey eşit aralık</option></>}
@@ -31,7 +32,7 @@ export function LayoutControls({ page, resolved, selection, onSelect, onChange, 
     {v && <fieldset className="layout-settings" disabled={lockedInLayout(page, v.id)}>
       <legend>{selection.length > 1 ? `${selection.length} nesne seçili · son nesne` : "Seçili nesne"}</legend>
       <label>Ad<input aria-label="Nesne adı" value={v.title ?? ""} placeholder={v.id} onChange={(e) => onVisual({ ...v, title: e.target.value })} /></label>
-      <label>Üst kapsayıcı<select aria-label="Üst kapsayıcı" value={v.parentId ?? ""} onChange={(e) => onChange(reparent(page, [v.id], e.target.value || null, resolved))}>
+      <label>Üst kapsayıcı<select disabled={!allowStructure} aria-label="Üst kapsayıcı" value={v.parentId ?? ""} onChange={(e) => onChange(reparent(page, [v.id], e.target.value || null, resolved))}>
         <option value="">Sayfa</option>{page.visuals.filter((p) => p.type === "container" && !excluded.has(p.id) && !lockedInLayout(page, p.id)).map((p) => <option key={p.id} value={p.id}>{p.title || p.id}</option>)}
       </select></label>
       <div className="layout-numbers">{(["x", "y", "w", "h"] as const).map((key) => <label key={key}>{({ x: "X", y: "Y", w: "Genişlik", h: "Yükseklik" })[key]}

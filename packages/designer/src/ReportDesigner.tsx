@@ -5,8 +5,9 @@ import {
   sameField, slicerFilters, snap, visualIsVisible,
   type ActionValue, type CrossFilter, type QueryFn, type WellKey,
   containerOptions, lockedInLayout, ancestors, usePageLayout,
+  resolvePageVariant, editPageVariant, pruneReportLayouts,
 } from "@floem/report";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
@@ -17,6 +18,7 @@ import { groupSelection, ungroup, deleteSelection, duplicateSelection, reorderSi
 import { LayoutControls } from "./LayoutControls";
 import { ComponentLibraryPane } from "./ComponentLibraryPane";
 import { repairInstances } from "./components";
+import { PageLayoutControls } from "./PageLayoutControls";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -55,6 +57,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const history = useRef(new DesignHistory(host.report));
   const timer = useRef<number | null>(null);
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
+  const [layoutChoices, setLayoutChoices] = useState<Record<string, string | null>>({});
   const [selection, setSelection] = useState<string[]>([]);
   const selectedId = selection.at(-1) ?? null;
   const setSelectedId = (id: string | null) => setSelection(id ? [id] : []);
@@ -93,6 +96,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       setPreviewActions(false);
       setPreviewVisibility({});
       setPreviewStates({});
+      setLayoutChoices({});
     }
   }, [host.report]);
 
@@ -122,7 +126,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   const update = useCallback(
     (fn: (r: ReportDefinition) => ReportDefinition) => {
-      const next = fn(reportRef.current);
+      const next = pruneReportLayouts(fn(reportRef.current));
       if (next === reportRef.current) return;
       history.current.update(next);
       reportRef.current = next;
@@ -133,8 +137,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     [send],
   );
 
-  const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
-  const layout = usePageLayout(page, JSON.stringify(previewVisibility[page?.id] ?? {}));
+  const basePage = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
+  const layoutId = basePage?.layouts?.some((v) => v.id === layoutChoices[basePage.id]) ? layoutChoices[basePage.id] : null;
+  const page = useMemo(() => resolvePageVariant(basePage, layoutId), [basePage, layoutId]);
+  const viewKey = `${page?.id}:${layoutId ?? "base"}`;
+  const layout = usePageLayout(page, JSON.stringify(previewVisibility[page?.id] ?? {}), viewKey);
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
   const dataRev = `${host.dataRev}:${actionRev}`;
@@ -147,7 +154,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   const updatePage = (fn: (p: ReportPage) => ReportPage) => update((r) => {
     const before = r.pages.find((p) => p.id === page.id)!;
-    const next = repairInstances(fn(before), r.components ?? []);
+    const next = repairInstances(editPageVariant(before, layoutId, fn(resolvePageVariant(before, layoutId))), r.components ?? []);
     return before === next ? r : { ...r, pages: r.pages.map((p) => p.id === page.id ? next : p) };
   });
   const updateVisual = (v: Visual) => updatePage((p) => {
@@ -188,6 +195,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     else history.current.commit();
   }
   function groupChosen(frame = false) {
+    if (layoutId) return;
     const result = groupSelection(page, selection, frame, new Set(report.pages.flatMap((p) => p.visuals.flatMap((v) => [v.id, ...Object.values(v.component?.nodeMap ?? {})]))), layout.visuals);
     if (result.id) { updatePage(() => result.page); setSelectedId(result.id); }
   }
@@ -280,7 +288,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   function createVisual(type: VisualType, at?: { x: number; y: number }): Visual {
     const [w, h] = VISUAL_DEFS[type].size;
     const pos = at
-      ? { x: snap(Math.max(0, Math.min(page.width - w, at.x - w / 2))), y: snap(Math.max(0, Math.min(page.height - h, at.y - 20))) }
+      ? { x: snap(Math.max(0, Math.min(page.width - w, at.x - w / 2))), y: snap(Math.max(0, Math.min(layout.height - h, at.y - 20))) }
       : freeSpot(w, h);
     const ids = new Set(report.pages.flatMap((p) => p.visuals.flatMap((v) => [v.id, ...Object.values(v.component?.nodeMap ?? {})])));
     const format = type === "shape" ? { showTitle: false, backgroundColor: "#2a78d6", padding: 0 } :
@@ -373,7 +381,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); changeHistory(e.shiftKey ? "redo" : "undo"); }
       else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); changeHistory("redo"); }
-      else if (mod && e.key.toLowerCase() === "g") { e.preventDefault(); if (e.shiftKey && selected) updatePage((p) => ungroup(p, selected.id, layout.visuals)); else groupChosen(); }
+      else if (mod && e.key.toLowerCase() === "g") { e.preventDefault(); if (layoutId) return; if (e.shiftKey && selected) updatePage((p) => ungroup(p, selected.id, layout.visuals)); else groupChosen(); }
       else if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); setSelection(page.visuals.filter((v) => !v.parentId && !v.format.locked).map((v) => v.id)); }
       else if (mod && e.key.toLowerCase() === "d" && selected) { e.preventDefault(); duplicateVisual(selected); }
       else if (e.key === "Delete" && selectedId) { e.preventDefault(); deleteVisual(selectedId); }
@@ -449,7 +457,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   return (
-    <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}
+    <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`} data-layout-id={layoutId ?? "base"}
       onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
       onBlurCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
       <div className="panel-toggles" role="group" aria-label="Sağ paneller">
@@ -479,6 +487,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         <PageCanvas
           theme={report.theme}
           page={page}
+          viewKey={viewKey}
+          allowStructure={!layoutId}
           layout={layout}
           previewActions={previewActions}
           visibleOverrides={previewVisibility[page.id] ?? {}}
@@ -492,7 +502,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           onGestureStart={beginGesture}
           onGestureEnd={endGesture}
           onGroup={() => groupChosen()}
-          onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }}
+          onUngroup={(id) => { if (!layoutId) updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }}
           onSelect={setSelectedId}
           onChange={updateVisual}
           onDelete={deleteVisual}
@@ -588,11 +598,14 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
-        layoutControls={!previewActions && <LayoutControls page={page} resolved={layout.visuals} selection={selection} onSelect={setSelection}
+        layoutControls={!previewActions && <LayoutControls page={page} allowStructure={!layoutId} resolved={layout.visuals} selection={selection} onSelect={setSelection}
           onChange={(next) => updatePage(() => next)} onVisual={updateVisual} onGroup={groupChosen}
           onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }} />}
-        themeControls={<><ComponentLibraryPane report={report} page={page} selection={selection} resolved={layout.visuals} tables={tables} store={host.componentLibrary}
-          onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />
+        themeControls={<><PageLayoutControls page={basePage} activeId={layoutId} onSelect={(id) => setLayoutChoices((old) => ({ ...old, [page.id]: id }))}
+          onChange={(next) => update((r) => ({ ...r, pages: r.pages.map((p) => p.id === next.id ? next : p) }))}
+          resolved={layout.visuals} contentHeight={layout.height} selection={selection} overflow={layout.overflow} />
+          {layoutId ? <p className="layout-hint">Ortak bileşen kitaplığını Ana düzende düzenleyin.</p> : <ComponentLibraryPane report={report} page={page} selection={selection} resolved={layout.visuals} tables={tables} store={host.componentLibrary}
+          onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />}
           <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
           <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
             if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {

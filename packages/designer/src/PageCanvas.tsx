@@ -100,9 +100,11 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 export function PageCanvas({
   page, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
   pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
-  onDuplicate, onShiftLayer, onFormat, theme, selection, onSelection, onPageChange, onGestureStart, onGestureEnd, onGroup, onUngroup, layout,
+  onDuplicate, onShiftLayer, onFormat, theme, selection, onSelection, onPageChange, onGestureStart, onGestureEnd, onGroup, onUngroup, layout, viewKey, allowStructure = true,
 }: {
   page: ReportPage;
+  viewKey?: string;
+  allowStructure?: boolean;
   layout: ReturnType<typeof usePageLayout>;
   theme?: ThemeSnapshot | null;
   previewActions: boolean;
@@ -181,7 +183,8 @@ export function PageCanvas({
     // Alt basılıyken kılavuz ve yapışma yok (serbest konum)
     const excluded = descendants(d.original, d.ids);
     const others = layout.visuals.filter((v) => !excluded.has(v.id));
-    const a = e.altKey ? null : alignRect(raw, d.mode, others, page);
+    const canvasHeight = Math.max(page.height, layout.height);
+    const a = e.altKey ? null : alignRect(raw, d.mode, others, { ...page, height: canvasHeight });
     const r = a?.rect ?? raw;
     // Kılavuza yapışmayan eksende 8 px ızgara
     const gx = (v: number) => (a?.snappedX ? v : e.altKey ? Math.round(v) : snap(v));
@@ -195,12 +198,12 @@ export function PageCanvas({
         ? {
             ...o,
             x: Math.max(0, Math.min(page.width - o.w, gx(r.x))),
-            y: Math.max(0, Math.min(page.height - o.h, gy(r.y))),
+            y: Math.max(0, Math.min(canvasHeight - o.h, gy(r.y))),
           }
         : {
             ...o,
             w: Math.max(minW, Math.min(page.width - o.x, gx(r.w))),
-            h: Math.max(minH, Math.min(page.height - o.y, gy(r.h))),
+            h: Math.max(minH, Math.min(canvasHeight - o.y, gy(r.h))),
           };
     setGuides(a?.guides ?? []);
     d.moved = true; d.last = next;
@@ -212,7 +215,7 @@ export function PageCanvas({
     if (!d) return;
     drag.current = null;
     if (!cancel && d.moved && d.mode === "move") {
-      if (e?.ctrlKey && e.altKey) {
+      if (allowStructure && e?.ctrlKey && e.altKey) {
         const excluded = descendants(d.original, d.ids);
         const target = [...layout.visuals].reverse().find((v) => v.type === "container" && !excluded.has(v.id) && !lockedInLayout(page, v.id)
           && d.last.x + d.last.w / 2 >= v.x && d.last.x + d.last.w / 2 <= v.x + v.w && d.last.y + d.last.h / 2 >= v.y && d.last.y + d.last.h / 2 <= v.y + v.h);
@@ -222,9 +225,9 @@ export function PageCanvas({
       } else if (d.ids.length === 1) {
         const v = d.original.visuals.find((node) => node.id === d.ids[0])!;
         const parent = d.original.visuals.find((node) => node.id === v.parentId);
-        if (parent && containerOptions(parent).mode !== "free") {
-          const options = containerOptions(parent);
-          const siblings = layout.visuals.filter((node) => node.parentId === parent.id);
+        const options = parent ? containerOptions(parent) : d.original.rootLayout;
+        if (options && options.mode !== "free") {
+          const siblings = layout.visuals.filter((node) => (node.parentId ?? null) === (parent?.id ?? null));
           const distance = (node: Visual) => options.mode === "vertical" ? Math.abs(node.y + node.h / 2 - d.last.y - d.last.h / 2)
             : options.mode === "horizontal" && !options.wrap ? Math.abs(node.x + node.w / 2 - d.last.x - d.last.w / 2)
             : Math.hypot(node.x + node.w / 2 - d.last.x - d.last.w / 2, node.y + node.h / 2 - d.last.y - d.last.h / 2);
@@ -248,13 +251,13 @@ export function PageCanvas({
 
 
   return (
-    <ReportViewport page={page} theme={theme} width={page.width} height={page.height} banner={banner}
+    <ReportViewport page={page} theme={theme} viewKey={viewKey} width={page.width} height={layout.height} banner={banner}
       onBackground={() => { if (!previewActions) onSelect(null); setCross(null); }}>
       {(scale) => (
       <ReportThemeScope theme={theme}
         rootRef={layout.root}
         className="page"
-        style={{ width: page.width * scale, height: page.height * scale, backgroundColor: pageBackground(page, theme) }}
+        style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, theme) }}
         onPointerMove={(e) => move(e, scale)}
         onPointerUp={(e) => end(e)}
         onPointerCancel={(e) => end(e, true)}
@@ -300,8 +303,8 @@ export function PageCanvas({
               editItems={previewActions ? [] : [
                 { label: "Biçim / özellikler", action: () => onFormat(v.id) },
                 { label: "Çoğalt", action: () => onDuplicate(raw) },
-                { label: "Grupla", disabled: !canGroup(page, selection), action: onGroup },
-                { label: "Grubu çöz", disabled: v.type !== "container" || locked, action: () => onUngroup(v.id) },
+                { label: "Grupla", disabled: !allowStructure || !canGroup(page, selection), action: onGroup },
+                { label: "Grubu çöz", disabled: !allowStructure || v.type !== "container" || locked, action: () => onUngroup(v.id) },
                 { label: v.format.locked ? "Kilidi aç" : "Kilitle", action: () => onChange({ ...raw, format: { ...raw.format, locked: !raw.format.locked } }) },
                 { label: "Bir katman öne", disabled: locked || page.visuals.at(-1)?.id === v.id, action: () => onShiftLayer(v.id, 1) },
                 { label: "Bir katman geriye", disabled: locked || page.visuals[0]?.id === v.id, action: () => onShiftLayer(v.id, -1) },
@@ -365,7 +368,7 @@ export function PageCanvas({
                   onRowAction={previewActions && v.format.rowAction ? (value) => onAction(v, v.format.rowAction!.action,
                     rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
                   onAction={previewActions ? (action) => onAction(v, action) : undefined}
-                  pageWidth={page.width} pageHeight={page.height}
+                  pageWidth={page.width} pageHeight={layout.height}
                   dataRev={dataRev}
                   cross={cross}
                   onCross={(value) => setCross(toggleCross(v, cross, value))}

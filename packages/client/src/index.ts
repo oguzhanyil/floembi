@@ -407,6 +407,7 @@ export interface VisualFormat {
   textOverflow?: "wrap" | "ellipsis" | "scroll" | "grow";
   lineHeight?: number;
   fontFamily?: string;
+  fontSize?: number;
   showTotals?: boolean;
   /** Matris varsayılanı ayrı sütunlar, ağaç tablo varsayılanı girintili tek sütundur. */
   matrixRowLayout?: "columns" | "compact";
@@ -506,9 +507,30 @@ export interface ReportPage {
   backgroundTransparency?: number;
   outspaceColor?: string;
   outspaceTransparency?: number;
+  /** Aynı nesneler için ekran genişliğine göre seçilen yerleşimler. */
+  layouts?: PageLayoutVariant[];
+  rootLayout?: ContainerLayout;
   visuals: Visual[];
   /** Detaya git (drill-through) alanları: başka sayfadan bu alanın değeriyle filtrelenerek açılır */
   drillthrough?: FieldRef[];
+}
+
+export interface LayoutVisualOverride {
+  x?: number; y?: number; w?: number; h?: number;
+  container?: ContainerLayout;
+  layoutItem?: LayoutItem;
+  format?: Pick<VisualFormat, "fontSize" | "titleSize" | "padding" | "textOverflow" | "gridFitColumns" | "legend">;
+}
+export interface PageLayoutVariant {
+  id: string;
+  name: string;
+  maxWidth: number;
+  width: number;
+  height: number;
+  displayOption?: "FitToPage" | "FitToWidth" | "ActualSize";
+  rootLayout?: ContainerLayout;
+  order?: string[];
+  overrides: Record<string, LayoutVisualOverride>;
 }
 
 export interface ThemeSnapshot {

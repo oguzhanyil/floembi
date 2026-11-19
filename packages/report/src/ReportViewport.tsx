@@ -12,10 +12,11 @@ export function canvasScale(zoom: Zoom, box: { w: number; h: number }, width: nu
 }
 
 /** Yakınlaştırma yalnız görünümü değiştirir; kayıtlı rapor koordinatlarını değiştirmez. */
-export function ReportViewport({ width, height, children, banner, onBackground, page, theme, viewKey }: {
+export function ReportViewport({ width, height, children, banner, onBackground, page, theme, viewKey, tools }: {
   width: number; height: number; children: (scale: number) => ReactNode;
   banner?: ReactNode; onBackground?: () => void;
   page?: ReportPage; theme?: ThemeSnapshot | null; viewKey?: string;
+  tools?: ReactNode;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -71,6 +72,7 @@ export function ReportViewport({ width, height, children, banner, onBackground, 
       </div>
     </div>
     <div className="canvas-zoom" role="group" aria-label="Tuval görünümü">
+      {tools}
       <select aria-label="Tuval ölçeği" value={zoom === 1 ? "actual" : typeof zoom === "number" ? "manual" : zoom}
         onChange={(e) => { if (e.target.value !== "manual") setZoom(e.target.value === "actual" ? 1 : e.target.value === "width" ? "width" : "fit"); }}>
         <option value="fit">Sayfaya sığdır</option><option value="width">Genişliğe sığdır</option><option value="actual">%100</option>

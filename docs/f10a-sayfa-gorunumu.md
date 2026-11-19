@@ -62,4 +62,5 @@ güncel destek durumunu üretir. Veri ve ölçü geçişi ayrı F06 işleri olar
 
 Yeni şema alanlarını kullanmadan önce Desktop ve web Python sunucusu güncel kodla yeniden
 başlatılmalıdır. Bu geliştirme sırasında kullanıcının çalışan sunucusu durdurulmadı.
-Sonraki aşama **F08: laptop/tablet/telefon düzen varyantları**.
+Devam aşaması [F08: laptop/tablet/telefon düzenleri](f08-ekran-duzenleri.md) uygulandı.
+Güncel sırada F09 büyük Grid/Tree Grid vardır.

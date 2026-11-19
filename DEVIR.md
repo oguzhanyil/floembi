@@ -1,7 +1,7 @@
 # Floem BI: devir notu (20.11.2026)
 
-F10A son doğrulama: 256 Python geçti, 1 atlandı; 39 saf TS geçti; tam Chromium,
-typecheck ve Desktop/web derlemeleri geçti. Sıradaki geliştirme F08'dir.
+Güncel geliştirme: F10A ve F08 uygulandı. Sıradaki aşama F09 büyük Grid/Tree Grid.
+F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
@@ -142,7 +142,31 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F10A sayfa görünümü uygulandı; sırada F08
+### 20.11.2026 F08 ekran düzenleri uygulandı; sırada F09
+
+- `ReportPage.layouts[]` ile aynı görsellerin laptop/tablet/telefon yerleşimleri;
+  geometri, akış ve sınırlı sunum istisnaları ayrı, semantik ve eylemler ortaktır.
+- Görselleştirmeler → Ekran düzenleri: oluştur/seç, eşik/boyut, sayfa akışı,
+  seçimi Ana düzenden al ve düzen kaldır. Değişiklikler undo/redo'ya katılır.
+- Web rapor bölmesi genişliğini ölçer; en dar eşleşen eşiği seçer. Alttaki Düzen
+  menüsü manuel seçim sunar. Filtre/görünürlük/eylem durumu ve sorgular korunur.
+- Kök akışı gerçek metin/kapsayıcı yüksekliğiyle sayfayı büyütür; taşma uyarılır.
+  Gruplama/üst kapsayıcı ve ortak bileşen kitaplığı Ana düzende düzenlenir.
+- Yeni yerel dosya: `data/SAPB1Demo-Floem-F08.floem`; 11 sayfa, ilk ikisinde üçer
+  düzen, beş boş dönmeyen veri sorgusu. Önceki F07B dosyası korunur.
+- Üretici aynı TS yardımcısını kullanır: `scripts/create-responsive-demo.mjs`.
+  [Kullanım, veri sözleşmesi ve sınırlar](docs/f08-ekran-duzenleri.md).
+- Kullanıcı sunucuları durdurulmadı. Yeni şema için Desktop ve web Python
+  sunucusunun güncel kodla yeniden açılması gerekir.
+- Doğrulama: 275 Python geçti, 1 atlandı; 47 saf TS; tam Chromium; typecheck ve
+  Desktop/web derlemeleri geçti. Gerçek demo DuckDB sonuçları ve web stil dosyasıyla
+  telefon görünümü de denetlendi; arayüzdeki uzun rapor başlığı satıra geçer.
+
+**Sıradaki F09:** 10.000 üstü sentetik kayıtta sunucu arama/sayfalama sözleşmesi,
+kararlı sıralama ve filtre/RLS bağlamı; toplamların kapsamı; görünen sonuç/tam kapsam
+ayrımını açıkça gösteren CSV/Excel/PDF davranışı. Kullanıcının SQL kaynağına yazılmaz.
+
+### 20.11.2026 F10A sayfa görünümü uygulandı (tamamlanan önceki aşama)
 
 [Kullanım ve sözleşme](docs/f10a-sayfa-gorunumu.md). Başlangıç `FitToPage/FitToWidth/ActualSize`,
 sayfa başına oturum zoom'u, zemin/dış alan rengi ve ayrı %0–100 saydamlık. Koordinatlar sabit;

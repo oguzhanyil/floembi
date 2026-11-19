@@ -137,6 +137,37 @@ class Visual(_B):
     state: dict[str, Any] = Field(default_factory=dict)      # dilimleyici seçimi, sıralama gibi etkileşim durumu
 
 
+class LayoutFormat(_B):
+    fontSize: FiniteFloat | None = Field(default=None, ge=8, le=144)
+    titleSize: FiniteFloat | None = Field(default=None, ge=8, le=144)
+    padding: FiniteFloat | None = Field(default=None, ge=0, le=128)
+    textOverflow: Literal["wrap", "ellipsis", "scroll", "grow"] | None = None
+    gridFitColumns: bool | None = None
+    legend: Literal["top", "bottom", "right", "none"] | None = None
+
+
+class LayoutVisualOverride(_B):
+    x: FiniteFloat | None = None
+    y: FiniteFloat | None = None
+    w: FiniteFloat | None = Field(default=None, gt=0, le=20000)
+    h: FiniteFloat | None = Field(default=None, gt=0, le=20000)
+    container: ContainerLayout | None = None
+    layoutItem: LayoutItem | None = None
+    format: LayoutFormat | None = None
+
+
+class PageLayoutVariant(_B):
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=120)
+    maxWidth: int = Field(ge=240, le=7680)
+    width: int = Field(ge=240, le=7680)
+    height: int = Field(ge=200, le=20000)
+    displayOption: Literal["FitToPage", "FitToWidth", "ActualSize"] = "FitToWidth"
+    rootLayout: ContainerLayout | None = None
+    order: list[str] = Field(default_factory=list, max_length=10000)
+    overrides: dict[str, LayoutVisualOverride] = Field(default_factory=dict, max_length=10000)
+
+
 class Page(_B):
     id: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=120)
@@ -147,8 +178,27 @@ class Page(_B):
     backgroundTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
     outspaceColor: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")
     outspaceTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
+    layouts: list[PageLayoutVariant] = Field(default_factory=list, max_length=12)
+    rootLayout: ContainerLayout | None = None
     visuals: list[Visual] = Field(default_factory=list)
     drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
+
+    @model_validator(mode="after")
+    def _layouts(self) -> "Page":
+        if len({v.id for v in self.layouts}) != len(self.layouts) or len({v.maxWidth for v in self.layouts}) != len(self.layouts):
+            raise ValueError("Düzen kimlikleri ve geçiş genişlikleri benzersiz olmalı")
+        if any(v.id in {"base", "auto"} for v in self.layouts):
+            raise ValueError("base ve auto düzen seçimi için ayrılmış kimliklerdir")
+        ids = {v.id for v in self.visuals}
+        for layout in self.layouts:
+            if set(layout.overrides) - ids or set(layout.order) - ids or len(set(layout.order)) != len(layout.order):
+                raise ValueError("Düzen yalnız sayfanın mevcut nesnelerine başvurabilir; sıralama yinelenemez")
+            if any(key in {"__proto__", "constructor", "prototype"} for key in layout.overrides):
+                raise ValueError("Düzen nesne kimliği ayrılmış bir ad olamaz")
+            by_id = {v.id: v for v in self.visuals}
+            if any(o.container is not None and by_id[key].type != "container" for key, o in layout.overrides.items()):
+                raise ValueError("Düzen kapsayıcı ayarı yalnız kapsayıcıya uygulanabilir")
+        return self
 
 
 def validate_tree(visuals: list[Visual]) -> None:

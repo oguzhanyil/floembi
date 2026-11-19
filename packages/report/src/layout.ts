@@ -50,10 +50,25 @@ export function rectUnion(rects: Rect[]): Rect | null {
 }
 
 type Node = { visual: Visual; children: Node[] };
-export interface ResolvedLayout { visuals: Visual[]; overflow: Set<string> }
+export interface ResolvedLayout { visuals: Visual[]; overflow: Set<string>; height: number }
 
 /** Saf yerleşim hesabı. Kayıtlı tanımı değiştirmez; Desktop/web aynı sonucu kullanır. */
-export function resolvePageLayout(page: ReportPage, intrinsicHeights: Record<string, number> = {}): ResolvedLayout {
+export function resolvePageLayout(page: ReportPage, intrinsicHeights: Record<string, number> = {}, depthLimit = 16): ResolvedLayout {
+  if (page.rootLayout && page.rootLayout.mode !== "free") {
+    let id = "__page_layout__";
+    while (page.visuals.some((v) => v.id === id)) id += "_";
+    const root: Visual = { id, type: "container", x: 0, y: 0, w: page.width, h: page.height,
+      group: [], values: [], filters: [], format: {}, container: page.rootLayout };
+    const inner = resolvePageLayout({ ...page, rootLayout: undefined,
+      visuals: [root, ...page.visuals.map((v) => v.parentId ? v : { ...v, parentId: id })] }, intrinsicHeights, depthLimit + 1);
+    const height = inner.visuals[0].h;
+    const overflow = new Set(inner.overflow);
+    if (overflow.delete(id)) overflow.add(page.id);
+    return { height, overflow, visuals: inner.visuals.slice(1).map((v) => {
+      if (v.parentId !== id) return v;
+      const result = { ...v }; delete result.parentId; return result;
+    }) };
+  }
   const children = new Map<string | null, Visual[]>();
   for (const v of page.visuals) { const key = v.parentId ?? null; children.set(key, [...(children.get(key) ?? []), v]); }
   const visited = new Set<string>(), overflow = new Set<string>();
@@ -79,7 +94,7 @@ export function resolvePageLayout(page: ReportPage, intrinsicHeights: Record<str
     const v = { ...raw, w: forcedW === undefined ? raw.w : size(raw, forcedW, "Width"),
       h: forcedH === undefined ? raw.h : size(raw, forcedH, "Height") };
     if (v.type === "text" && v.format.textOverflow === "grow") v.h = size(v, Math.max(v.h, intrinsicHeights[v.id] ?? v.h), "Height");
-    if (depth > 16 || visited.has(v.id)) return { visual: v, children: [] };
+    if (depth > depthLimit || visited.has(v.id)) return { visual: v, children: [] };
     visited.add(v.id);
     if (v.type !== "container") return { visual: v, children: [] };
     const o = containerOptions(v), pad = o.mode === "free" ? 0 : o.padding;
@@ -149,7 +164,7 @@ export function resolvePageLayout(page: ReportPage, intrinsicHeights: Record<str
     result.push(visual); node.children.forEach((child) => flatten(child, visual.x, visual.y));
   }
   roots.forEach((root) => flatten(root));
-  return { visuals: result, overflow };
+  return { visuals: result, overflow, height: page.height };
 }
 
 /** Düz çizim ağacında kapsayıcı gizleme/kırpma ve opaklık mirası. */
