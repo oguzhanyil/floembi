@@ -1,5 +1,5 @@
 import type { VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
-import { AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
+import { AllCommunityModule, themeQuartz, type ColDef, type GridApi } from "ag-grid-community";
 import { AgGridProvider, AgGridReact } from "ag-grid-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CrossSelect } from "./charts";
@@ -37,7 +37,7 @@ export function AgDataGrid({
   onSort?: (s: VisualState["sort"]) => void;
   format: VisualFormat;
 }) {
-  const grid = useRef<AgGridReact<GridRow>>(null);
+  const gridApi = useRef<GridApi<GridRow> | null>(null);
   const [search, setSearch] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [hidden, setHidden] = useState<number[]>([]);
@@ -82,9 +82,9 @@ export function AgDataGrid({
     } satisfies ColDef<GridRow>] : []),
   ], [columns, hidden, format.gridFilters, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
 
-  // React ref'i Grid API hazır olmadan atanabilir (özellikle StrictMode'da).
-  useEffect(() => { grid.current?.api?.redrawRows(); }, [selected, selectedKey, rows]);
-  const exportCsv = () => grid.current?.api?.exportDataAsCsv({
+  // Grid API'yi yalnız gridReady olayından sonra kullan.
+  useEffect(() => { gridApi.current?.redrawRows(); }, [selected, selectedKey, rows]);
+  const exportCsv = () => gridApi.current?.exportDataAsCsv({
     fileName: "floem-tablo.csv",
     skipPinnedBottom: true,
     processCellCallback: ({ value }) => {
@@ -109,7 +109,9 @@ export function AgDataGrid({
     </div>
     <div className="v-ag-grid">
       <AgGridProvider modules={modules}>
-        <AgGridReact<GridRow> ref={grid} theme={theme} rowData={rowData} columnDefs={columnDefs}
+        <AgGridReact<GridRow> theme={theme} rowData={rowData} columnDefs={columnDefs}
+          onGridReady={(event) => { gridApi.current = event.api; }}
+          onGridPreDestroyed={() => { gridApi.current = null; }}
           defaultColDef={{ suppressHeaderMenuButton: true }} quickFilterText={search}
           rowHeight={30} headerHeight={34} floatingFiltersHeight={32}
           pagination={format.gridPagination === true} paginationPageSize={Number(format.gridPageSize) || 100}
