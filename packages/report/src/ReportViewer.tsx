@@ -3,6 +3,7 @@ import { ImportCompatibility } from "./ImportCompatibility";
 import type { FilterRef, ReportDefinition, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import { useState } from "react";
 import { ReportViewport } from "./ReportViewport";
+import { pageBackground } from "./pageAppearance";
 import { VisualContextMenu } from "./VisualContextMenu";
 import {
   DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
@@ -86,7 +87,7 @@ export function ReportViewer({
   return (
     <div className="viewer">
       <ImportCompatibility audit={report.importAudit} />
-      <ReportViewport width={page.width} height={page.height} onBackground={() => setCross(null)} banner={drill && pageFilters.length > 0 && (
+      <ReportViewport page={page} theme={report.theme} width={page.width} height={page.height} onBackground={() => setCross(null)} banner={drill && pageFilters.length > 0 && (
           <DrillBanner
             label={drill.label}
             onBack={() => {
@@ -97,7 +98,7 @@ export function ReportViewer({
           />
         )}>
         {(scale) => (
-        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
+        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: pageBackground(page, report.theme) }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           {layout.visuals.filter((v) => visibleInLayout(page, v, visibility[page.id] ?? {})).map((v) => {
             const raw = page.visuals.find((node) => node.id === v.id)!;

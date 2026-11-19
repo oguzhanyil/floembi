@@ -80,7 +80,7 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 ## Güncel geliştirme sırası
 
 PBIP sayfa görünümü bulguları için [F10A-01–04 alt işleri](pbip-bulgularindan-gelistirme-listesi.md)
-planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ortak temeli, F05 ve F07B uygulandı. Sırada **F10A-01–04**, ardından **F08** var. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
+uygulandı. F04/F07A iyileştirmesi F08 öncesinde tamamlandı. F06 ortak temeli, F05 ve F07B de hazır. Sırada **F08** var. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
 
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
@@ -90,7 +90,7 @@ planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ort
 | 7 | **F06: ortak model ve ölçü geçişi** | Ortak temel, 29 yerel ölçü ve 135 kaynak ölçünün haritası uygulandı; tam motor/sonuç uyumu açık. [Kapsam ve kalan işler](f06-ortak-model-ve-olcu-gecisi.md). |
 | 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | Uygulandı; [kullanım, demo ve doğrulama](f05-grup-kapsayici-ve-yerlesim.md). |
 | 9 | **F07B: kullanıcı bileşenleri, marka ve ikon kitaplığı** | Uygulandı; sürümlü yerel/gömülü kitaplık, alan eşleme, ortak stil ve yerel istisna, SVG/PNG/ICO. [Kullanım](f07b-bilesen-ve-marka-kitapligi.md). |
-| 9a | **F10A-01–04: PBIP sayfa görünümü** | Sıradaki iş; sayfaya/genişliğe sığdırma, saydamlık ve tuval dışı renk. |
+| 9a | **F10A-01–04: PBIP sayfa görünümü** | Uygulandı; sayfaya/genişliğe sığdırma, saydamlık ve tuval dışı renk. [Kullanım](f10a-sayfa-gorunumu.md). |
 | 10 | **F08: ekranlara göre düzen varyantları** | Aynı bileşen/ölçü farklı ekran düzenlerinde korunur. |
 | 11 | **F09: büyük Grid/Tree Grid** | Sunucu arama/sayfalama, toplam ve dışa aktarım kapsamı. |
 | 12 | **F11: veri bağları, durumlar, tekrarlayıcı ve hareket** | Kullanıcı nesneleri veriyle değişir. |

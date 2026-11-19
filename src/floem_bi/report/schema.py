@@ -143,6 +143,10 @@ class Page(_B):
     width: int = 1280
     height: int = 720
     backgroundColor: str | None = None
+    displayOption: Literal["FitToPage", "FitToWidth", "ActualSize"] | None = None
+    backgroundTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
+    outspaceColor: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")
+    outspaceTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
     visuals: list[Visual] = Field(default_factory=list)
     drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
 

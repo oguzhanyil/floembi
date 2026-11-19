@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { initialZoom, pageBackground, pageBaseColor, transparentColor } from "../../packages/report/src/pageAppearance";
+import { canvasScale } from "../../packages/report/src/ReportViewport";
+import { createTheme } from "../../packages/report/src/theme";
+
+assert.equal(initialZoom(), "fit"); assert.equal(initialZoom("FitToWidth"), "width"); assert.equal(initialZoom("ActualSize"), 1);
+assert.equal(canvasScale("width", { w: 832, h: 432 }, 1600, 1200), .5);
+assert.equal(canvasScale("fit", { w: 832, h: 432 }, 1600, 1200), 1/3);
+assert.equal(canvasScale(1, { w: 832, h: 432 }, 1600, 1200), 1);
+console.log("PASS: Kaynak görünümü ve üç ölçek nesne koordinatlarından bağımsız çözülür");
+assert.equal(transparentColor("#123456", 0), "rgba(18, 52, 86, 1)");
+assert.equal(transparentColor("#123456", 50), "rgba(18, 52, 86, 0.5)");
+assert.equal(transparentColor("#123456", 100), "rgba(18, 52, 86, 0)");
+assert.equal(transparentColor("#12345680", 50), "rgba(18, 52, 86, 0.25098)");
+console.log("PASS: Zemin saydamlığı %0/50/100 ve mevcut alfa çarpımı");
+const page = { id: "p", name: "P", width: 1280, height: 720, visuals: [] };
+assert.equal(pageBaseColor(createTheme("electric", "dark")), "#0B1628");
+assert.equal(pageBackground(page, createTheme("electric", "dark")), "rgba(11, 22, 40, 1)");
+assert.equal(pageBackground({ ...page, backgroundColor: "#ffffff", backgroundTransparency: 50 }, createTheme("electric", "dark")), "rgba(255, 255, 255, 0.5)");
+console.log("PASS: Eksik sayfa rengi rapor temasını miras alır, özel renk bağımsız kalır");
+console.log("3 sayfa görünümü testi geçti.");

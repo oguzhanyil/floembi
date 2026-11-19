@@ -118,7 +118,11 @@ export async function testLayouts({ call, evaluate, waitFor, input }) {
   await waitFor(`!document.querySelector('[data-visual-id="${groupId}"]')`);
   const a = await rect('a'), f = await rect('frame');
   await drag('[data-visual-id=a] .visual-head', f.x + f.w / 2 - a.x - a.w / 2, f.y + f.h / 2 - a.y - a.h / 2, 3);
-  await waitFor('window.savedLayout.pages[0].visuals.find(v=>v.id==="a").parentId === "frame"');
+  try { await waitFor('window.savedLayout.pages[0].visuals.find(v=>v.id==="a").parentId === "frame"'); }
+  catch (error) {
+    console.error('Bırakma geometrisi', { a, f, after: await rect('a'), frame: await rect('frame'), saved: await evaluate('window.savedLayout.pages[0].visuals.find(v=>v.id==="a")') });
+    throw error;
+  }
   await shortcut('z');
   await waitFor('!window.savedLayout.pages[0].visuals.find(v=>v.id==="a").parentId');
   // Bir akış öğesini kardeşinin merkezine bırakarak sıralayın.

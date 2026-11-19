@@ -3,7 +3,7 @@ import type { ThemeSnapshot } from "@floem/client";
 import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
-  visualMotion, visualStyle,
+  visualMotion, visualStyle, pageBackground,
   rowActionValue, ReportViewport, VisualContextMenu, usePageLayout, inheritedLayoutStyle, visibleInLayout,
   lockedInLayout, selectionRoots, descendants, rectUnion, containerOptions,
   type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
@@ -248,13 +248,13 @@ export function PageCanvas({
 
 
   return (
-    <ReportViewport width={page.width} height={page.height} banner={banner}
+    <ReportViewport page={page} theme={theme} width={page.width} height={page.height} banner={banner}
       onBackground={() => { if (!previewActions) onSelect(null); setCross(null); }}>
       {(scale) => (
       <ReportThemeScope theme={theme}
         rootRef={layout.root}
         className="page"
-        style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
+        style={{ width: page.width * scale, height: page.height * scale, backgroundColor: pageBackground(page, theme) }}
         onPointerMove={(e) => move(e, scale)}
         onPointerUp={(e) => end(e)}
         onPointerCancel={(e) => end(e, true)}

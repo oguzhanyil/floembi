@@ -1,11 +1,15 @@
 # PBIP bulgularından geliştirme listesi
 
-**Tarih:** 20.11.2026 · **Durum:** planlandı, uygulanmadı.
+**Tarih:** 20.11.2026 · **Durum:** F10A-01–04 uygulandı.
+
+[Uygulama, kullanım ve doğrulama](f10a-sayfa-gorunumu.md). Yedi raporun 39 sayfasındaki
+bu dört kaynak özellik yolu yeni analizde uygulanır; kalan ilgili kayıp bulgusu 0.
+Bilinmeyen/dinamik değerler uyarı olarak kalır. Aşağıdaki sayılar ilk F10 tespitini kaydeder.
 
 Uyumluluk raporundaki bulgular geliştirme girdisidir. Aynı özellik için yüzlerce ayrı iş açmak
 yerine özellik yolu ve bulgu kodu üzerinden tek iş oluşturulur; etkilenen rapor/sayfalar o işe bağlanır.
-Bu liste F10 sonrasındaki sayfa görünümü eksiklerini kaydeder. Ana sıradaki F06'yı değiştirmez;
-F04/F07A görünüm iyileştirmeleri olarak F08 ekran düzenleri öncesinde ele alınır.
+Bu liste F10 sonrasındaki sayfa görünümü işlerinin gerekçesini kaydeder.
+F04/F07A görünüm iyileştirmeleri F08 ekran düzenlerinden önce tamamlandı.
 
 ## Kaynaktaki durum
 

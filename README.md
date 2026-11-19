@@ -16,6 +16,11 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 (19.11.2026). F01–F04 sonuçları ve marka belgesine göre güncellenen geliştirme sırası:
 [Uygulama notu](docs/f01-f04-uygulama-ve-tasarim-sirasi.md).
 
+**F10A sayfa görünümü hazır:** boş tuvale tıklayın → **Görselleştirmeler → Tuval**.
+Başlangıç görünümü, zemin saydamlığı ve tuval dışı renk/saydamlık dosyayla korunur.
+Manuel yakınlaştırma sayfa başına oturumda hatırlanır; koordinatlar değişmez.
+[Kullanım ve Power BI aktarım kapsamı](docs/f10a-sayfa-gorunumu.md).
+
 **F07B bileşen ve marka kitaplığı hazır:** Görselleştirmeler → **Bileşen kitaplığı** ile
 grup/kapsayıcıları kaydedin; başka sayfa ve raporlarda alanlarını eşleyerek kullanın.
 Ortak sürüm güncellemesi yerel ayarları korur. **Marka ve ikonlar** açık/koyu logo ailesi,
@@ -51,7 +56,7 @@ UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.
 hizalama ve boyut sınırlarını ayarlayın. Büyüyen metin akıştaki komşularını iter.
 Yeni verili örnek: **`data/SAPB1Demo-Floem-F05.floem` → Tasarım Atölyesi**.
 [Kullanım, dosya sözleşmesi ve testler](docs/f05-grup-kapsayici-ve-yerlesim.md).
-Yerleşim/geçmiş testleri: `node tests/design/run.mjs`. Sırada F07B kullanıcı bileşenleri var.
+Yerleşim/geçmiş testleri: `node tests/design/run.mjs`. F07B kitaplığı ve F10A görünümü de hazırdır.
 
 ## Kurulum ve çalıştırma
 

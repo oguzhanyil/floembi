@@ -502,6 +502,10 @@ export interface ReportPage {
   width: number;
   height: number;
   backgroundColor?: string;
+  displayOption?: "FitToPage" | "FitToWidth" | "ActualSize";
+  backgroundTransparency?: number;
+  outspaceColor?: string;
+  outspaceTransparency?: number;
   visuals: Visual[];
   /** Detaya git (drill-through) alanları: başka sayfadan bu alanın değeriyle filtrelenerek açılır */
   drillthrough?: FieldRef[];

@@ -1,5 +1,8 @@
 # Floem BI: devir notu (20.11.2026)
 
+F10A son doğrulama: 256 Python geçti, 1 atlandı; 39 saf TS geçti; tam Chromium,
+typecheck ve Desktop/web derlemeleri geçti. Sıradaki geliştirme F08'dir.
+
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
 - Kesin kurallar,
@@ -138,6 +141,20 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 20.11.2026 F10A sayfa görünümü uygulandı; sırada F08
+
+[Kullanım ve sözleşme](docs/f10a-sayfa-gorunumu.md). Başlangıç `FitToPage/FitToWidth/ActualSize`,
+sayfa başına oturum zoom'u, zemin/dış alan rengi ve ayrı %0–100 saydamlık. Koordinatlar sabit;
+yazı/grafikler solmaz. Sayfa alt katmanı rapor temasının zemini; dış alan alt katmanı
+uygulama `--bg` yüzeyi. Tuval/dış alan sıfırlama düğmeleri sayfa Biçim panelinde.
+Pencere/sayfa değişimi ve yeniden açma ortak ReportViewport üzerinden Desktop/web'de çözülür.
+
+Yedi PBIP, 39 sayfa: 39 görünüm, 37 tuval saydamlığı, 32 dış renk, 31 dış saydamlık
+uygulandı; bu dört yol için yeni analizde kalan kayıp bulgusu 0. Desteklenmeyen değerler,
+dinamik renk ve koşullu seçiciler bulgu olarak kalır. Eski aktarım geçmişi değiştirilmez.
+16 yeni Python, 3 saf TS ve Chromium görünüm/zemin/oturum kontrolleri eklendi.
+F08 aynı ölçü/eylemi koruyan laptop/tablet/telefon düzenleri bu temelin üzerine gelir.
 
 ### 20.11.2026 F07B bileşen ve marka kitaplığı uygulandı; sırada F10A → F08
 

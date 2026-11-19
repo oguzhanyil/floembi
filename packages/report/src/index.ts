@@ -5,6 +5,7 @@ export * from "./reportUtils";
 export * from "./visualStyle";
 export * from "./visualActions";
 export * from "./ReportViewport";
+export * from "./pageAppearance";
 export * from "./VisualContextMenu";
 export type { ContextMenuItem } from "./ContextMenu";
 export * from "./useVisualData";

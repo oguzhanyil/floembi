@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import re
 import tempfile
 from collections import defaultdict
@@ -77,6 +78,29 @@ def _number(value: Any, fallback: float = 0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return fallback
+
+
+def _page_appearance(info: dict) -> tuple[dict, set[tuple[str, int, str]]]:
+    """Yalnız desteklenen sabit/default sayfa özellikleri başarılı sayılır."""
+    result, handled = {}, set()
+    # Microsoft page/2.1.0: eski dinamik ve sol-üst seçenekleri farklı semantiktedir.
+    if info.get("displayOption") in ("FitToPage", "FitToWidth", "ActualSize"):
+        result["displayOption"] = info["displayOption"]
+    for category, prefix in (("background", "background"), ("outspace", "outspace")):
+        for prop in ("color", "transparency"):
+            for index, item in enumerate((info.get("objects") or {}).get(category, [])):
+                if item.get("selector") not in (None, {}, {"id": "default"}):
+                    continue
+                if prop not in item.get("properties", {}):
+                    continue
+                value = _literal(item["properties"][prop])
+                valid = isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?", value) if prop == "color" else \
+                    type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 100
+                if valid:
+                    result[prefix + ("Color" if prop == "color" else "Transparency")] = value
+                    handled.add((category, index, prop))
+                break
+    return result, handled
 
 
 def _field(field: dict) -> tuple[str, str, str] | None:
@@ -406,22 +430,21 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
                 visual["id"] = f"{base[:58]}_{index}"
                 index += 1
             ids.add(visual["id"])
-        page_background = _property(info.get("objects") or {}, "background", "color")
+        appearance, handled = _page_appearance(info)
         pages.append({"id": str(page_id)[:64], "name": str(info.get("displayName") or page_id)[:120],
                       "width": int(info.get("width") or 1280), "height": int(info.get("height") or 720),
-                      "backgroundColor": page_background if isinstance(page_background, str) and
-                      re.fullmatch(r"#[0-9a-fA-F]{6,8}", page_background) else "#FFFFFF",
+                      **appearance,
                       "visuals": visuals})
         page_issues = []
         if info.get("filterConfig", {}).get("filters") or info.get("filters"):
             page_issues.append(finding("FILTER_NOT_IMPORTED"))
         for key in info:
-            if info.get(key) and key not in ("$schema", "name", "displayName", "width", "height", "objects", "filterConfig", "filters"):
+            if (info.get(key) or key == "displayOption") and key not in appearance and key not in ("$schema", "name", "displayName", "width", "height", "objects", "filterConfig", "filters"):
                 page_issues.append(finding("PAGE_PROPERTY_NOT_IMPORTED", key))
         for category, items in (info.get("objects") or {}).items():
-            for item in items:
+            for index, item in enumerate(items):
                 for prop in item.get("properties", {}):
-                    if (category, prop) != ("background", "color"):
+                    if (category, index, prop) not in handled:
                         page_issues.append(finding("PAGE_PROPERTY_NOT_IMPORTED", f"objects.{category}.{prop}"))
         audited_visuals = []
         for _z, raw in sorted(inputs, key=lambda item: item[0]):

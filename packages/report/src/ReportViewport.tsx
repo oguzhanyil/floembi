@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { ReportPage, ThemeSnapshot } from "@floem/client";
+import { initialZoom, pageBaseColor, transparentColor } from "./pageAppearance";
 
 type Zoom = "fit" | "width" | number;
 export function canvasScale(zoom: Zoom, box: { w: number; h: number }, width: number, height: number) {
@@ -10,14 +12,24 @@ export function canvasScale(zoom: Zoom, box: { w: number; h: number }, width: nu
 }
 
 /** Yakınlaştırma yalnız görünümü değiştirir; kayıtlı rapor koordinatlarını değiştirmez. */
-export function ReportViewport({ width, height, children, banner, onBackground }: {
+export function ReportViewport({ width, height, children, banner, onBackground, page, theme, viewKey }: {
   width: number; height: number; children: (scale: number) => ReactNode;
   banner?: ReactNode; onBackground?: () => void;
+  page?: ReportPage; theme?: ThemeSnapshot | null; viewKey?: string;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [zoom, setZoom] = useState<Zoom>("fit");
-  const before = useRef({ scale: 1, width, height });
+  const [zooms, setZooms] = useState<Record<string, { initial: string; zoom: Zoom }>>({});
+  const key = viewKey ?? page?.id ?? "canvas", option = page?.displayOption ?? "FitToPage";
+  const zoom = zooms[key]?.initial === option ? zooms[key].zoom : initialZoom(option);
+  const setZoom = (value: Zoom) => setZooms((old) => ({ ...old, [key]: { initial: option, zoom: value } }));
+  const before = useRef({ scale: 1, width, height, key, option });
+  useLayoutEffect(() => {
+    setZooms((old) => {
+      if (!old[key] || old[key].initial === option) return old;
+      const next = { ...old }; delete next[key]; return next;
+    });
+  }, [key, option]);
   useLayoutEffect(() => {
     const el = scroll.current;
     if (!el) return;
@@ -32,17 +44,17 @@ export function ReportViewport({ width, height, children, banner, onBackground }
     const el = scroll.current;
     if (!el) return;
     const previous = before.current;
-    if (previous.width !== width || previous.height !== height || zoom === "fit") {
+    if (previous.key !== key || previous.option !== option || previous.width !== width || previous.height !== height || zoom === "fit") {
       el.scrollTo(0, 0);
     } else if (previous.scale !== scale) {
       const ratio = scale / previous.scale;
       el.scrollLeft = (el.scrollLeft + el.clientWidth / 2) * ratio - el.clientWidth / 2;
       el.scrollTop = (el.scrollTop + el.clientHeight / 2) * ratio - el.clientHeight / 2;
     }
-    before.current = { scale, width, height };
-  }, [scale, width, height, zoom]);
+    before.current = { scale, width, height, key, option };
+  }, [scale, width, height, zoom, key, option]);
   const change = (delta: number) => setZoom(Math.max(0.1, Math.min(4, Math.round((scale + delta) * 100) / 100)));
-  return <div className="report-viewport" onKeyDown={(e) => {
+  return <div className="report-viewport" style={{ gridTemplateRows: `${banner ? "auto " : ""}minmax(0, 1fr) auto` }} onKeyDown={(e) => {
     if (!(e.ctrlKey || e.metaKey) || (e.target as HTMLElement).matches("input, textarea, select, [contenteditable=true]")) return;
     if (["+", "=", "-", "0"].includes(e.key)) {
       e.preventDefault();
@@ -50,17 +62,17 @@ export function ReportViewport({ width, height, children, banner, onBackground }
     }
   }}>
     {banner}
-    <div className="report-scroll" ref={scroll} tabIndex={0} aria-label="Rapor tuvali" onPointerDown={(e) => {
+    <div className="report-scroll" ref={scroll} tabIndex={0} aria-label="Rapor tuvali" style={{ backgroundColor: "var(--bg, #e9e8e6)" }} onPointerDown={(e) => {
       const target = e.target as HTMLElement;
       if (target === e.currentTarget || target.classList.contains("report-scroll-space") || target.classList.contains("page")) onBackground?.();
     }}>
-      <div className="report-scroll-space" style={{ width: width * scale + 32, height: height * scale + 32 }}>
-        {children(scale)}
+      <div className="report-scroll-space" style={{ width: width * scale + 32, height: height * scale + 32, backgroundColor: page?.outspaceColor ? transparentColor(page.outspaceColor, page.outspaceTransparency) : undefined }}>
+        <div className="report-page-backdrop" style={{ width: width * scale, height: height * scale, backgroundColor: pageBaseColor(theme) }}>{children(scale)}</div>
       </div>
     </div>
     <div className="canvas-zoom" role="group" aria-label="Tuval görünümü">
-      <select aria-label="Tuval ölçeği" value={typeof zoom === "number" ? "manual" : zoom}
-        onChange={(e) => setZoom(e.target.value === "actual" ? 1 : e.target.value === "width" ? "width" : "fit")}>
+      <select aria-label="Tuval ölçeği" value={zoom === 1 ? "actual" : typeof zoom === "number" ? "manual" : zoom}
+        onChange={(e) => { if (e.target.value !== "manual") setZoom(e.target.value === "actual" ? 1 : e.target.value === "width" ? "width" : "fit"); }}>
         <option value="fit">Sayfaya sığdır</option><option value="width">Genişliğe sığdır</option><option value="actual">%100</option>
         {typeof zoom === "number" && <option value="manual">Özel ölçek</option>}
       </select>

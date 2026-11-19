@@ -636,8 +636,16 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
     <>
       <div className="viz-selected">Sayfa: {page.name}</div>
       <Section title="Tuval">
+        <label>Başlangıç görünümü<select aria-label="Sayfanın başlangıç görünümü" value={page.displayOption ?? "FitToPage"} onChange={(e) => onChange({ ...page, displayOption: e.target.value as ReportPage["displayOption"] })}>
+          <option value="FitToPage">Sayfaya sığdır</option><option value="FitToWidth">Genişliğe sığdır</option><option value="ActualSize">Gerçek boyut · %100</option>
+        </select></label>
         <label>Sayfa rengi<input type="color" value={page.backgroundColor && /^#[0-9a-f]{6}$/i.test(page.backgroundColor) ? page.backgroundColor : "#ffffff"}
           onChange={(e) => onChange({ ...page, backgroundColor: e.target.value })} /></label>
+        <label>Tuval saydamlığı (%)<input aria-label="Tuval saydamlığı" type="number" min={0} max={100} value={page.backgroundTransparency ?? 0} onChange={(e) => { const n = e.currentTarget.valueAsNumber; if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...page, backgroundTransparency: n }); }} /></label>
+        <button type="button" onClick={() => { const next = { ...page }; delete next.backgroundColor; delete next.backgroundTransparency; onChange(next); }}>Tuval rengini temadan al</button>
+        <label>Tuval dışı alan<input aria-label="Tuval dışı alan rengi" type="color" value={page.outspaceColor?.slice(0,7) ?? "#e9e8e6"} onChange={(e) => onChange({ ...page, outspaceColor: e.target.value })} /></label>
+        <label>Dış alan saydamlığı (%)<input aria-label="Dış alan saydamlığı" type="number" min={0} max={100} value={page.outspaceTransparency ?? 0} onChange={(e) => { const n = e.currentTarget.valueAsNumber; if (Number.isFinite(n) && n >= 0 && n <= 100) onChange({ ...page, outspaceTransparency: n }); }} /></label>
+        <button type="button" onClick={() => { const next = { ...page }; delete next.outspaceColor; delete next.outspaceTransparency; onChange(next); }}>Dış alanı uygulamadan al</button>
       </Section>
       <div
         className={`well ${over ? "over" : ""}`}
