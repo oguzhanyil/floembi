@@ -13,8 +13,10 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 
 **19.11.2026 etkileşim güncellemesi:** Rapor tasarımcısına `button` nesnesi, tıklama olayları
 (sayfaya git, sonraki/önceki, filtreleri sıfırla, nesne göster/gizle, URL aç, fonksiyon, menü),
-başlangıçta gizlenen nesneler ve ikonlu etkileşim önizleme anahtarı eklendi. Sağ üst ok Veri ve
-Görselleştirmeler panellerini birlikte açar/kapatır; sayfa rengi ve nesne düzeni araçları Biçim panelindedir.
+başlangıçta gizlenen nesneler ve ikonlu etkileşim önizleme anahtarı eklendi. Sağ üstteki Veri ve
+Görselleştirmeler düğmeleri panellerini bağımsız açar/kapatır; tek panel açıkken yalnız onun genişliği ayrılır.
+Serbest tasarım/etkileşim düğmesi 32 px, ortalanmış simgesi 16 px'dir.
+Sayfa rengi ve nesne düzeni araçları Biçim panelindedir.
 Tablo ve matriste satır eylem hücresi hazır veya yüklenen ikonla URL'ye kodlanmış `{value}` değeri
 aktarır, hedef sayfayı aynı değerle filtreler ya da satır filtresiyle kayıtlı FDX ölçüsünü hesaplar.
 Yalnızca HTTP(S) URL ve tanımlı fonksiyonlar çalıştırılır. Aynı olaylar

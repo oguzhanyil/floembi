@@ -18,7 +18,8 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 
 Yeni demo: `data/SAPB1Demo-Floem-F01-F04.floem` (Desktop'ta Aç / Ctrl+O).
 Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı
-sürüklenebilir; sağ üst okla gizlenir. UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.
+sürüklenebilir; sağ üstteki **Görselleştirmeler** ve **Veri** düğmeleriyle ayrı ayrı gizlenir.
+UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.
 
 ## Kurulum ve çalıştırma
 

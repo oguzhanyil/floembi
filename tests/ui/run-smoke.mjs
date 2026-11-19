@@ -93,7 +93,9 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width: 768, height: 768, deviceScaleFactor: 1.25, mobile: false });
   await waitFor('getComputedStyle(document.querySelector(".designer-panes")).position === "absolute"');
   assert(await evaluate('document.querySelector(".report-main").getBoundingClientRect().width >= 760'));
-  await evaluate('document.querySelector(".panes-toggle").click();document.querySelector(".canvas-zoom button[title]").click()');
+  await evaluate('document.querySelectorAll(".panel-toggle")[0].click()');
+  await waitFor('document.querySelectorAll(".designer-panel-slot")[0].hidden && !document.querySelectorAll(".designer-panel-slot")[1].hidden');
+  await evaluate('document.querySelectorAll(".panel-toggle")[1].click();document.querySelector(".canvas-zoom button[title]").click()');
   await waitFor('getComputedStyle(document.querySelector(".designer-panes")).display === "none"');
   await evaluate('document.querySelector(".report-scroll").scrollTo(0,0)');
   const handle = await evaluate('(()=>{const r=document.querySelector(".visual-head").getBoundingClientRect();return {x:r.x+30,y:r.y+10}})()');

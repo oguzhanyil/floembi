@@ -4,7 +4,7 @@ import {
   sameField, slicerFilters, snap, visualIsVisible,
   type ActionValue, type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
@@ -43,7 +43,10 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const timer = useRef<number | null>(null);
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [canvasFocus, setCanvasFocus] = useState((host.report.pages[0]?.width ?? 0) >= 1600);
+  const [visualizationsOpen, setVisualizationsOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
+  const [dataOpen, setDataOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
+  const panelId = useId();
+  const canvasFocus = !visualizationsOpen && !dataOpen;
   const [previewActions, setPreviewActions] = useState(false);
   const [previewVisibility, setPreviewVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [previewStates, setPreviewStates] = useState<Record<string, VisualState>>({});
@@ -62,7 +65,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       reportRef.current = host.report;
       setReport(host.report);
       if (!host.report.pages.some((p) => p.id === pageId)) setPageId(host.report.pages[0]?.id ?? "p1");
-      setCanvasFocus((host.report.pages[0]?.width ?? 0) >= 1600);
+      const showPanels = (host.report.pages[0]?.width ?? 0) < 1600;
+      setVisualizationsOpen(showPanels);
+      setDataOpen(showPanels);
       setPreviewActions(false);
       setPreviewVisibility({});
       setPreviewStates({});
@@ -364,18 +369,25 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   return (
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}>
-      <button className="panes-toggle" type="button" aria-label={canvasFocus ? "Görselleştirmeler ve Veri panellerini göster" : "Görselleştirmeler ve Veri panellerini gizle"}
-        aria-expanded={!canvasFocus} title={canvasFocus ? "Sağ panelleri göster" : "Sağ panelleri gizle"}
-        onClick={() => setCanvasFocus((current) => !current)}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
+      <div className="panel-toggles" role="group" aria-label="Sağ paneller">
+        <button className="panel-toggle" type="button" aria-controls={`${panelId}-visualizations`}
+          aria-label={`Görselleştirmeler panelini ${visualizationsOpen ? "gizle" : "göster"}`}
+          aria-expanded={visualizationsOpen} onClick={() => setVisualizationsOpen((current) => !current)}>
+          <span>Görselleştirmeler</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+        </button>
+        <button className="panel-toggle" type="button" aria-controls={`${panelId}-data`}
+          aria-label={`Veri panelini ${dataOpen ? "gizle" : "göster"}`}
+          aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}>
+          <span>Veri</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+        </button>
+      </div>
       <div className="report-main">
         <div className="canvas-shell">
         <button className={`canvas-mode-toggle ${pageFilters.length ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
           title={previewActions ? "Etkileşim açık · tasarıma dön" : "Serbest tasarım açık · etkileşimi dene"} onClick={() => {
             setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
           }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+          <svg viewBox="1 1 23 23" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
         </button>
         <PageCanvas
           page={page}
@@ -471,7 +483,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           </button>
         </nav>
       </div>
-      <DesignerPanels><VisualizationsPane
+      <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
         page={page}
         pages={report.pages}
         tables={tables}
