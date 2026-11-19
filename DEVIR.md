@@ -139,7 +139,37 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F05 tasarım düzeni uygulandı; sırada F07B
+### 20.11.2026 F07B bileşen ve marka kitaplığı uygulandı; sırada F10A → F08
+
+[Kullanım ve sözleşme](docs/f07b-bilesen-ve-marka-kitapligi.md). Görselleştirmeler →
+Bileşen kitaplığı: grup/kapsayıcı/tek nesne kaydetme, alan yuvaları, sayfa/model eşleme,
+sürümlü ortak stil ve yerel istisna. Yeni sürüm etkilenen kullanımlarla önizlenir;
+seçili veya açık rapordaki tüm kullanımlara elle uygulanır. Ölçü/konum/yerel renk,
+ekleme/silme korunur; toplu uygulama tek undo adımıdır. Kitaplık kaydı undo ile silinmez.
+Hazır KPI, gezinme/filtre ve süreç kartı; JSON alışverişi, bağ koparma ve yerel kaldırma var.
+
+Desktop kitaplığı `%APPDATA%\FloemBI\components.json`: token korumalı API, CAS revizyonu,
+atomik yazma, 10 MB/500 sürüm. Bileşen 200 nesne/200 yuva/16 düzey; yol/ağaç/eşleme
+doğrulamalı. Kullanılan sürümler rapora gömülür; normal nesneler web'de yerel kitaplık
+olmadan görünür. Diğer raporlar açılınca güncelleme ayrıca uygulanır; canlı yayın değiştirilmedi.
+Model yeniden adlandırma kullanım eşlemesini günceller; değişmez tanım sürümleri korunur.
+Kopyalama yerel silinmiş kimlikleri de ayırır; alt ağaç dışına taşıma bağı koparır.
+
+Marka ve ikonlar: Yıldırım Y/piksel işaretinden dört ürün ailesi, altı logo varyantı,
+açık/koyu görünüm, gerçek 16–512 px karşılaştırma ve SVG/PNG/ICO. Logo tuvale eklenir.
+Mevcut paket simgesi otomatik değiştirilmedi; yeni bağımlılık yok.
+
+Yeni yerel `data/SAPB1Demo-Floem-F07B.floem`: 11 sayfa, iki sürüm, dört bağlı kullanım.
+İlk iki sayfadaki beş sorgu boş olmayan sonuç verdi. Önceki demolar korunur.
+`python -m floem_bi.component_demo` yeni hedefe üretir. 13 yeni Python testi, 16 yeni
+saf TS bileşen/marka testi ve Chromium kitaplık/alan/sürüm/undo/web/marka kontrolleri var.
+Son tam koşu: **240 Python geçti, 1 atlandı**; **36 saf TS testi** ve tüm tarayıcı
+regresyonları başarılı. Typecheck ve Desktop/web üretim derlemeleri geçti.
+
+**Sıradaki F10A-01–04:** PBIP `displayOption`, tuval saydamlığı ve tuval dışı alan
+rengi/saydamlığı. Sonrasında F08 düzen varyantları. F06-2–5 ve F11 işleri açık.
+
+### 20.11.2026 F05 tasarım düzeni uygulandı
 
 [Kullanım ve sözleşme](docs/f05-grup-kapsayici-ve-yerlesim.md). Shift çoklu seçim, grup/kapsayıcı,
 iç içe katmanlar, grup orantılı boyutu, hizalama/eşit aralık, yatay/dikey/ızgara düzen,
@@ -161,8 +191,7 @@ yeni hedefe yeniden üretir; eski dosya ezilmez. Kullanıcı DB'si ve canlı yay
 227 Python testi geçti, 1 atlandı; 20 saf tasarım testi ve Chromium regresyonları başarılı.
 Gerçek atölye geometrisi sentetik ekran verisiyle incelendi; yeni bağımlılık yok.
 
-**Ana sıradaki F07B:** birleşik nesneleri sürümlü kitaplığa kaydetme, alan yuvaları,
-ortak stil/yerel istisna ve marka/ikon varyantları. Sonrasında F08 düzen varyantları;
+F07B birleşik nesne kitaplığı bu temelin üzerine uygulandı (yukarıda).
 F10A görünüm alt işleri F08 öncesinde. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
 
 ### 20.11.2026 F06 ortak model ve ölçü geçiş haritası uygulandı

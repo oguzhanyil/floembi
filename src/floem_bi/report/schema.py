@@ -88,6 +88,34 @@ class ContainerLayout(_B):
     overflow: Literal["visible", "clip"] = "visible"
 
 
+class ComponentBinding(_B):
+    table: str | None = None
+    column: str | None = None
+    measure: str | None = None
+    agg: Agg | None = None
+    pageId: str | None = None
+    visualId: str | None = None
+
+
+def check_binding(kind: str, binding: ComponentBinding) -> None:
+    keys = binding.model_dump(exclude_none=True)
+    if kind == "field":
+        valid = set(keys) == {"table", "column"}
+    elif kind == "value":
+        valid = set(keys) == {"measure"} or {"table", "column"} <= set(keys) <= {"table", "column", "agg"}
+    else:
+        valid = set(keys) == {dict(measure="measure", page="pageId", visual="visualId")[kind]}
+    if not valid or any(not value.strip() for value in keys.values() if isinstance(value, str)):
+        raise ValueError("Bileşen yuvasının alan eşlemesi geçersiz")
+
+
+class ComponentInstance(_B):
+    definitionId: str = Field(min_length=1, max_length=80)
+    version: int = Field(ge=1, le=100000)
+    nodeMap: dict[str, str] = Field(min_length=1, max_length=200)
+    bindings: dict[str, ComponentBinding] = Field(default_factory=dict, max_length=200)
+
+
 class Visual(_B):
     id: str = Field(min_length=1, max_length=64)
     type: VisualType
@@ -99,6 +127,7 @@ class Visual(_B):
     parentId: str | None = None
     container: ContainerLayout | None = None
     layoutItem: LayoutItem | None = None
+    component: ComponentInstance | None = None
     group: list[FieldRef] = Field(default_factory=list)     # Tablo: Sütunlar · Grafik: X ekseni · Dilimleyici: Alan
     legend: list[FieldRef] = Field(default_factory=list)    # Grafik: Gösterge (seriyi böler)
     values: list[ValueRef] = Field(default_factory=list)    # Tablo: Değerler · Grafik: Y ekseni · Kart: Alan
@@ -116,6 +145,97 @@ class Page(_B):
     backgroundColor: str | None = None
     visuals: list[Visual] = Field(default_factory=list)
     drillthrough: list[FieldRef] = Field(default_factory=list)   # Detaya git (drill-through) alanları
+
+
+def validate_tree(visuals: list[Visual]) -> None:
+    by_id = {v.id: v for v in visuals}
+    if len(by_id) != len(visuals):
+        raise ValueError("Görsel kimlikleri benzersiz olmalı")
+    for v in visuals:
+        if v.container is not None and v.type != "container":
+            raise ValueError("Kapsayıcı düzeni yalnız kapsayıcı nesnesine uygulanabilir")
+        current, seen = v, {v.id}
+        while current.parentId is not None:
+            parent = by_id.get(current.parentId)
+            if parent is None or parent.type != "container":
+                raise ValueError("Üst nesne aynı sayfada bir kapsayıcı olmalı")
+            if parent.id in seen:
+                raise ValueError("Kapsayıcılar döngü oluşturamaz")
+            seen.add(parent.id)
+            if len(seen) > 16:
+                raise ValueError("En fazla 16 iç içe nesne düzeyi kullanılabilir")
+            current = parent
+
+
+class ComponentSite(_B):
+    visualId: str = Field(min_length=1, max_length=64)
+    path: list[str] = Field(min_length=2, max_length=20)
+
+
+class ComponentSlot(_B):
+    id: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    kind: Literal["field", "value", "measure", "page", "visual"]
+    sites: list[ComponentSite] = Field(min_length=1, max_length=400)
+    defaultBinding: ComponentBinding | None = None
+
+
+class ComponentDefinition(_B):
+    id: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+    version: int = Field(ge=1, le=100000)
+    rootId: str = Field(min_length=1, max_length=64)
+    visuals: list[Visual] = Field(min_length=1, max_length=200)
+    slots: list[ComponentSlot] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def _definition(self) -> "ComponentDefinition":
+        import re
+        validate_tree(self.visuals)
+        roots = [v.id for v in self.visuals if v.parentId is None]
+        if roots != [self.rootId] or any(v.component is not None for v in self.visuals):
+            raise ValueError("Bileşen tek köklü olmalı; iç bileşenler tasarım kopyası olarak kaydedilir")
+        if len({s.id for s in self.slots}) != len(self.slots):
+            raise ValueError("Bileşen yuva kimlikleri benzersiz olmalı")
+        nodes = {v.id: v.model_dump(mode="json", exclude_none=True) for v in self.visuals}
+        if any(key in {"__proto__", "constructor", "prototype"} for key in [*nodes, *(s.id for s in self.slots)]):
+            raise ValueError("Bileşen kimliği ayrılmış bir ad olamaz")
+        used = set()
+        for slot in self.slots:
+            if slot.defaultBinding:
+                check_binding(slot.kind, slot.defaultBinding)
+            for site in slot.sites:
+                path = ".".join(site.path)
+                ref_path = re.fullmatch(r"(group|legend|values|target|filters)\.[0-9]{1,3}", path)
+                action_path = re.fullmatch(r"format\.(rowAction\.)?action(\.items\.[0-9]{1,3}\.action)*", path)
+                if not (ref_path or action_path) or (site.visualId, path) in used:
+                    raise ValueError("Bileşen yuvasının hedef yolu geçersiz veya yineleniyor")
+                used.add((site.visualId, path))
+                try:
+                    node = nodes[site.visualId]
+                    for key in site.path:
+                        node = node[int(key)] if isinstance(node, list) else node[key]
+                except (KeyError, IndexError, ValueError, TypeError) as e:
+                    raise ValueError("Bileşen yuvasının hedefi bulunamadı") from e
+                expected = "field" if ref_path and site.path[0] in ("group", "legend", "filters") else "value" if ref_path else None
+                if action_path and isinstance(node, dict):
+                    expected = "page" if node.get("type") == "page" else "visual" if node.get("type") == "toggle" else "measure" if node.get("type") == "function" and node.get("functionName") == "measure" else None
+                if not isinstance(node, dict) or expected is None or slot.kind != expected:
+                    raise ValueError("Bileşen yuvası hedef türüyle uyuşmuyor")
+        return self
+
+
+class ComponentLibrary(_B):
+    version: Literal[1] = 1
+    revision: int = Field(default=0, ge=0)
+    components: list[ComponentDefinition] = Field(default_factory=list, max_length=500)
+
+    @model_validator(mode="after")
+    def _versions(self) -> "ComponentLibrary":
+        if len({(c.id, c.version) for c in self.components}) != len(self.components):
+            raise ValueError("Bileşen kimliği/sürümü benzersiz olmalı")
+        return self
 
 
 class ThemeSnapshot(_B):
@@ -139,30 +259,40 @@ class Report(_B):
     version: int = 1
     theme: ThemeSnapshot | None = None
     importAudit: dict[str, Any] | None = None
+    components: list[ComponentDefinition] = Field(default_factory=list, max_length=500)
     pages: list[Page] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique(self) -> "Report":
         if len({p.id for p in self.pages}) != len(self.pages):
             raise ValueError("Sayfa kimlikleri benzersiz olmalı")
+        definitions = {(c.id, c.version): c for c in self.components}
+        if len(definitions) != len(self.components):
+            raise ValueError("Bileşen kimliği/sürümü benzersiz olmalı")
         for p in self.pages:
-            if len({v.id for v in p.visuals}) != len(p.visuals):
-                raise ValueError(f"'{p.name}' sayfasında görsel kimlikleri benzersiz olmalı")
+            validate_tree(p.visuals)
             by_id = {v.id: v for v in p.visuals}
             for v in p.visuals:
-                if v.container is not None and v.type != "container":
-                    raise ValueError("Kapsayıcı düzeni yalnız kapsayıcı nesnesine uygulanabilir")
-                current, seen = v, {v.id}
-                while current.parentId is not None:
-                    parent = by_id.get(current.parentId)
-                    if parent is None or parent.type != "container":
-                        raise ValueError("Üst nesne aynı sayfada bir kapsayıcı olmalı")
-                    if parent.id in seen:
-                        raise ValueError("Kapsayıcılar döngü oluşturamaz")
-                    seen.add(parent.id)
-                    if len(seen) > 16:
-                        raise ValueError("En fazla 16 iç içe nesne düzeyi kullanılabilir")
-                    current = parent
+                if not v.component:
+                    continue
+                link = v.component
+                definition = definitions.get((link.definitionId, link.version))
+                if not definition or link.nodeMap.get(definition.rootId) != v.id or set(link.nodeMap) != {n.id for n in definition.visuals} or len(set(link.nodeMap.values())) != len(link.nodeMap):
+                    raise ValueError("Bileşen kullanımı kayıtlı tanımla uyuşmuyor")
+                slots = {s.id: s for s in definition.slots}
+                if set(link.bindings) != set(slots):
+                    raise ValueError("Bileşen alan yuvaları eksik")
+                for key, binding in link.bindings.items():
+                    check_binding(slots[key].kind, binding)
+                for node_id in link.nodeMap.values():
+                    node = by_id.get(node_id)
+                    if node and node.id != v.id:
+                        if node.component:
+                            raise ValueError("Bileşen eşlemesi iç bileşen bağlantısı taşıyamaz")
+                        while node.parentId and node.parentId != v.id:
+                            node = by_id[node.parentId]
+                        if node.parentId != v.id:
+                            raise ValueError("Bileşen eşlemesi kendi alt ağacında kalmalı")
         return self
 
 
@@ -175,6 +305,8 @@ def _refs(report: dict):
     for page in report.get("pages", []):
         yield from page.get("drillthrough", [])
         for v in page.get("visuals", []):
+            # Tanımlar değişmez sürümlerdir; model adları kullanım eşlemesinde güncellenir.
+            yield from (v.get("component") or {}).get("bindings", {}).values()
             for key in ("group", "legend", "values", "target", "filters"):
                 for ref in v.get(key, []):
                     yield ref
@@ -203,12 +335,11 @@ def rename_measure_refs(report: dict, old: str, new: str) -> None:
             if isinstance(item, dict):
                 action_refs(item.get("action"))
 
+    for ref in _refs(report):
+        if (ref.get("measure") or "").lower() == old.lower():
+            ref["measure"] = new
     for page in report.get("pages", []):
         for v in page.get("visuals", []):
-            for key in ("values", "target"):
-                for ref in v.get(key, []):
-                    if (ref.get("measure") or "").lower() == old.lower():
-                        ref["measure"] = new
             fmt = v.get("format") or {}
             action_refs(fmt.get("action"))
             action_refs((fmt.get("rowAction") or {}).get("action"))

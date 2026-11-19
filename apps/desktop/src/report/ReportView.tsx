@@ -27,10 +27,11 @@ export function ReportView({ onEditMeasure, viewAs = null }: { onEditMeasure?: (
     [client, patchDoc],
   );
   const onError = useCallback((e: unknown) => setError(toUiError(e)), [setError]);
+  const componentLibrary = useMemo(() => ({ load: () => client.loadComponents(), save: (...args: Parameters<typeof client.saveComponents>) => client.saveComponents(...args) }), [client]);
 
   const host: DesignerHost = useMemo(
-    () => ({ tables, report: doc!.report, dataRev, run, save, onError, registerFlush, onEditMeasure }),
-    [tables, doc, dataRev, run, save, onError, registerFlush, onEditMeasure],
+    () => ({ tables, report: doc!.report, dataRev, run, save, onError, registerFlush, onEditMeasure, componentLibrary }),
+    [tables, doc, dataRev, run, save, onError, registerFlush, onEditMeasure, componentLibrary],
   );
   return <ReportDesigner key={doc!.id} host={host} />;
 }

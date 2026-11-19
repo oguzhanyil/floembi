@@ -14,6 +14,7 @@ import { testMatrix } from "./matrix-smoke.mjs";
 import { testThemes } from "./theme-smoke.mjs";
 import { testImportAudit } from "./import-audit-smoke.mjs";
 import { testLayouts } from "./layout-smoke.mjs";
+import { testComponents } from "./component-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -71,6 +72,10 @@ try {
   };
   await call('Runtime.enable');
   await call("Page.navigate", { url: `http://127.0.0.1:${server.address().port}` });
+  if (process.env.FLOEM_UI_COMPONENTS_ONLY) {
+    await waitFor('window.setTestMode');
+    await testComponents({ call, evaluate, waitFor, input: (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event("input",{bubbles:true}))})()`), dir });
+  } else {
   await waitFor('document.querySelector("[data-fixture=broken] .v-error") && document.querySelector("[data-fixture=zero] .v-card-value")');
   assert.equal(await evaluate('document.querySelector("[data-fixture=zero] .v-card-value").textContent'), "0");
   assert.match(await evaluate('document.querySelector("[data-fixture=null]").textContent'), /veri yok/);
@@ -341,6 +346,7 @@ try {
   await testThemes({ call, evaluate, waitFor, openMenu, choose, dir });
   await testImportAudit({ call, evaluate, waitFor, input, dir });
   await testLayouts({ call, evaluate, waitFor, input });
+  await testComponents({ call, evaluate, waitFor, input, dir });
   if (process.env.FLOEM_UI_LAYOUT_REPORT) {
     const definition = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_LAYOUT_REPORT), 'utf8'));
     await evaluate(`window.setAllReport(${JSON.stringify(definition)});window.setTestMode('all-viewer')`);
@@ -386,6 +392,7 @@ try {
       await writeFile(join(resolve(process.env.FLOEM_UI_ARTIFACT_DIR), 'f06-ortak-model.png'), Buffer.from(shot.data, 'base64'));
     }
     console.log('PASS: F06 gerçek rapor düzeninde Ortak Model düğmesi, 6 sütunlu grid ve kart/tablo yerleşimi (sentetik ekran verisi).');
+  }
   }
   await call("Browser.close");
 } finally {

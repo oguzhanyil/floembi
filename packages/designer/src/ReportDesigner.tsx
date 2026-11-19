@@ -1,5 +1,5 @@
 import { ImportCompatibility, ReportThemeControls } from "@floem/report";
-import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualAction, VisualState, VisualType } from "@floem/client";
+import type { ComponentLibraryStore, FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualAction, VisualState, VisualType } from "@floem/client";
 import {
   DrillBanner, VISUAL_DEFS, crossFiltersFor, defaultAgg, defaultRole, newId, resolveVisualAction, runMeasureAction,
   sameField, slicerFilters, snap, visualIsVisible,
@@ -15,6 +15,8 @@ import { DesignerPanels } from "./DesignerPanels";
 import { DesignHistory } from "./history";
 import { groupSelection, ungroup, deleteSelection, duplicateSelection, reorderSibling, transformSelection } from "./layoutEditing";
 import { LayoutControls } from "./LayoutControls";
+import { ComponentLibraryPane } from "./ComponentLibraryPane";
+import { repairInstances } from "./components";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -37,6 +39,7 @@ export interface DesignerHost {
   registerFlush?(fn: () => Promise<void>): () => void;
   /** Veri bölmesinde ölçünün düzenle düğmesi (Desktop'ta formül çubuğunu açar) */
   onEditMeasure?(name: string): void;
+  componentLibrary?: ComponentLibraryStore;
 }
 
 /** Power BI rapor görünümü: sayfa tuvali, Görselleştirmeler ve Veri bölmeleri, sayfa sekmeleri. */
@@ -144,7 +147,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   const updatePage = (fn: (p: ReportPage) => ReportPage) => update((r) => {
     const before = r.pages.find((p) => p.id === page.id)!;
-    const next = fn(before);
+    const next = repairInstances(fn(before), r.components ?? []);
     return before === next ? r : { ...r, pages: r.pages.map((p) => p.id === page.id ? next : p) };
   });
   const updateVisual = (v: Visual) => updatePage((p) => {
@@ -185,12 +188,12 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     else history.current.commit();
   }
   function groupChosen(frame = false) {
-    const result = groupSelection(page, selection, frame, new Set(report.pages.flatMap((p) => p.visuals.map((v) => v.id))), layout.visuals);
+    const result = groupSelection(page, selection, frame, new Set(report.pages.flatMap((p) => p.visuals.flatMap((v) => [v.id, ...Object.values(v.component?.nodeMap ?? {})]))), layout.visuals);
     if (result.id) { updatePage(() => result.page); setSelectedId(result.id); }
   }
 
   function duplicateVisual(v: Visual) {
-    const result = duplicateSelection(page, selection.includes(v.id) ? selection : [v.id], new Set(report.pages.flatMap((p) => p.visuals.map((x) => x.id))));
+    const result = duplicateSelection(page, selection.includes(v.id) ? selection : [v.id], new Set(report.pages.flatMap((p) => p.visuals.flatMap((x) => [x.id, ...Object.values(x.component?.nodeMap ?? {})]))));
     updatePage(() => result.page); setSelection(result.ids);
   }
 
@@ -279,7 +282,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     const pos = at
       ? { x: snap(Math.max(0, Math.min(page.width - w, at.x - w / 2))), y: snap(Math.max(0, Math.min(page.height - h, at.y - 20))) }
       : freeSpot(w, h);
-    const ids = new Set(report.pages.flatMap((p) => p.visuals.map((v) => v.id)));
+    const ids = new Set(report.pages.flatMap((p) => p.visuals.flatMap((v) => [v.id, ...Object.values(v.component?.nodeMap ?? {})])));
     const format = type === "shape" ? { showTitle: false, backgroundColor: "#2a78d6", padding: 0 } :
       type === "image" ? { showTitle: false, padding: 0 } :
       type === "button" ? { showTitle: false, padding: 0, text: "Düğme", buttonStyle: "solid" as const,
@@ -447,8 +450,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   return (
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}
-      onFocusCapture={(e) => { if ((e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
-      onBlurCapture={(e) => { if ((e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
+      onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
+      onBlurCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
       <div className="panel-toggles" role="group" aria-label="Sağ paneller">
         <button className="panel-toggle" type="button" aria-controls={`${panelId}-visualizations`}
           aria-label={`Görselleştirmeler panelini ${visualizationsOpen ? "gizle" : "göster"}`}
@@ -588,7 +591,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         layoutControls={!previewActions && <LayoutControls page={page} resolved={layout.visuals} selection={selection} onSelect={setSelection}
           onChange={(next) => updatePage(() => next)} onVisual={updateVisual} onGroup={groupChosen}
           onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }} />}
-        themeControls={<><ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
+        themeControls={<><ComponentLibraryPane report={report} page={page} selection={selection} resolved={layout.visuals} tables={tables} store={host.componentLibrary}
+          onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />
+          <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
           <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
             if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {
               setActionNotice("Bu nesne aktarım sonrasında silinmiş veya değiştirilmiş."); return;

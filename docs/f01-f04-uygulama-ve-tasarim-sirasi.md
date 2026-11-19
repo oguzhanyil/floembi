@@ -47,7 +47,7 @@ Temel kapsam:
 - 4/8/12/16/24/32/48/64 boşluk ölçeği; köşe, kontrollü gölge, odak halkası ve yoğun/rahat tablo seçenekleri.
 - Hareket süresi ve azaltılmış hareket ayarı merkezi olur. Parlama ve sürekli animasyon varsayılan olmaz. Güvenilirlik, okunabilirlik ve yoğun veri kullanımına öncelik verilir.
 
-Belgeden alınan başlangıç paletleri (henüz uygulama teması olarak eklenmedi):
+Belgeden alınan başlangıç paletleri (F07A ile açık/koyu tema ailesi olarak uygulandı):
 
 | Aile | Primary / Secondary / Accent | Koyu arka plan / yüzey | Metin / ikincil metin |
 |---|---|---|---|
@@ -59,7 +59,7 @@ Belgeden alınan başlangıç paletleri (henüz uygulama teması olarak eklenmed
 
 Açık görünüm başlangıcı: arka plan `#F5F7FA`, yüzey `#FFFFFF`, metin `#172033`, ikincil metin `#64748B`, kenar `#E2E8F0`. Başarı/uyarı/hata/bilgi başlangıç renkleri sırasıyla `#16A34A`, `#F59E0B`, `#EF4444`, `#3B82F6`; tüm ön plan/arka plan eşleşmeleri gerçek bileşenlerde kontrast denetiminden geçecek. Marka renginin beyaz metinle her yerde kullanılabileceği varsayılmayacak.
 
-**F07B — bileşen ve marka kitaplığı, F05'ten sonra:** kullanıcı kendi nesnesini oluşturup kitaplığa kaydeder; tema rollerini miras alan birleşik nesneler başka sayfalarda/model alanlarıyla tekrar kullanılır. Logo yatay/dikey/tek renk/çizgisel/açık-koyu varyantları ve 16–512 px ikonlar bu teslimatta gerçek boyutta karşılaştırılır. Bu varlıklar bu turda yeniden üretilmedi.
+**F07B — bileşen ve marka kitaplığı uygulandı:** kullanıcı kendi nesnesini sürümlü kitaplığa kaydeder; tema rollerini miras alan birleşik nesneler başka sayfalarda/model alanlarıyla tekrar kullanılır. Ortak güncelleme önizlemeyle uygulanır, yerel istisnalar korunur. Logo yatay/dikey/sembol/tek renk/çizgisel/açık-koyu varyantları ve 16–512 px ikonlar gerçek boyutta karşılaştırılır; SVG/PNG/ICO indirilir. [Kullanım ve doğrulama](f07b-bilesen-ve-marka-kitapligi.md).
 
 ### Kullanıcının ileri düzey nesne oluşturma akışı
 
@@ -80,7 +80,7 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 ## Güncel geliştirme sırası
 
 PBIP sayfa görünümü bulguları için [F10A-01–04 alt işleri](pbip-bulgularindan-gelistirme-listesi.md)
-planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ortak temeli ve F05 uygulandı; ana sıradaki **F07B**. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
+planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ortak temeli, F05 ve F07B uygulandı. Sırada **F10A-01–04**, ardından **F08** var. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
 
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
@@ -89,7 +89,8 @@ planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ort
 | 6 | **F10: PBIP uyumluluk ve kayıp raporu** | Uygulandı; [kullanım ve yedi raporun bulguları](f10-pbip-uyumluluk.md). |
 | 7 | **F06: ortak model ve ölçü geçişi** | Ortak temel, 29 yerel ölçü ve 135 kaynak ölçünün haritası uygulandı; tam motor/sonuç uyumu açık. [Kapsam ve kalan işler](f06-ortak-model-ve-olcu-gecisi.md). |
 | 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | Uygulandı; [kullanım, demo ve doğrulama](f05-grup-kapsayici-ve-yerlesim.md). |
-| 9 | **F07B: kullanıcı bileşenleri, marka ve ikon kitaplığı** | F05 üzerinde yeniden kullanılabilir nesneler; ortak stil ve yerel istisna. |
+| 9 | **F07B: kullanıcı bileşenleri, marka ve ikon kitaplığı** | Uygulandı; sürümlü yerel/gömülü kitaplık, alan eşleme, ortak stil ve yerel istisna, SVG/PNG/ICO. [Kullanım](f07b-bilesen-ve-marka-kitapligi.md). |
+| 9a | **F10A-01–04: PBIP sayfa görünümü** | Sıradaki iş; sayfaya/genişliğe sığdırma, saydamlık ve tuval dışı renk. |
 | 10 | **F08: ekranlara göre düzen varyantları** | Aynı bileşen/ölçü farklı ekran düzenlerinde korunur. |
 | 11 | **F09: büyük Grid/Tree Grid** | Sunucu arama/sayfalama, toplam ve dışa aktarım kapsamı. |
 | 12 | **F11: veri bağları, durumlar, tekrarlayıcı ve hareket** | Kullanıcı nesneleri veriyle değişir. |

@@ -29,6 +29,8 @@ from ..transform import parse_steps
 from ..report import QueryError, VisualQuery
 from .connections import ConnectionStore
 from .publish import PublishClient
+from .component_library import ComponentStore
+from ..report.schema import ComponentDefinition
 
 
 class ConnectionIn(BaseModel):
@@ -91,6 +93,12 @@ class SaveIn(BaseModel):
 
 class NewIn(BaseModel):
     name: str | None = None
+
+
+class LibraryIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    components: list[ComponentDefinition] = Field(max_length=500)
+    revision: int = Field(ge=0)
 
 
 class DiagramIn(BaseModel):
@@ -167,6 +175,7 @@ def create_app(
     work_dir.mkdir(parents=True, exist_ok=True)
     runner = JobRunner()
     publisher = PublishClient(store.dir)
+    component_store = ComponentStore(store.dir)
     startup_error: dict | None = None
     first: Document | None = None
     if open_path:                                   # .floem dosyasına çift tıklayarak açılış
@@ -331,6 +340,22 @@ def create_app(
     def set_diagram(body: DiagramIn):
         doc().set_diagram(body.tables, mark_dirty=not body.auto)
         return {"ok": True, "dirty": doc().dirty}
+
+    @app.get("/library/components", dependencies=[Depends(auth)])
+    def component_library():
+        try:
+            return component_store.load().model_dump(mode="json", exclude_none=True)
+        except (ValueError, OSError) as e:
+            raise DocumentError("Bileşen kitaplığı okunamadı", str(e), code="library_invalid") from e
+
+    @app.put("/library/components", dependencies=[Depends(auth)])
+    def save_component_library(body: LibraryIn):
+        try:
+            return component_store.save(body.components, body.revision).model_dump(mode="json", exclude_none=True)
+        except FileExistsError as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except (ValueError, OSError) as e:
+            raise DocumentError("Bileşen kitaplığı kaydedilemedi", str(e), code="library_invalid") from e
 
     @app.put("/document/report", dependencies=[Depends(auth)])
     def set_report(body: dict[str, Any]):

@@ -16,6 +16,13 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 (19.11.2026). F01–F04 sonuçları ve marka belgesine göre güncellenen geliştirme sırası:
 [Uygulama notu](docs/f01-f04-uygulama-ve-tasarim-sirasi.md).
 
+**F07B bileşen ve marka kitaplığı hazır:** Görselleştirmeler → **Bileşen kitaplığı** ile
+grup/kapsayıcıları kaydedin; başka sayfa ve raporlarda alanlarını eşleyerek kullanın.
+Ortak sürüm güncellemesi yerel ayarları korur. **Marka ve ikonlar** açık/koyu logo ailesi,
+16–512 px simge karşılaştırması ve SVG/PNG/ICO indirme sunar.
+Yeni verili örnek: `data/SAPB1Demo-Floem-F07B.floem` → **Bileşen Atölyesi**.
+[Kullanım, sürüm davranışı ve doğrulama](docs/f07b-bilesen-ve-marka-kitapligi.md).
+
 **F07A tema altyapısı hazır:** Desktop başlığında **◐ Tema**, Görselleştirmeler panelinde
 **Rapor teması** bulunur. Beş renk ailesinin açık/koyu sürümlerini **10 temayı karşılaştır** ile
 inceleyin. Uygulama ve rapor temaları bağımsızdır; nesnede **Biçim → Görünüm → Temadan al**

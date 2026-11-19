@@ -67,6 +67,7 @@ export function deleteSelection(page: ReportPage, ids: string[]): ReportPage {
 }
 
 export function duplicateSelection(page: ReportPage, ids: string[], allIds: Set<string>): { page: ReportPage; ids: string[] } {
+  for (const v of page.visuals) for (const id of Object.values(v.component?.nodeMap ?? {})) allIds.add(id);
   const roots = selectionRoots(page, ids), chosen = descendants(page, roots.map((v) => v.id));
   const remap = new Map([...chosen].map((id) => [id, idFor(allIds)])), rootIds = new Set(roots.map((v) => v.id));
   const replaceActions = (value: unknown): unknown => {
@@ -75,7 +76,10 @@ export function duplicateSelection(page: ReportPage, ids: string[], allIds: Set<
       [key, key === "visualId" && typeof item === "string" ? remap.get(item) ?? item : replaceActions(item)]));
     return value;
   };
+  // Yerel olarak silinmiş şablon düğümleri de kopyada ayrı kimlik alır.
+  for (const v of page.visuals.filter((n) => chosen.has(n.id))) for (const id of Object.values(v.component?.nodeMap ?? {})) if (!remap.has(id)) remap.set(id, idFor(allIds));
   const copies = page.visuals.filter((v) => chosen.has(v.id)).map((v) => ({ ...structuredClone(v), id: remap.get(v.id)!,
+    ...(v.component ? { component: { ...structuredClone(v.component), nodeMap: Object.fromEntries(Object.entries(v.component.nodeMap).map(([key, id]) => [key, remap.get(id)!])), bindings: replaceActions(v.component.bindings) as NonNullable<Visual["component"]>["bindings"] } } : {}),
     parentId: v.parentId ? remap.get(v.parentId) ?? v.parentId : null,
     x: v.x + (rootIds.has(v.id) ? 24 : 0), y: v.y + (rootIds.has(v.id) ? 24 : 0),
     format: { ...replaceActions(v.format) as Visual["format"], locked: false } }));

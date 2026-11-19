@@ -368,6 +368,7 @@ export interface Visual {
   parentId?: string | null;
   container?: ContainerLayout;
   layoutItem?: LayoutItem;
+  component?: ComponentInstance;
   group: FieldRef[];
   /** Grafik: Gösterge (seriyi böler) */
   legend?: FieldRef[];
@@ -532,7 +533,27 @@ export interface ReportDefinition {
   version: number;
   theme?: ThemeSnapshot | null;
   importAudit?: ImportAudit | null;
+  components?: ComponentDefinition[];
   pages: ReportPage[];
+}
+
+export type ComponentBinding = { table?: string; column?: string; measure?: string; agg?: Agg; pageId?: string; visualId?: string };
+export interface ComponentSlot {
+  id: string; label: string; kind: "field" | "value" | "measure" | "page" | "visual";
+  sites: { visualId: string; path: string[] }[];
+  defaultBinding?: ComponentBinding;
+}
+export interface ComponentDefinition {
+  id: string; name: string; description: string; version: number; rootId: string;
+  visuals: Visual[]; slots: ComponentSlot[];
+}
+export interface ComponentInstance {
+  definitionId: string; version: number; nodeMap: Record<string, string>; bindings: Record<string, ComponentBinding>;
+}
+export interface ComponentLibrary { version: 1; revision: number; components: ComponentDefinition[] }
+export interface ComponentLibraryStore {
+  load(): Promise<ComponentLibrary>;
+  save(components: ComponentDefinition[], revision: number): Promise<ComponentLibrary>;
 }
 
 export interface VisualQuery {
@@ -714,6 +735,11 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   constructor(baseUrl: string, token: string) {
     super(baseUrl, token);
     this.doc = new HttpClient({ baseUrl, headers: { "X-Floem-Token": token }, unreachableMessage: DESKTOP_UNREACHABLE });
+  }
+
+  loadComponents() { return this.doc.request<ComponentLibrary>("GET", "/library/components"); }
+  saveComponents(components: ComponentDefinition[], revision: number) {
+    return this.doc.request<ComponentLibrary>("PUT", "/library/components", { components, revision });
   }
 
   getDocument() {
