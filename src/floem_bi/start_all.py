@@ -24,7 +24,10 @@ PILOT_LOCAL_URL = "http://127.0.0.1:8811"
 
 def _health(url: str, timeout: float = 2) -> bool:
     try:
-        with urllib.request.urlopen(f"{url}/api/health", timeout=timeout) as response:
+        request = urllib.request.Request(
+            f"{url}/api/health", headers={"User-Agent": "FloemBI/0.1"},
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status == 200 and json.load(response).get("ok") is True
     except (OSError, ValueError, urllib.error.URLError):
         return False
