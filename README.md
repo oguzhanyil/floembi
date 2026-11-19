@@ -42,6 +42,8 @@ Desktop açılınca arka planda `python -m floem_bi.desktop_service` başlar. Se
 bir portta yalnızca `127.0.0.1` adresinden dinler ve her açılışta üretilen bir token'la
 korunur. Kayıtlı bağlantıların şifresi olmayan bilgisi `%APPDATA%\FloemBI\connections.json`
 dosyasında, şifreleri Windows Kimlik Bilgisi Yöneticisi'nde ("FloemBI") tutulur.
+Desktop açıkken `.floem` dosyasına çift tıklamak yeni dosyayı aynı pencerede açar;
+kaydedilmemiş değişiklikler varsa önce onay ister. **Aç / Ctrl+O** da aynı dosyayı açar.
 
 VS Code terminalinde `ELECTRON_RUN_AS_NODE=1` tanımlı olabilir. `npm run desktop` bunu
 kendisi temizler; Electron'u elle başlatıyorsanız bu değişkeni kaldırın.

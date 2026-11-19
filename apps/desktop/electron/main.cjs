@@ -19,13 +19,32 @@ let service = null;          // { child, port }
 let docDirty = false;        // arayüzden: kaydedilmemiş değişiklik var mı
 let forceClose = false;
 let serviceLog = "";         // hata durumunda gösterilecek stderr
+let rendererReady = false;
+let pendingOpenPath = null;
 const token = crypto.randomBytes(24).toString("hex");
 
 // .floem dosyasına çift tıklanınca Windows dosya yolunu komut satırında verir
+function argumentFileToOpen(argv = process.argv, cwd = process.cwd()) {
+  const args = argv.slice(app.isPackaged ? 1 : 2);
+  for (const arg of args) {
+    if (!arg.toLowerCase().endsWith(".floem")) continue;
+    const file = path.resolve(cwd, arg);
+    if (fs.existsSync(file)) return file;
+  }
+  return null;
+}
+
 function fileToOpen() {
-  const args = process.argv.slice(app.isPackaged ? 1 : 2);
-  const found = args.find((a) => a.toLowerCase().endsWith(".floem") && fs.existsSync(a));
-  return found || process.env.FLOEM_OPEN || null;
+  return argumentFileToOpen() || process.env.FLOEM_OPEN || null;
+}
+
+function sendPendingOpen() {
+  if (!rendererReady || !pendingOpenPath) return;
+  const [win] = BrowserWindow.getAllWindows();
+  if (!win || win.isDestroyed()) return;
+  const file = pendingOpenPath;
+  pendingOpenPath = null;
+  win.webContents.send("floem:open-file", file);
 }
 
 function serviceCommand() {
@@ -110,6 +129,8 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+
+  win.webContents.on("did-start-loading", () => { rendererReady = false; });
 
   // Dış bağlantılar uygulama içinde açılmaz; varsayılan tarayıcıya gider.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -229,6 +250,11 @@ ipcMain.on("floem:close-now", (e) => {
   BrowserWindow.fromWebContents(e.sender)?.close();
 });
 
+ipcMain.on("floem:renderer-ready", () => {
+  rendererReady = true;
+  sendPendingOpen();
+});
+
 // Duman testleri (yalnızca geliştirme): ayrı kullanıcı klasörü; açık bir Floem BI ile çakışmaz
 if (process.env.FLOEM_SCREENSHOT && !app.isPackaged) {
   app.setPath("userData", path.join(app.getPath("temp"), "floem-bi-smoke"));
@@ -237,12 +263,15 @@ if (process.env.FLOEM_SCREENSHOT && !app.isPackaged) {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, commandLine, workingDirectory) => {
+    const file = argumentFileToOpen(commandLine, workingDirectory);
+    if (file) pendingOpenPath = file;
     const [win] = BrowserWindow.getAllWindows();
     if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
     }
+    sendPendingOpen();
   });
 
   app.whenReady().then(async () => {

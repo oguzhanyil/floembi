@@ -38,6 +38,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<UiError | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const docRef = useRef<DocumentState | null>(null);
+  const loadGeneration = useRef(0);
   const flushers = useRef(new Set<() => Promise<void>>());
   const registerFlush = useCallback((fn: () => Promise<void>) => {
     flushers.current.add(fn);
@@ -61,11 +62,14 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   }, [setDoc]);
 
   const reload = useCallback(async () => {
+    const generation = loadGeneration.current;
     try {
       const d = await client.getDocument();
+      if (generation !== loadGeneration.current) return;
       if (d.startup_error) setError(d.startup_error);
       setDoc(d);
     } catch (e) {
+      if (generation !== loadGeneration.current) return;
       setError(toUiError(e));
     }
   }, [client, setDoc]);
@@ -109,10 +113,9 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
     [client, setDoc, flushAll],
   );
 
-  const open = useCallback(async () => {
-    if (docRef.current?.dirty && !window.confirm(DISCARD)) return;
-    const path = await window.floem.openFileDialog();
-    if (!path) return;
+  const openPath = useCallback(async (path: string, confirmDirty = true) => {
+    if (confirmDirty && docRef.current?.dirty && !window.confirm(DISCARD)) return;
+    loadGeneration.current += 1;
     try {
       setDoc(await client.openDocument(path));
       setJob(null);
@@ -120,6 +123,20 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
       setError(toUiError(e));
     }
   }, [client, setDoc]);
+
+  const open = useCallback(async () => {
+    if (docRef.current?.dirty && !window.confirm(DISCARD)) return;
+    const path = await window.floem.openFileDialog();
+    if (!path) return;
+    await openPath(path, false);
+  }, [openPath]);
+
+  useEffect(() => {
+    if (!doc) return;
+    return window.floem.onOpenFile((path) => { void openPath(path); });
+    // Yalnızca ilk belge geldikten sonra dosya açma olaylarını dinle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(doc), openPath]);
 
   const newDocument = useCallback(async () => {
     if (docRef.current?.dirty && !window.confirm(DISCARD)) return;

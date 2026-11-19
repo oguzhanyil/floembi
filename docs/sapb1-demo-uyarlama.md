@@ -12,6 +12,10 @@ PBIP 18 sayfa ve 963 görsel tanımlar. Sayfalardan biri özel `asistan` görsel
 
 Her iki `.floem` dosyası yereldir ve git tarafından dışlanır. Çalışan dosya bu makinedeki
 LocalDB verisinin **anlık görüntüsünü** içerir; kaynak değişirse yeniden üretmek gerekir.
+Desktop üst çubuğunda dosya yolu `SAPB1Demo-Floem.floem` olmalı: bu dosyada 8 sayfa ve
+7 dolu tablo vardır. `SAPB1Demo-Taslak.floem` 18 sayfa ve boş tablolardan oluşur.
+Desktop zaten açıksa **Aç / Ctrl+O** ile çalışan dosyayı seçin. Eski Desktop sürümleri,
+dosyaya çift tıklanınca açık pencereyi öne getirip yeni dosyayı yüklemiyordu.
 
 ```powershell
 .venv\Scripts\python -m floem_bi.pbip_import "..\powerbi-main\Demo\SAPB1Demo.Report" "data\SAPB1Demo-Taslak.floem"
