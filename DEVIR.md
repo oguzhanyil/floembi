@@ -145,6 +145,11 @@ Yöneticisi'nde; manuel yönetici girişi gerektiğinde kullanıcı
 `python -m floem_bi.server.pilot admin-password` ile bildiği bir şifre belirleyebilir.
 Bu hesap ve SMTP şifresi depoda tutulmaz.
 
+Windows yeniden açıldıktan sonra `floem-baslat.bat` dosyasına çift tıklanır; otomatik
+oturum açılışı görevi kurulmaz. `src/floem_bi/start_all.py` yerel 8800 sunucusunu, pilot
+8811 sunucusunu, Cloudflare tünelini, kayıtlı Floemway'leri ve Desktop'ı kontrol edip
+eksik olanları başlatır. Anahtarlar Windows Kimlik Bilgisi Yöneticisi'nden okunur.
+
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
 

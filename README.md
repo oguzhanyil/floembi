@@ -100,6 +100,13 @@ rapor `https://bi.floemdata.com` adresine yayımlanır; alıcı yalnızca kendis
 görür. Sunucu bu Windows bilgisayarında çalıştığından bilgisayar uykuya geçtiğinde veya pilot
 süreçleri durduğunda adres kullanılamaz.
 
+Bilgisayarı yeniden başlattıktan ve Windows oturumu açtıktan sonra depo kökündeki
+[`floem-baslat.bat`](floem-baslat.bat) dosyasına çift tıklayın. Bu dosya yerel sunucuyu (8800),
+pilot yayın sunucusunu (8811), Cloudflare tünelini, kayıtlı Floemway süreçlerini ve Desktop'ı
+başlatır. Açık bileşenleri tekrar açmaz. Kurulumun (`.venv`, `node_modules`, web derlemesi,
+Cloudflare tünel belirteci) önceden yapılmış olması gerekir. Başlatma Windows oturum açılışına
+otomatik olarak eklenmez; web yayını için bilgisayarın açık ve uyanık kalması gerekir.
+
 ```powershell
 npm run web:build
 .venv\Scripts\python -m floem_bi.server.pilot init
