@@ -10,6 +10,7 @@ import {
   currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
 } from "./useVisualData";
 import { CardVisual, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
+import { VisualErrorBoundary } from "./VisualErrorBoundary";
 
 type Scalar = string | number | boolean;
 
@@ -141,11 +142,12 @@ export function toggleCross(v: Visual, cross: CrossFilter | null, value: unknown
   return same ? null : { visualId: v.id, table: g.table, column: g.column, value: value as string | number | boolean };
 }
 
-function ErrorView({ message, detail }: { message: string; detail?: string }) {
+function ErrorView({ message, detail, onRetry }: { message: string; detail?: string; onRetry: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="v-error" role="alert">
       <strong>{message}</strong>
+      <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }}>Tekrar dene</button>
       {detail && (
         <>
           <button className="v-error-more" onClick={() => setOpen(!open)}>
@@ -191,7 +193,13 @@ function TemplateVisual({ v }: { v: Visual }) {
 }
 
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
-export function VisualBody({
+export function VisualBody(props: Parameters<typeof VisualBodyContent>[0]) {
+  return <VisualErrorBoundary resetKey={JSON.stringify([props.v, props.extra, props.dataRev, props.state])}>
+    <VisualBodyContent {...props} />
+  </VisualErrorBoundary>;
+}
+
+function VisualBodyContent({
   v, extra, dataRev, cross, onCross, onCrossRow, onRowAction, onAction, pageWidth, pageHeight, detailReady, run, state, onState, fieldType,
 }: {
   v: Visual;
@@ -214,13 +222,16 @@ export function VisualBody({
   /** Dilimleyici alanının model tipi (aralık dilimleyicisinde tarih/sayı girişi için) */
   fieldType?: ColumnType;
 }) {
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => setAttempt((value) => value + 1);
+  const revision = `${dataRev}:${attempt}`;
   const st = state ?? v.state ?? {};
   const vq = st !== v.state ? { ...v, state: st } : v;
   const isMatrix = v.type === "matrix" || v.type === "treegrid";
-  const data = useVisualData(vq, extra, dataRev, run, !isMatrix);
-  const mdata = useMatrixData(vq, extra, dataRev, run, isMatrix);
+  const data = useVisualData(vq, extra, revision, run, !isMatrix);
+  const mdata = useMatrixData(vq, extra, revision, run, isMatrix);
   const tq = useMemo(() => trendQuery(vq, extra), [vq, extra]);
-  const tdata = useQueryData(tq, dataRev, run);
+  const tdata = useQueryData(tq, revision, run);
   const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
   const [drillMode, setDrillMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -302,7 +313,7 @@ export function VisualBody({
     </div>;
   }
   if (v.type === "text") {
-    if (data.state === "error") return <ErrorView {...data.error} />;
+    if (data.state === "error") return <ErrorView {...data.error} onRetry={retry} />;
     const r = data.state === "ready" ? data.result : data.state === "loading" ? data.previous : undefined;
     return <TextVisual v={v} result={r} loading={data.state === "loading"} />;
   }
@@ -319,12 +330,15 @@ export function VisualBody({
         </div>
       );
     }
-    if (mdata.state === "error") return <ErrorView {...mdata.error} />;
+    if (mdata.state === "error") return <ErrorView {...mdata.error} onRetry={retry} />;
     const parts = mdata.state === "ready" ? mdata.parts : mdata.previous;
     if (v.format.templatePreview && (!parts || parts.every((part) => part.result.rows.length === 0))) return <TemplateVisual v={v} />;
     if (!parts) return <div className="v-empty v-loading">Yükleniyor…</div>;
+    if (mdata.state === "ready" && parts.every((part) => part.result.rows.length === 0))
+      return <div className="v-empty v-no-data" role="status"><span>Bu seçim için veri yok</span></div>;
     return (
-      <div className={"v-body " + (mdata.state === "loading" ? "loading" : "")}>
+      <div aria-busy={mdata.state === "loading"} className={"v-body " + (mdata.state === "loading" ? "loading" : "")}>
+        {mdata.state === "loading" && <span className="v-refreshing" role="status">Güncelleniyor…</span>}
         <MatrixVisual v={v} parts={parts} state={st} onState={onState} selected={selected} onSelect={onCross}
           onRowAction={onRowAction} />
       </div>
@@ -339,13 +353,17 @@ export function VisualBody({
       </div>
     );
   }
-  if (data.state === "error") return <ErrorView {...data.error} />;
+  if (data.state === "error") return <ErrorView {...data.error} onRetry={retry} />;
   const result = data.state === "ready" ? data.result : data.previous;
   if (v.format.templatePreview && (!result || result.rows.length === 0)) return <TemplateVisual v={v} />;
   if (!result) return <div className="v-empty v-loading">Yükleniyor…</div>;
+  if (data.state === "ready" && (result.rows.length === 0 ||
+      (["card", "kpi", "ticker"].includes(v.type) && result.rows[0]?.[0] == null)))
+    return <div className="v-empty v-no-data" role="status"><span>Bu seçim için veri yok</span></div>;
   const def = VISUAL_DEFS[v.type];
   return (
-    <div className={`v-body ${data.state === "loading" ? "loading" : ""}`}>
+    <div aria-busy={data.state === "loading"} className={`v-body ${data.state === "loading" ? "loading" : ""}`}>
+      {data.state === "loading" && <span className="v-refreshing" role="status">Güncelleniyor…</span>}
       {toolbar}
       {def.category && (
         <CategoryChart result={result} def={def} format={v.format} hasLegend={!!v.legend?.length} selected={selected} onSelect={handleClick} />

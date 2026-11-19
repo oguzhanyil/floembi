@@ -196,7 +196,7 @@ export function useQueryData(query: VisualQuery | null, revision: string, run: Q
     }
     let alive = true;
     setData((d) => ({ state: "loading", previous: d.state === "ready" ? d.result : d.state === "loading" ? d.previous : undefined }));
-    run(query)
+    Promise.resolve().then(() => run(query))
       .then((result) => alive && setData({ state: "ready", result }))
       .catch((e) => alive && setData({ state: "error", error: toError(e) }));
     return () => {
@@ -205,7 +205,7 @@ export function useQueryData(query: VisualQuery | null, revision: string, run: Q
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, run]);
 
-  return data;
+  return query && data.state === "empty" ? { state: "loading" } : data;
 }
 
 export interface MatrixPart {
@@ -233,7 +233,7 @@ export function useMatrixData(v: Visual, extra: FilterRef[], revision: string, r
     }
     let alive = true;
     setData((d) => ({ state: "loading", previous: d.state === "ready" ? d.parts : d.state === "loading" ? d.previous : undefined }));
-    Promise.all(queries.map(({ r, c, q }) => run(q).then((result) => ({ r, c, result }))))
+    Promise.all(queries.map(({ r, c, q }) => Promise.resolve().then(() => run(q)).then((result) => ({ r, c, result }))))
       .then((parts) => alive && setData({ state: "ready", parts }))
       .catch((e) => alive && setData({ state: "error", error: toError(e) }));
     return () => {
@@ -242,5 +242,5 @@ export function useMatrixData(v: Visual, extra: FilterRef[], revision: string, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, run]);
 
-  return data;
+  return queries && data.state === "empty" ? { state: "loading" } : data;
 }
