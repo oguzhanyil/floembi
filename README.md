@@ -108,6 +108,13 @@ tıklanabilir, katman içerik üstünü kapatmaz. Veri bulunmayan grafik ve kart
 önizlemesini gösterir; çubuklar gerçek veri değildir. 1920 piksel genişliğindeki raporlar açılırken
 tuval geniş görünür; sağ üstteki ok Görselleştirmeler ve Veri panellerini birlikte açıp kapatır.
 
+**SAP B1 Demo uyarlaması:** Yerel `DEMO_FIRMA1` veritabanı mevcutsa
+`.venv\Scripts\python -m floem_bi.demo_port data\SAPB1Demo-Floem.floem` komutu,
+veri içeren sekiz sayfalık, düzenlenebilir bir örnek rapor oluşturur. Kaynağı yalnızca
+okur; oluşan dosyayı Desktop'ta **Dosya aç** ile açın. Özgün 18 sayfalık PBIP düzen
+taslağı, aktarılan alanlar ve eksikler için [uyarlama notuna](docs/sapb1-demo-uyarlama.md)
+bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalıştırın.
+
 #### Etkileşimli rapor nesneleri
 
 - **Görselleştirmeler → Ekle → Düğme** ile sayfaya düğme ekleyin. Nesneyi seçip **Biçim → Düğme**
