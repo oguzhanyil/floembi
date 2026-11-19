@@ -1,4 +1,4 @@
-# Floem BI: devir notu (19.11.2026)
+# Floem BI: devir notu (20.11.2026)
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
@@ -139,6 +139,24 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 20.11.2026 F10 PBIP uyumluluk raporu uygulandı
+
+[Kullanım ve yerel inceleme](docs/f10-pbip-uyumluluk.md). İçe aktarıcı `prepare_report` ve
+`import_report` olarak ayrıldı. `pbip_compatibility.py`, kaynak/gerçek hedef nesne ve alan
+başvuruları üzerinden tür, filtre, ölçü, toplama, hiyerarşi, sorgu, eylem ve biçim kayıplarını listeler.
+Özel tür/birleşik grafik/huni açık uyarılı metin yer tutucusudur; sessiz grafik benzetimi kaldırıldı.
+`report.importAudit` geçmiş kaydı .floem içinde; JSON/Markdown yan dosyaları da yazılır.
+`--analyze-only` DuckDB veya .floem oluşturmadan inceleme çıktısı üretir.
+Desktop Görselleştirmeler ve web'de `ImportCompatibility` arama/durum/JSON sunar;
+Desktop'ta sayfa/nesneye gider. Sonraki elle düzeltmeler aktarım geçmişini değiştirmez.
+
+Yedi kaynakta 39 sayfa/1.408 nesne: 13 desteklenmeyen, 1.392 kısmi, 2 atlanan, 1 yerleşim eşlemesi.
+Yerel JSON/Markdown dosyaları `data/pbip-compatibility-F10/`; yeni örnek
+`data/SAPB1Demo-Taslak-F10.floem` 18 sayfa/905 hedef/23 boş tablo. Önceki verili dosyalar korunur.
+29 hedefli pytest, Chromium UI ve önceki regresyonlar, typecheck, Desktop/web build başarılı.
+Gerçek yeni taslak `Document.open` ile açıldı; model uyarısı yok. Yeni bağımlılık eklenmedi.
+**Sıradaki ana iş F06: ortak model ve ölçü geçiş haritası**, ardından F05 → F07B.
+
 ### 19.11.2026 F07A tema altyapısı uygulandı
 
 [Kullanım, sözleşme ve kontroller](docs/f07a-tema-altyapisi.md). Beş aile × açık/koyu tema,
@@ -150,7 +168,7 @@ Kaynaklar `packages/report/src/theme.tsx`, `ThemeControls.tsx`, `theme.css` ve P
 `report/schema.py:ThemeSnapshot`. Stil değerleri çizim anında çözülür, nesnelere kopyalanmaz.
 20 hedefli pytest, Chromium tema/kontrast/kalıcılık ve önceki UI regresyonları, typecheck,
 Desktop/web derlemeleri geçti. Fiziksel DPI ve bütün ürün ekranlarının görsel onayı bekliyor.
-**Sıradaki ana iş F10: PBIP uyumluluk ve kayıp raporu**, ardından F06 → F05 → F07B.
+Bu teslimden sonraki F10 tamamlandı; sırada F06 → F05 → F07B var.
 
 ### 19.11.2026 matris hiyerarşisi ve Excel (F09)
 

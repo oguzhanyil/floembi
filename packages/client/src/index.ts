@@ -489,9 +489,22 @@ export interface ThemeSnapshot {
   reducedMotion: boolean;
 }
 
+export interface ImportFinding { code: string; severity: "info" | "warning" | "error"; message: string; detail: string }
+export interface ImportVisualAudit {
+  sourceId: string; sourceType: string; targetIds: string[]; targetType: string;
+  status: "mapped" | "partial" | "unsupported" | "skipped";
+  fields: { role: string; table: string; name: string; kind: string; status: string }[];
+  issues: ImportFinding[];
+}
+export interface ImportAudit {
+  version: 1; source: string; scope: "layout_only"; summary: Record<string, number>;
+  issues: ImportFinding[];
+  pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];
+}
 export interface ReportDefinition {
   version: number;
   theme?: ThemeSnapshot | null;
+  importAudit?: ImportAudit | null;
   pages: ReportPage[];
 }
 

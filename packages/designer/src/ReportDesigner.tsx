@@ -1,4 +1,4 @@
-import { ReportThemeControls } from "@floem/report";
+import { ImportCompatibility, ReportThemeControls } from "@floem/report";
 import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualAction, VisualState, VisualType } from "@floem/client";
 import {
   DrillBanner, VISUAL_DEFS, crossFiltersFor, defaultAgg, defaultRole, newId, resolveVisualAction, runMeasureAction,
@@ -490,7 +490,13 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
-        themeControls={<ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />}
+        themeControls={<><ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
+          <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
+            if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {
+              setActionNotice("Bu nesne aktarım sonrasında silinmiş veya değiştirilmiş."); return;
+            }
+            setPageId(targetPage); setSelectedId(visualId); setDrill(null); setCross(null);
+          }} /></>}
         page={page}
         pages={report.pages}
         tables={tables}

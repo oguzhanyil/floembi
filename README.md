@@ -21,6 +21,12 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 inceleyin. Uygulama ve rapor temaları bağımsızdır; nesnede **Biçim → Görünüm → Temadan al**
 ile özel stil temizlenir. [Kullanım ve doğrulama](docs/f07a-tema-altyapisi.md).
 
+**F10 Power BI uyumluluk raporu hazır:** yeni PBIP taslaklarında **Görselleştirmeler → Power BI
+aktarım raporu**, sayfa/nesne/alan bazında kayıpları gösterir. JSON/Markdown yan dosyaları ve
+`.floem` oluşturmayan `--analyze-only` seçeneği bulunur. Yeni inceleme örneği:
+`data/SAPB1Demo-Taslak-F10.floem` (**boş verili taslak**).
+[Kullanım, yedi raporun bulguları ve sınırlar](docs/f10-pbip-uyumluluk.md).
+
 Yeni demo: `data/SAPB1Demo-Floem-F01-F04.floem` (Desktop'ta Aç / Ctrl+O).
 Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı
 sürüklenebilir; sağ üstteki **Görselleştirmeler** ve **Veri** düğmeleriyle ayrı ayrı gizlenir.

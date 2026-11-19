@@ -108,6 +108,7 @@ class ThemeSnapshot(_B):
 class Report(_B):
     version: int = 1
     theme: ThemeSnapshot | None = None
+    importAudit: dict[str, Any] | None = None
     pages: list[Page] = Field(default_factory=list)
 
     @model_validator(mode="after")

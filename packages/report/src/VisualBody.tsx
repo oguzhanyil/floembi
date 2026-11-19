@@ -200,6 +200,7 @@ export function VisualBody(props: Parameters<typeof VisualBodyContent>[0]) {
   const resolved = themedVisual(props.v, theme);
   return <VisualErrorBoundary resetKey={JSON.stringify([props.v, props.extra, props.dataRev, props.state])}>
     <VisualBodyContent {...props} v={resolved} />
+    {typeof props.v.format.importWarning === "string" && <div className="v-import-warning" role="note">Power BI görseli desteklenmiyor · Aktarım raporunu inceleyin</div>}
   </VisualErrorBoundary>;
 }
 

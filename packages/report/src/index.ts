@@ -18,3 +18,4 @@ export { ReportViewer } from "./ReportViewer";
 
 export * from "./theme";
 export * from "./ThemeControls";
+export * from "./ImportCompatibility";

@@ -44,4 +44,5 @@ sürüm 1 ailesinin varsayılanlarından tamamlanır. Yeni bağımlılık eklenm
   fiziksel Windows DPI/çoklu monitör testi yerine geçmez. Eski sabit renkli özel nesneler
   kullanıcı Temadan al seçeneğini kullanana kadar kendi stillerini korur.
 
-Sonraki ana teslim **F10: PBIP uyumluluk ve kayıp raporu**; ardından F06, F05 ve F07B.
+Bu teslimden sonraki [F10: PBIP uyumluluk raporu](f10-pbip-uyumluluk.md) tamamlandı;
+sırada F06, F05 ve F07B var.

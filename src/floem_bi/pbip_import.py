@@ -15,6 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from .pbip_compatibility import APPROXIMATE_TYPES, audit_visual, finding, finish_audit, write_audit
 from .document.document import Document
 from .model.schema import ModelBilgisi, ModelTanimi, Olcu, Sutun, Tablo, TabloKaynak
 from .model.semantic import SemanticModel
@@ -205,6 +206,8 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     visual = raw.get("visual") or {}
     original_type = visual.get("visualType", "unknown")
     kind = TYPE_MAP.get(original_type, "text")
+    if original_type in APPROXIMATE_TYPES:
+        kind = "text"
     pos = raw.get("position") or {}
     name = str(raw.get("name") or "gorsel")[:64]
     objects = visual.get("objects") or {}
@@ -242,7 +245,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     elif kind == "text":
         fmt["text"], style = _text(objects)
         fmt.update(style)
-        if original_type not in TYPE_MAP:
+        if original_type not in TYPE_MAP or original_type in APPROXIMATE_TYPES:
             fmt["text"] = f"PBIP görseli: {original_type}"
     elif kind == "image":
         data = _image(report_dir, objects)
@@ -340,25 +343,29 @@ def _model(name: str, bindings: _Bindings) -> ModelTanimi:
     return ModelTanimi(model=ModelBilgisi(ad=name), tablolar=tables)
 
 
-def import_report(report_dir: Path, output: Path) -> dict[str, int]:
+def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]:
     report_dir = report_dir.resolve()
     pages_dir = report_dir / "definition" / "pages"
     if not pages_dir.is_dir() or not report_dir.name.endswith(".Report"):
         raise ValueError("PBIP .Report klasörü bulunamadı")
     meta = _read(pages_dir / "pages.json")
-    order = meta.get("pageOrder") or [p.name for p in pages_dir.iterdir() if p.is_dir()]
+    order = meta.get("pageOrder") or sorted(p.name for p in pages_dir.iterdir() if p.is_dir())
     bindings = _Bindings()
     pages = []
     visual_total = 0
+    audit_pages = []
+    report_issues = []
     for page_id in order:
         page_dir = pages_dir / page_id
-        if not page_dir.is_dir():
+        if page_dir.parent != pages_dir or not page_dir.is_dir():
+            report_issues.append(finding("ORDER_ENTRY_MISSING", str(page_id)))
             continue
         info = _read(page_dir / "page.json")
         inputs = []
-        for path in (page_dir / "visuals").glob("*/visual.json"):
+        for path in sorted((page_dir / "visuals").glob("*/visual.json")):
             raw = _read(path)
             inputs.append((float((raw.get("position") or {}).get("z", 0)), raw))
+        mapped_targets: dict[int, list[dict]] = {}
         converted_items: list[tuple[float, dict, dict]] = []
         buttons: list[tuple[float, dict, dict]] = []
         for z, raw in sorted(inputs, key=lambda item: item[0]):
@@ -368,12 +375,14 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
                 if action:
                     converted["format"]["action"] = action
                 converted_items.append((z, raw, converted))
+                mapped_targets[id(raw)] = [converted]
             elif action:
                 buttons.append((z, raw, action))
         for z, button, action in buttons:
             underneath = [item for item_z, raw, item in converted_items
                           if item_z < z and _inside(raw, button)]
             if underneath:
+                mapped_targets[id(button)] = underneath
                 for item in underneath:
                     item["format"]["action"] = action
             else:
@@ -386,6 +395,8 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
                     "format": {"showTitle": False, "padding": 0, "text": "Sayfaya git", "buttonStyle": "ghost",
                                "buttonInvisible": True, "action": action},
                 }))
+        for _z, raw, item in converted_items:
+            mapped_targets.setdefault(id(raw), [item])
         visuals = [item for _z, _raw, item in sorted(converted_items, key=lambda entry: entry[0])]
         # PBIP bazı durumlarda aynı görsel adını bir sayfada tekrar kullanabilir.
         ids: set[str] = set()
@@ -401,15 +412,46 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
                       "backgroundColor": page_background if isinstance(page_background, str) and
                       re.fullmatch(r"#[0-9a-fA-F]{6,8}", page_background) else "#FFFFFF",
                       "visuals": visuals})
+        page_issues = []
+        if info.get("filterConfig", {}).get("filters") or info.get("filters"):
+            page_issues.append(finding("FILTER_NOT_IMPORTED"))
+        for key in info:
+            if info.get(key) and key not in ("$schema", "name", "displayName", "width", "height", "objects", "filterConfig", "filters"):
+                page_issues.append(finding("PAGE_PROPERTY_NOT_IMPORTED", key))
+        for category, items in (info.get("objects") or {}).items():
+            for item in items:
+                for prop in item.get("properties", {}):
+                    if (category, prop) != ("background", "color"):
+                        page_issues.append(finding("PAGE_PROPERTY_NOT_IMPORTED", f"objects.{category}.{prop}"))
+        audited_visuals = []
+        for _z, raw in sorted(inputs, key=lambda item: item[0]):
+            targets = mapped_targets.get(id(raw), [])
+            entry = audit_visual(raw, targets)
+            audited_visuals.append(entry)
+            if entry["status"] == "unsupported":
+                for target in targets:
+                    target["format"]["importWarning"] = "TYPE_UNSUPPORTED"
+        page_audit = {"id": pages[-1]["id"], "name": pages[-1]["name"], "issues": page_issues, "visuals": audited_visuals}
+        audit_pages.append(page_audit)
         visual_total += len(visuals)
     report = Report.model_validate({"version": 1, "pages": pages}).model_dump(mode="json", exclude_none=True)
     name = report_dir.name.removesuffix(".Report")
     model = _model(name, bindings)
     SemanticModel(model)
+    report["importAudit"] = finish_audit(name, audit_pages, report_dir, report_issues)
+    report = Report.model_validate(report).model_dump(mode="json", exclude_none=True)
+    return report, model, {"pages": len(pages), "visuals": visual_total, "tables": len(model.tablolar)}
+
+
+def import_report(report_dir: Path, output: Path, *, analyze_only: bool = False) -> dict[str, int]:
+    report, model, stats = prepare_report(report_dir)
     output = output.resolve()
+    if analyze_only:
+        write_audit(output, report["importAudit"])
+        return stats
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="floem-pbip-") as temporary:
-        doc = Document.new(Path(temporary), name)
+        doc = Document.new(Path(temporary), model.model.ad)
         try:
             doc.content.tanim = model
             for table in model.tablolar:
@@ -423,7 +465,8 @@ def import_report(report_dir: Path, output: Path) -> dict[str, int]:
             doc.save(output)
         finally:
             doc.close()
-    return {"pages": len(pages), "visuals": visual_total, "tables": len(model.tablolar)}
+    write_audit(output, report["importAudit"])
+    return stats
 
 
 def main() -> None:
@@ -431,19 +474,24 @@ def main() -> None:
     parser.add_argument("report_dir", type=Path, help="PBIP .Report klasörü")
     parser.add_argument("output", type=Path, help="Oluşturulacak .floem dosyası")
     parser.add_argument("--all", action="store_true", help="Kaynak depodaki tüm .Report klasörlerini aktar")
+    parser.add_argument("--analyze-only", action="store_true", help="Yalnız uyumluluk JSON/Markdown raporu oluştur; .floem yazma")
     args = parser.parse_args()
     if args.all:
         sources = sorted(args.report_dir.rglob("*.Report"))
         for source in sources:
             relative = source.relative_to(args.report_dir)
             output = args.output / relative.parent / (source.name.removesuffix(".Report") + ".floem")
-            result = import_report(source, output)
+            result = import_report(source, output, analyze_only=args.analyze_only)
             print(f"{output}: {result['pages']} sayfa, {result['visuals']} görsel, {result['tables']} tablo")
-        print("Veri ve özgün DAX ölçüleri aktarılmadı; dosyalar düzenlenebilir tasarım taslağıdır.")
+            print(f"Uyumluluk raporu: {output.with_suffix('.compatibility.md')} ve .json")
+        print("Yalnız uyumluluk raporları oluşturuldu; .floem yazılmadı." if args.analyze_only else
+              "Veri ve özgün DAX ölçüleri aktarılmadı; dosyalar düzenlenebilir tasarım taslağıdır.")
         return
-    result = import_report(args.report_dir, args.output)
-    print(f"Aktarıldı: {args.output} · {result['pages']} sayfa, {result['visuals']} görsel, {result['tables']} tablo")
-    print("Veri ve özgün DAX ölçüleri aktarılmadı; bu dosya düzenlenebilir tasarım taslağıdır.")
+    result = import_report(args.report_dir, args.output, analyze_only=args.analyze_only)
+    print(f"{'İncelendi' if args.analyze_only else 'Aktarıldı'}: {args.output} · {result['pages']} sayfa, {result['visuals']} görsel, {result['tables']} tablo")
+    print(f"Uyumluluk raporu: {args.output.with_suffix('.compatibility.md')} ve .json")
+    print("Yalnız uyumluluk raporları oluşturuldu; .floem yazılmadı." if args.analyze_only else
+          "Veri ve özgün DAX ölçüleri aktarılmadı; bu dosya düzenlenebilir tasarım taslağıdır.")
 
 
 if __name__ == "__main__":

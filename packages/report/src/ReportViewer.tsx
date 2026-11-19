@@ -1,4 +1,5 @@
 import { ReportThemeScope, themedVisual } from "./theme";
+import { ImportCompatibility } from "./ImportCompatibility";
 import type { FilterRef, ReportDefinition, Visual, VisualAction, VisualState } from "@floem/client";
 import { useState } from "react";
 import { ReportViewport } from "./ReportViewport";
@@ -79,6 +80,7 @@ export function ReportViewer({
 
   return (
     <div className="viewer">
+      <ImportCompatibility audit={report.importAudit} />
       <ReportViewport width={page.width} height={page.height} onBackground={() => setCross(null)} banner={drill && pageFilters.length > 0 && (
           <DrillBanner
             label={drill.label}

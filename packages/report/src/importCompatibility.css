@@ -1,0 +1,18 @@
+.import-audit-control { padding: 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.import-audit-control > button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.import-audit-control p { margin-bottom: 0; line-height: 1.5; color: var(--muted); }
+.import-audit-dialog { width: min(1000px, 94vw); max-width: 94vw; max-height: 90vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 24px; font: 13px "Segoe UI", system-ui, sans-serif; }
+.import-audit-dialog::backdrop { background: #07122299; }
+.import-audit-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.import-audit-dialog h2 { margin: 0 0 8px; }
+.import-audit-dialog p { line-height: 1.6; }
+.import-audit-dialog button, .import-audit-dialog select, .import-audit-dialog input { color: inherit; background: var(--surface); border: 1px solid var(--border-strong); padding: 6px 10px; border-radius: 6px; font: inherit; }
+.import-audit-summary, .import-audit-tools { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding: 12px 0; }
+.import-audit-tools input { flex: 1; min-width: 180px; }
+.import-audit-dialog li { padding: 5px 0; overflow-wrap: anywhere; line-height: 1.5; }
+.import-audit-dialog small { display: block; color: var(--muted); }
+.import-audit-visual { border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 8px 0; }
+.import-audit-visual summary { cursor: pointer; overflow-wrap: anywhere; }
+.import-audit-visual table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.import-audit-visual td, .import-audit-visual th { border-bottom: 1px solid var(--border); padding: 6px; text-align: left; overflow-wrap: anywhere; }
+.v-import-warning { position: absolute; bottom: 2px; left: 4px; right: 4px; padding: 4px; background: var(--surface); color: var(--danger); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; pointer-events: none; }

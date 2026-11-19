@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { unzipSync, strFromU8 } from "fflate";
 import { testMatrix } from "./matrix-smoke.mjs";
 import { testThemes } from "./theme-smoke.mjs";
+import { testImportAudit } from "./import-audit-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -337,6 +338,7 @@ try {
   console.log(`PASS: ${types.length} nesnede tasarım/web sağ tık menüsü; çoğaltma, kilit, katman, silme, biçim, klavye, metin kopyalama; grafik/ağaç veri aktarımı; tablo PDF-XLSX-CSV; 6 viewport/DPR ve nesne taşıma.`);
   await testMatrix({ call, evaluate, waitFor, openMenu, choose, input, dir });
   await testThemes({ call, evaluate, waitFor, openMenu, choose, dir });
+  await testImportAudit({ call, evaluate, waitFor, input, dir });
   await call("Browser.close");
 } finally {
   ws?.close();
