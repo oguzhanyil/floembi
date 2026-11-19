@@ -53,6 +53,7 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
   }, [client, picked, session?.logged_in]);
 
   const needsSave = !doc?.path || doc.dirty;
+  const localServer = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/?$/i.test(server.trim());
 
   async function login(e: FormEvent) {
     e.preventDefault();
@@ -155,10 +156,10 @@ export function PublishDialog({ onClose }: { onClose: () => void }) {
                 Şifre
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
               </label>
-              <p className="hint">
+              {localServer && <p className="hint">
                 Geliştirme kullanıcıları: <code>yonetici@floembi.test</code> (Floem.Yonetici1) ve{" "}
                 <code>izleyici@floembi.test</code> (Floem.Izleyici1). Sunucuyu başlatmak için: <code>npm run server</code>
-              </p>
+              </p>}
               <div>
                 <button className="primary" disabled={!!busy}>
                   {busy === "login" ? "Oturum açılıyor…" : "Oturum aç"}

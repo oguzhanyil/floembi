@@ -54,7 +54,8 @@ class PublishClient:
     # ------------------------------------------------------------------ HTTP
     def _call(self, method: str, path: str, body: Any = None, data=None, headers=None, timeout=TIMEOUT) -> Any:
         url = self.server_url + path
-        hdrs = {"Accept": "application/json", **(headers or {})}
+        # Cloudflare'ın Python-urllib varsayılan kimliğini tarayıcı hatası (1010) olarak engellememesi için.
+        hdrs = {"Accept": "application/json", "User-Agent": "FloemBI-Desktop/0.1", **(headers or {})}
         if self.token:
             hdrs["Authorization"] = f"Bearer {self.token}"
         if body is not None:
@@ -152,6 +153,12 @@ class PublishClient:
         ).encode("utf-8")
         tail = f"\r\n--{boundary}--\r\n".encode("ascii")
         size = len(head) + os.path.getsize(path) + len(tail)
+        if urlparse(self.server_url).hostname == "bi.floemdata.com" and size > 100_000_000:
+            raise DocumentError(
+                "Rapor dosyası bu pilotun 100 MB yükleme sınırını aşıyor",
+                "Daha büyük raporlar için parçalı yükleme desteği gerekir.",
+                code="publish_too_large",
+            )
 
         def body() -> Iterator[bytes]:
             yield head

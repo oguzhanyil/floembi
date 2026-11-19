@@ -124,6 +124,24 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### Gerçek adresli tek alıcı pilotu (19.11.2026)
+
+`https://bi.floemdata.com` adresi için mevcut Windows bilgisayarında ayrı pilot sunucu ve
+Cloudflare tüneli kuruldu. Pilot SQLite/DuckDB verisi `%LOCALAPPDATA%\FloemBI\pilot-server`
+altındadır; geliştirme kullanıcıları ve 8800 sunucusu kullanılmaz. `floemmodel.floem`
+Desktop yayınlama istemcisiyle pilot çalışma alanına gönderildi. GoDaddy SMTP test gönderimi
+ve gerçek alıcı daveti `sent` döndü. Cloudflare tüneli `healthy`; dış adreste rapor API'si
+yetkisiz isteğe 401, yönetici sorgusuna 200 döndü. Alıcının daveti kabul edip şifre
+belirlemesi ve web üzerinden görsel kabulü bekleniyor. Desktop penceresinde kaydedilmemiş
+değişiklik göstergesi görüldüğünden, son düzenlemeler kaydedildikten sonra yeniden yayımlama
+gerekiyor olabilir.
+
+Kod: `src/floem_bi/server/pilot.py` (yönetici, tünel, şifre),
+`src/floem_bi/server/cloudflare_pilot.py` (idempotent DNS/tünel kurulumu),
+`README.md` (çalıştırma ve kullanıcı akışı). Geçici yönetici şifresi Windows Kimlik
+Bilgisi Yöneticisi'nde; kullanıcı `python -m floem_bi.server.pilot admin-password` ile
+kendi şifresini belirlemeli. Bu hesap ve SMTP şifresi depoda tutulmaz.
+
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
 

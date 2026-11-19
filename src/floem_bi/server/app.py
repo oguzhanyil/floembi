@@ -33,6 +33,7 @@ import secrets
 import shutil
 import tempfile
 import threading
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta, timezone
@@ -59,6 +60,7 @@ from .mail import (
     load_mail_settings,
     login_hint, send, sender_display, settings_from_row, share_mail, test_mail,
 )
+from . import pilot_config
 from .events import EventHub
 from .refresh import RefreshError, SnapshotBuilder
 from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
@@ -90,6 +92,7 @@ class ServerSettings:
     public_url: str = "http://127.0.0.1:8800"
     web_dist: Path | None = None
     seed_users: bool = True
+    pilot: bool = False
     seed_passwords: dict[str, str] = field(default_factory=dict)
     mail: MailSettings = field(default_factory=MailSettings)   # ortam değişkenlerinden; ekran ayarı önceliklidir
     invite_days: int = 7
@@ -104,10 +107,15 @@ SEED_USERS = [
 SEED_WORKSPACE = "Satış Ekibi"
 
 
-def load_settings() -> ServerSettings:
-    data = Path(os.environ.get("FLOEM_SERVER_DATA", "data/server")).resolve()
+def load_settings(*, pilot: bool = False) -> ServerSettings:
+    data = pilot_config.data_dir() if pilot else Path(os.environ.get("FLOEM_SERVER_DATA", "data/server")).resolve()
     data.mkdir(parents=True, exist_ok=True)
-    secret = os.environ.get("FLOEM_SERVER_SECRET")
+    if pilot:
+        secret = pilot_config.server_secret(data)
+        if not secret:
+            raise RuntimeError("Pilot sunucu anahtarı bulunamadı. Önce 'python -m floem_bi.server.pilot init' çalıştırın.")
+    else:
+        secret = os.environ.get("FLOEM_SERVER_SECRET")
     if not secret:
         key = data / "secret.key"
         if not key.exists():
@@ -115,11 +123,16 @@ def load_settings() -> ServerSettings:
         secret = key.read_text(encoding="utf-8").strip()
     web = os.environ.get("FLOEM_WEB_DIST")
     default_web = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
+    public_url = os.environ.get("FLOEM_PUBLIC_URL", pilot_config.PILOT_URL if pilot else "http://127.0.0.1:8800").rstrip("/")
+    if pilot and public_url != pilot_config.PILOT_URL:
+        raise RuntimeError(f"Pilot için FLOEM_PUBLIC_URL yalnızca {pilot_config.PILOT_URL} olabilir.")
     return ServerSettings(
         data_dir=data,
         secret=secret,
-        public_url=os.environ.get("FLOEM_PUBLIC_URL", "http://127.0.0.1:8800").rstrip("/"),
+        public_url=public_url,
         web_dist=Path(web) if web else (default_web if default_web.exists() else None),
+        seed_users=not pilot,
+        pilot=pilot,
         seed_passwords={env: os.environ.get(env, default) for _, _, env, default in SEED_USERS},
         mail=load_mail_settings(),
     )
@@ -137,6 +150,39 @@ def seed(engine: Engine, settings: ServerSettings) -> None:
             )).inserted_primary_key[0]
         wid = c.execute(db.workspaces.insert().values(name=SEED_WORKSPACE)).inserted_primary_key[0]
         c.execute(db.members.insert().values(workspace_id=wid, user_id=ids["yonetici@floembi.test"], role="admin"))
+
+
+class LoginThrottle:
+    """Pilot girişinde e-posta başına hatalı deneme sınırı (tek sunucu süreci)."""
+
+    def __init__(self, limit: int = 10, window_seconds: float = 900):
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._lock = threading.Lock()
+        self._failures: dict[str, tuple[int, float]] = {}
+
+    def allow(self, email: str) -> bool:
+        with self._lock:
+            count, started = self._failures.get(email, (0, 0.0))
+            if time.monotonic() - started >= self.window_seconds:
+                self._failures.pop(email, None)
+                return True
+            return count < self.limit
+
+    def failure(self, email: str) -> None:
+        now = time.monotonic()
+        with self._lock:
+            count, started = self._failures.get(email, (0, now))
+            if now - started >= self.window_seconds:
+                count, started = 0, now
+            self._failures[email] = (count + 1, started)
+            if len(self._failures) > 10000:
+                self._failures = {key: value for key, value in self._failures.items()
+                                  if now - value[1] < self.window_seconds}
+
+    def success(self, email: str) -> None:
+        with self._lock:
+            self._failures.pop(email, None)
 
 
 # ------------------------------------------------------------------ istek gövdeleri
@@ -294,10 +340,25 @@ class EngineCache:
 
 def create_server(settings: ServerSettings | None = None) -> FastAPI:
     settings = settings or load_settings()
+    if settings.pilot and settings.seed_users:
+        raise RuntimeError("Pilot modunda geliştirme kullanıcıları oluşturulamaz.")
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     engine = db.make_engine(f"sqlite:///{(settings.data_dir / 'floem.db').as_posix()}")
     if settings.seed_users:
         seed(engine, settings)
+    if settings.pilot:
+        with engine.connect() as c:
+            seeded = c.execute(select(db.users.c.id).where(
+                db.users.c.email.in_([email for email, *_ in SEED_USERS])).limit(1)).first()
+            admin = c.execute(select(db.users.c.id).join(db.members, db.members.c.user_id == db.users.c.id)
+                              .where(and_(db.users.c.is_admin.is_(True), db.members.c.role == "admin"))
+                              .limit(1)).first()
+        if seeded is not None:
+            engine.dispose()
+            raise RuntimeError("Pilot veritabanında geliştirme hesabı bulundu; ayrı boş veri klasörü kullanın.")
+        if admin is None:
+            engine.dispose()
+            raise RuntimeError("Pilot yönetici hesabı yok. Önce 'python -m floem_bi.server.pilot init' çalıştırın.")
     with engine.begin() as c:
         c.execute(db.refresh_runs.update().where(db.refresh_runs.c.status.in_(["queued", "running"])).values(
             status="failed", stage="Sunucu yeniden başlatıldı", finished_at=db.now(),
@@ -305,6 +366,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                              ensure_ascii=False)))
     engines = EngineCache()
     publish_lock = threading.Lock()
+    login_throttle = LoginThrottle()
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         yield
@@ -314,6 +376,16 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     app = FastAPI(title="floembi.app", version="0.1.0", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.db = engine
+
+    if settings.pilot:
+        @app.middleware("http")
+        async def pilot_headers(request: Request, call_next):
+            response = await call_next(request)
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            if request.url.path.startswith("/api/") or request.url.path.startswith("/invite/"):
+                response.headers["Cache-Control"] = "no-store"
+            return response
     app.state.engines = engines
     hub = EventHub()
     app.state.events = hub
@@ -961,10 +1033,17 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
 
     @app.post("/api/auth/login")
     def login(body: LoginIn):
+        email = body.email.strip().lower()
+        if settings.pilot and not login_throttle.allow(email):
+            raise ApiError(429, "login_limited", "Çok fazla hatalı giriş denemesi. 15 dakika sonra tekrar deneyin.")
         with engine.connect() as c:
-            row = c.execute(select(db.users).where(db.users.c.email == body.email.strip().lower())).first()
+            row = c.execute(select(db.users).where(db.users.c.email == email)).first()
         if row is None or not verify_password(row.password_hash, body.password):
+            if settings.pilot:
+                login_throttle.failure(email)
             raise ApiError(401, "login_failed", "E-posta adresi ya da şifre hatalı")
+        if settings.pilot:
+            login_throttle.success(email)
         return {
             "token": issue_token(row.id, settings.secret),
             "user": {"id": row.id, "email": row.email, "name": row.name, "is_admin": bool(row.is_admin)},

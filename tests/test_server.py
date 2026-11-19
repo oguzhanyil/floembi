@@ -8,6 +8,9 @@ from fastapi.testclient import TestClient
 import test_document as td
 from floem_bi.server import ServerSettings, create_server
 from floem_bi.server import db
+from floem_bi.server import pilot_config
+from floem_bi.server.app import load_settings
+from floem_bi.server.pilot import bootstrap
 
 YON = ("yonetici@floembi.test", "Floem.Yonetici1")
 IZL = ("izleyici@floembi.test", "Floem.Izleyici1")
@@ -64,6 +67,58 @@ def test_login(server):
     assert me["workspaces"] == [{"id": 1, "name": "Satış Ekibi", "role": "admin", "role_label": "Yönetici"}]
     assert server.get("/api/me").status_code == 401
     assert server.get("/api/me", headers={"Authorization": "Bearer bozuk.token.x"}).status_code == 401
+
+
+def test_real_address_pilot_publish_invite_and_revoke(tmp_path, monkeypatch, floem_file):
+    directory = tmp_path / "pilot"
+    secrets = {}
+    monkeypatch.setenv("FLOEM_SERVER_DATA", str(directory))
+    monkeypatch.delenv("FLOEM_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(pilot_config, "server_secret", lambda path: secrets.get(str(path)))
+    monkeypatch.setattr(pilot_config, "save_server_secret", lambda path, value: secrets.__setitem__(str(path), value))
+    with pytest.raises(RuntimeError, match="anahtarı bulunamadı"):
+        load_settings(pilot=True)
+    bootstrap(directory, "yonetici@floemdata.com", "Pilot Yönetici", "Uzun.Pilot.Sifre1")
+    with pytest.raises(ValueError, match="tekrar oluşturulmadı"):
+        bootstrap(directory, "ikinci@floemdata.com", "İkinci", "Uzun.Pilot.Sifre2")
+    settings = load_settings(pilot=True)
+    assert settings.seed_users is False and settings.public_url == "https://bi.floemdata.com"
+    pilot = TestClient(create_server(settings))
+    with pilot.app.state.db.connect() as c:
+        assert [r.email for r in c.execute(db.users.select())] == ["yonetici@floemdata.com"]
+    admin = login(pilot, ("yonetici@floemdata.com", "Uzun.Pilot.Sifre1"))
+    published = publish(pilot, admin, floem_file.path).json()
+    rid = published["report_id"]
+    assert published["url"] == f"https://bi.floemdata.com/reports/{rid}"
+    assert pilot.get(f"/api/reports/{rid}").status_code == 401
+    share = pilot.post(f"/api/reports/{rid}/share", headers=admin,
+                       json={"emails": ["alici@ornek.com"]}).json()
+    assert share["results"][0]["status"] == "invited"
+    token = _invite_token(pilot, admin, "alici@ornek.com")
+    inbox = pilot.get("/api/mail/inbox", headers=admin).json()["items"]
+    html = pilot.get(f"/api/mail/inbox/{inbox[0]['id']}", headers=admin).json()["html"]
+    assert f"https://bi.floemdata.com/invite/{token}" in html
+    assert pilot.get(f"/api/invitations/{token}").headers["Cache-Control"] == "no-store"
+    accepted = pilot.post(f"/api/invitations/{token}/accept",
+                          json={"name": "Alıcı", "password": "Uzun.Alici.Sifre1"}).json()
+    recipient = {"Authorization": f"Bearer {accepted['token']}"}
+    assert pilot.get(f"/api/reports/{rid}", headers=recipient).status_code == 200
+    assert pilot.get("/api/workspaces/1/content", headers=recipient).status_code == 403
+    assert publish(pilot, recipient, floem_file.path).status_code == 403
+    assert pilot.delete(f"/api/reports/{rid}/share/{accepted['user']['id']}", headers=admin).status_code == 200
+    assert pilot.get(f"/api/reports/{rid}", headers=recipient).status_code == 403
+
+
+def test_pilot_login_throttle():
+    from floem_bi.server.app import LoginThrottle
+    throttle = LoginThrottle(limit=2, window_seconds=900)
+    assert throttle.allow("a@b.com")
+    throttle.failure("a@b.com")
+    assert throttle.allow("a@b.com")
+    throttle.failure("a@b.com")
+    assert not throttle.allow("a@b.com")
+    throttle.success("a@b.com")
+    assert throttle.allow("a@b.com")
 
 
 def test_publish_view_and_republish(server, floem_file):

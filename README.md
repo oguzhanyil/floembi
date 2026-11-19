@@ -93,6 +93,53 @@ Duman testi kancaları (yalnızca geliştirme): `FLOEM_OPEN=dosya.floem`,
 
 ### floembi.app (yerel sunucu) ve yayımlama (H5)
 
+#### Gerçek adresli tek alıcı pilotu
+
+Bu pilot, mevcut yerel sunucu ve deneme kullanıcılarından ayrı çalışır. Desktop'ta kaydedilmiş
+rapor `https://bi.floemdata.com` adresine yayımlanır; alıcı yalnızca kendisiyle paylaşılan raporu
+görür. Sunucu bu Windows bilgisayarında çalıştığından bilgisayar uykuya geçtiğinde veya pilot
+süreçleri durduğunda adres kullanılamaz.
+
+```powershell
+npm run web:build
+.venv\Scripts\python -m floem_bi.server.pilot init
+.venv\Scripts\python -m floem_bi.server.pilot cloudflare-setup
+.venv\Scripts\python -m floem_bi.server --pilot
+```
+
+`init` gerçek yönetici e-postasını, adını ve şifresini gizli istemden alır. Boş
+`%LOCALAPPDATA%\FloemBI\pilot-server` klasöründe yönetici ve “Pilot Raporlar” çalışma alanı
+oluşturur. Şifre veritabanında yalnızca özetiyle, sunucu anahtarı Windows Kimlik Bilgisi
+Yöneticisi'nde tutulur. Geliştirme kullanıcıları oluşturulmaz; mevcut `data/server` ve 8800
+portundaki süreç değişmez. `cloudflare-setup`, bu alan adına ait mevcut
+`%USERPROFILE%\.cloudflared\cert.pem` oturumunu kullanarak **ayrı** `floembi-pilot` tünelini ve
+`bi.floemdata.com` DNS kaydını oluşturur. Başka bir DNS kaydı varsa üzerine yazmaz. Tünel
+belirtecini Windows Kimlik Bilgisi Yöneticisi'ne kaydeder; belirteç komut satırına yazılmaz.
+Yönetici şifresini daha sonra gizli istemle değiştirmek için
+`.venv\Scripts\python -m floem_bi.server.pilot admin-password` kullanın.
+
+Sunucu açıkken ikinci terminalde tüneli başlatın:
+
+```powershell
+.venv\Scripts\python -m floem_bi.server.pilot tunnel
+```
+
+Cloudflare API kurulumu kullanılamıyorsa, Cloudflare panelinde ayrı bir uzaktan yönetilen tüneli
+ve `bi.floemdata.com` → `http://127.0.0.1:8811` rotasını oluşturun; tünel belirtecini
+`.venv\Scripts\python -m floem_bi.server.pilot tunnel-token` komutunun gizli istemine girin.
+
+Web'de yönetici olarak giriş yapıp **Yönetim → E-posta sunucusu** ekranında gerçek SMTP ayarını
+kaydedin ve test e-postasının ulaştığını doğrulayın. Desktop'ta raporu kaydedin, **Yayımla**
+ekranında `https://bi.floemdata.com` adresi ve yönetici hesabıyla “Pilot Raporlar”ı seçin.
+Web'de raporu açıp **Paylaş** ile gerçek alıcının e-postasını ekleyin. Davet bağlantısı yedi gün
+geçerlidir; alıcı adını ve şifresini belirleyip oturum açınca raporu görür. **Erişimi olanlar**
+ekranından yetki kaldırılabilir. Veri, Desktop'tan gönderilen anlık görüntüdür; güncellemek için
+raporu yeniden yayımlayın. Bu pilotta Floemway yenilemesi kurulmaz.
+
+Cloudflare Free/Pro'da tek HTTP yüklemesi 100 MB ile sınırlıdır. Desktop, bu adrese daha büyük
+`.floem` dosyasını göndermeden açıklayıcı hata verir. Pilotu dış ağdan, örneğin mobil veriyle
+test edin; davet sonucunun `sent` olması gerekir, `outbox` gerçek e-posta gönderimi değildir.
+
 ```bash
 .venv/Scripts/python -m pip install -e ".[server]"
 npm run web:build     # web arayüzünü derler (apps/web/dist)
