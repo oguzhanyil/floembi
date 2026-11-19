@@ -137,6 +137,20 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 rapor mantığı ve tasarım incelemesi
+
+[Tasarım ve ürün incelemesi](docs/floem-bi-tasarim-ve-urun-incelemesi.md), Power BI dalları,
+yerel SAP B1 demoları ve Floemdata Analytics kodu üzerinden hazırlandı. İlk finans dalı 6,
+son Demo dalı 17 sayfa; çalışan Floem uyarlaması 8 sayfa ve tam semantik geçiş değil.
+Kullanıcı AG Grid yaşam döngüsü düzeltmesinden sonra Desktop'ta veriyi gördüğünü doğruladı.
+
+Yeni bulgular: PBIP metin aktarımında en az 20 px zorlaması, tüm metinlerde `overflow:auto`,
+çalışan demonun 8 başlığında satır yüksekliğinden 1 px kısa içerik alanı; sabit paneller ve
+sayfaya sığdırmanın okunabilirliğe etkisi. Sayılar statik incelemeye dayanır; bu turda ekran
+testi yapılmadı. Demo sorgularında açık sipariş etiketi, birleşik miktar ve yürüyen bakiye
+toplamı gibi anlam farkları da belgelendi. F01–F15 işleri öneridir; henüz uygulanmadı.
+Önerilen ilk teslim F01–F03 ve temel zoom; sonraki teslim grup/bileşen/tema ve ölçü eşlemesi.
+
 ### 19.11.2026 görsel tasarım ve kaynak genişletmesi
 
 Desktop simgesi kullanıcının Yıldırım Technologies görselindeki mavi Y işaretinden türetildi;
@@ -293,7 +307,7 @@ Test: `tests/test_server.py::test_desktop_publish_auto_syncs_floemway` uçtan uc
   - `USERATTRIBUTE()` web'de boş dönüyor; kullanıcı öznitelikleri ekranı yok.
 - **App eksikleri:** kitleler (audiences); ilk sürümde tek erişim listesi var, şema buna uygun.
 - **Görsellerin bilinen sınırları** (kullanıcı ileride geliştirmek istiyor):
-  - Ölçeklenince yazı boyutu ölçeklenmiyor.
+  - Tüm içerik artık tuvalle birlikte ölçekleniyor; küçük ekranda okunabilirlik, metin taşması ve düzen varyantları açık işler (yukarıdaki inceleme).
   - Harita kararı bekliyor.
   - Detaya gitte sağ tık menüsü, gizli sayfa ve çok adımlı geri yığını yok; başlık düğmesi ve tek adım geri var.
   - Trend göstergesi yalnızca kart/KPI'da var, "geçen yılın aynı dönemi" seçeneği yok.

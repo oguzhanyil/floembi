@@ -11,6 +11,10 @@ Bu depodaki ilk dilim semantik çekirdektir:
 
 Mimari kararlar ve gerekçeleri `research/notes/99-floem-bi-sentez.md` dosyasındadır.
 
+Power BI dallarının iş mantığı, güncel demoların farkları, metin/çözünürlük sorunları ve
+öncelikli 15 geliştirme maddesi: [Tasarım ve ürün incelemesi](docs/floem-bi-tasarim-ve-urun-incelemesi.md)
+(19.11.2026; analiz ve öneri, uygulama tamamlanma listesi değildir).
+
 ## Kurulum ve çalıştırma
 
 ```bash
