@@ -82,8 +82,9 @@ export function AgDataGrid({
     } satisfies ColDef<GridRow>] : []),
   ], [columns, hidden, format.gridFilters, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
 
-  useEffect(() => { grid.current?.api.redrawRows(); }, [selected, selectedKey, rows]);
-  const exportCsv = () => grid.current?.api.exportDataAsCsv({
+  // React ref'i Grid API hazır olmadan atanabilir (özellikle StrictMode'da).
+  useEffect(() => { grid.current?.api?.redrawRows(); }, [selected, selectedKey, rows]);
+  const exportCsv = () => grid.current?.api?.exportDataAsCsv({
     fileName: "floem-tablo.csv",
     skipPinnedBottom: true,
     processCellCallback: ({ value }) => {
