@@ -132,7 +132,8 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   }, [openPath]);
 
   useEffect(() => {
-    if (!doc) return;
+    // Vite HMR arayüzü yenilerken açık Electron sürecinde eski preload kalabilir.
+    if (!doc || !window.floem?.onOpenFile) return;
     return window.floem.onOpenFile((path) => { void openPath(path); });
     // Yalnızca ilk belge geldikten sonra dosya açma olaylarını dinle.
     // eslint-disable-next-line react-hooks/exhaustive-deps

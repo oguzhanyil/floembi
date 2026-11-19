@@ -15,7 +15,7 @@ interface Window {
     saveFileDialog(defaultName: string): Promise<string | null>;
     setDocState(state: { name: string; dirty: boolean }): void;
     closeNow(): void;
-    onOpenFile(cb: (path: string) => void): () => void;
+    onOpenFile?(cb: (path: string) => void): () => void;
     onSaveAndClose(cb: () => void): () => void;
   };
 }
