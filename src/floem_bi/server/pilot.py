@@ -31,8 +31,8 @@ def bootstrap(directory: Path, email: str, name: str, password: str) -> None:
         raise ValueError("Geçerli bir yönetici e-posta adresi girin.")
     if not name or len(name) > 120:
         raise ValueError("Yönetici adı 1-120 karakter olmalı.")
-    if len(password) < 12 or len(password) > 200:
-        raise ValueError("Yönetici şifresi 12-200 karakter olmalı.")
+    if len(password) < 8 or len(password) > 200:
+        raise ValueError("Yönetici şifresi 8-200 karakter olmalı.")
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     engine = db.make_engine(f"sqlite:///{(directory / 'floem.db').as_posix()}")
@@ -65,8 +65,8 @@ def run_tunnel() -> int:
 
 def change_admin_password(directory: Path, password: str) -> None:
     """Yerel yönetici şifresini gizli istemden değiştirir."""
-    if len(password) < 12 or len(password) > 200:
-        raise ValueError("Yönetici şifresi 12-200 karakter olmalı.")
+    if len(password) < 8 or len(password) > 200:
+        raise ValueError("Yönetici şifresi 8-200 karakter olmalı.")
     if not pilot_config.server_secret(directory):
         raise ValueError("Pilot sunucu anahtarı yok; şifre değiştirilmedi.")
     engine = db.make_engine(f"sqlite:///{(directory.resolve() / 'floem.db').as_posix()}")
@@ -92,13 +92,13 @@ def main() -> None:
             directory = pilot_config.data_dir()
             email = input("Yönetici e-postası: ")
             name = input("Yönetici adı: ")
-            password = getpass.getpass("Yönetici şifresi (en az 12 karakter): ")
+            password = getpass.getpass("Yönetici şifresi (en az 8 karakter): ")
             if password != getpass.getpass("Şifre tekrar: "):
                 raise ValueError("Şifreler eşleşmiyor.")
             bootstrap(directory, email, name, password)
             print(f"Pilot alanı hazır: {directory}")
         elif args.command == "admin-password":
-            password = getpass.getpass("Yeni yönetici şifresi (en az 12 karakter): ")
+            password = getpass.getpass("Yeni yönetici şifresi (en az 8 karakter): ")
             if password != getpass.getpass("Şifre tekrar: "):
                 raise ValueError("Şifreler eşleşmiyor.")
             change_admin_password(pilot_config.data_dir(), password)

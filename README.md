@@ -116,7 +116,8 @@ portundaki süreç değişmez. `cloudflare-setup`, bu alan adına ait mevcut
 `bi.floemdata.com` DNS kaydını oluşturur. Başka bir DNS kaydı varsa üzerine yazmaz. Tünel
 belirtecini Windows Kimlik Bilgisi Yöneticisi'ne kaydeder; belirteç komut satırına yazılmaz.
 Yönetici şifresini daha sonra gizli istemle değiştirmek için
-`.venv\Scripts\python -m floem_bi.server.pilot admin-password` kullanın.
+`.venv\Scripts\python -m floem_bi.server.pilot admin-password` kullanın. Yönetici şifresi
+en az 8 karakter olmalıdır.
 
 Sunucu açıkken ikinci terminalde tüneli başlatın:
 

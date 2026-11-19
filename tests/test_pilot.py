@@ -87,20 +87,24 @@ def test_pilot_admin_password_rotation(tmp_path, monkeypatch):
     monkeypatch.setattr(pilot_config, "save_server_secret", lambda path, value: secrets.__setitem__(str(path), value))
     monkeypatch.setattr("floem_bi.server.pilot.keyring.get_password", lambda _service, name: temp.get(name))
     monkeypatch.setattr("floem_bi.server.pilot.keyring.delete_password", lambda _service, name: temp.pop(name))
-    bootstrap(directory, "admin@floemdata.com", "Yönetici", "Temporary.Pass.123")
-    change_admin_password(directory, "New.Strong.Pass.456")
+    with pytest.raises(ValueError, match="8-200"):
+        bootstrap(directory, "admin@floemdata.com", "Yönetici", "1234567")
+    bootstrap(directory, "admin@floemdata.com", "Yönetici", "Abc12345")
+    with pytest.raises(ValueError, match="8-200"):
+        change_admin_password(directory, "1234567")
+    change_admin_password(directory, "Sifre123")
     assert pilot_config.TEMP_ADMIN_PASSWORD_NAME not in temp
     app = TestClient(create_server(ServerSettings(data_dir=directory, secret=secrets[str(directory)],
                                                  seed_users=False, pilot=True)))
     assert app.post("/api/auth/login", json={"email": "admin@floemdata.com",
-                                               "password": "Temporary.Pass.123"}).status_code == 401
+                                               "password": "Abc12345"}).status_code == 401
     assert app.post("/api/auth/login", json={"email": "admin@floemdata.com",
-                                               "password": "New.Strong.Pass.456"}).status_code == 200
+                                               "password": "Sifre123"}).status_code == 200
     for _ in range(10):
         assert app.post("/api/auth/login", json={"email": "admin@floemdata.com",
                                                    "password": "yanlis"}).status_code == 401
     assert app.post("/api/auth/login", json={"email": "admin@floemdata.com",
-                                               "password": "New.Strong.Pass.456"}).status_code == 429
+                                               "password": "Sifre123"}).status_code == 429
 
 
 def test_pilot_refuses_development_users(tmp_path):
