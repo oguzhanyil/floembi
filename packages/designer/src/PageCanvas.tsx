@@ -1,9 +1,9 @@
-import type { FilterRef, ModelColumn, ReportPage, Visual, VisualState } from "@floem/client";
+import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
   visualMotion, visualStyle,
-  visualIsVisible,
-  type CrossFilter, type DrillTarget, type QueryFn,
+  visualIsVisible, rowActionValue,
+  type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
 import { useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 
@@ -102,7 +102,7 @@ export function PageCanvas({
   visibleOverrides: Record<string, boolean>;
   previewStates: Record<string, VisualState>;
   onPreviewState: (id: string, state: VisualState) => void;
-  onAction: (visual: Visual) => void;
+  onAction: (visual: Visual, action?: VisualAction, source?: ActionValue) => void;
   /** Detaya git hedeflerini bulmak için tüm sayfalar */
   pages: ReportPage[];
   /** Detay sayfasına gelinmişse, gelinen değerin filtreleri */
@@ -242,7 +242,7 @@ export function PageCanvas({
               role={previewActions && v.format.action && v.type !== "button" ? "button" : undefined}
               tabIndex={previewActions && v.format.action && v.type !== "button" ? 0 : undefined}
               onKeyDown={(e) => { if (previewActions && v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAction(v); } }}
-              onClick={(e) => { if (previewActions && v.format.action) { e.stopPropagation(); onAction(v); } }}
+              onClick={(e) => { if (previewActions && v.type !== "button" && v.format.action) { e.stopPropagation(); onAction(v); } }}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 if (!previewActions) onSelect(v.id);
@@ -291,6 +291,10 @@ export function PageCanvas({
                   extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, previewActions ? previewStates : {}, v.id)]}
                   detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
                   onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
+                  onRowAction={previewActions && v.format.rowAction ? (value) => onAction(v, v.format.rowAction!.action,
+                    rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
+                  onAction={previewActions ? (action) => onAction(v, action) : undefined}
+                  pageWidth={page.width} pageHeight={page.height}
                   dataRev={dataRev}
                   cross={cross}
                   onCross={(value) => setCross(toggleCross(v, cross, value))}

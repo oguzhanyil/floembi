@@ -1,7 +1,8 @@
-import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualState, VisualType } from "@floem/client";
+import type { FilterRef, ModelColumn, ModelTable, ReportDefinition, ReportPage, ValueRef, Visual, VisualAction, VisualState, VisualType } from "@floem/client";
 import {
-  DrillBanner, VISUAL_DEFS, defaultAgg, defaultRole, newId, resolveVisualAction, sameField, snap, visualIsVisible,
-  type CrossFilter, type QueryFn, type WellKey,
+  DrillBanner, VISUAL_DEFS, crossFiltersFor, defaultAgg, defaultRole, newId, resolveVisualAction, runMeasureAction,
+  sameField, slicerFilters, snap, visualIsVisible,
+  type ActionValue, type CrossFilter, type QueryFn, type WellKey,
 } from "@floem/report";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
@@ -45,6 +46,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const [previewActions, setPreviewActions] = useState(false);
   const [previewVisibility, setPreviewVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [previewStates, setPreviewStates] = useState<Record<string, VisualState>>({});
+  const [actionRev, setActionRev] = useState(0);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [cross, setCross] = useState<CrossFilter | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   // Detaya git (drill-through): hedef sayfa, filtreler, geri dönülecek sayfa
@@ -97,7 +100,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
-  const dataRev = host.dataRev;
+  const dataRev = `${host.dataRev}:${actionRev}`;
 
   const columnOf = useCallback(
     (table: string, column: string): ModelColumn | undefined =>
@@ -320,19 +323,34 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   if (!page) return null;
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
-  function runAction(v: Visual) {
-    const action = resolveVisualAction(v, report.pages, page.id);
+  function runAction(v: Visual, chosen?: VisualAction, source?: ActionValue) {
+    const action = resolveVisualAction(v, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
       setPageId(action.pageId);
       setSelectedId(null);
       setCross(null);
-      setDrill(null);
+      setDrill(action.filters?.length ? { pageId: action.pageId, from: page.id, filters: action.filters, label: action.label ?? "Satır değeri" } : null);
     } else if (action.type === "reset") {
       setCross(null);
       setDrill(null);
       setPreviewVisibility({});
       setPreviewStates(Object.fromEntries(report.pages.flatMap((item) => item.visuals.filter((v) => v.type === "slicer").map((v) => [v.id, {}]))));
+    } else if (action.type === "url") {
+      window.open(action.url, "_blank", "noopener,noreferrer");
+    } else if (action.type === "measure") {
+      const sourceFilter: FilterRef[] = action.source?.table && action.source.column && action.source.value !== null
+        ? [{ table: action.source.table, column: action.source.column, op: "in", values: [action.source.value] }] : [];
+      const filters = [...v.filters, ...pageFilters, ...crossFiltersFor(v, cross),
+        ...slicerFilters(page.visuals, previewStates), ...sourceFilter];
+      setActionNotice("FDX ölçüsü hesaplanıyor…");
+      void runMeasureAction(host.run, action.measure, filters).then(setActionNotice)
+        .catch((error) => setActionNotice(`FDX ölçüsü çalıştırılamadı: ${String(error)}`));
+    } else if (action.type === "function") {
+      if (action.name === "refresh") setActionRev((rev) => rev + 1);
+      else if (action.name === "clearSelection") { setCross(null); setDrill(null); }
+      else if (action.name === "filterByValue" && action.source?.table && action.source.column && action.source.value !== null)
+        setCross({ visualId: v.id, table: action.source.table, column: action.source.column, value: action.source.value });
     } else {
       const target = page.visuals.find((item) => item.id === action.visualId);
       if (!target) return;
@@ -345,31 +363,19 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
 
   return (
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}>
+      <button className="panes-toggle" type="button" aria-label={canvasFocus ? "Görselleştirmeler ve Veri panellerini göster" : "Görselleştirmeler ve Veri panellerini gizle"}
+        aria-expanded={!canvasFocus} title={canvasFocus ? "Sağ panelleri göster" : "Sağ panelleri gizle"}
+        onClick={() => setCanvasFocus((current) => !current)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
       <div className="report-main">
         <div className="canvas-shell">
-        <div className="design-toolbar" aria-label="Serbest tasarım araçları">
-          <span className="design-toolbar-label">Serbest tasarım</span>
-          <button type="button" aria-pressed={previewActions} onClick={() => {
+        <button className={`canvas-mode-toggle ${pageFilters.length ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
+          title={previewActions ? "Etkileşim açık · tasarıma dön" : "Serbest tasarım açık · etkileşimi dene"} onClick={() => {
             setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
-          }}>{previewActions ? "Tasarımı düzenle" : "Etkileşimi dene"}</button>
-          <button type="button" onClick={() => setCanvasFocus((current) => !current)}
-            aria-pressed={canvasFocus} title="Tuval için daha geniş alan aç">{canvasFocus ? "Panelleri göster" : "Tuvali genişlet"}</button>
-          <label className="design-page-color" title="Sayfa arka planı">Sayfa <input type="color" value={page.backgroundColor && /^#[0-9a-f]{6}$/i.test(page.backgroundColor) ? page.backgroundColor : "#ffffff"}
-            onChange={(e) => updatePage((p) => ({ ...p, backgroundColor: e.target.value }))} /></label>
-          {selected && <>
-            <span className="design-toolbar-separator" />
-            <button type="button" onClick={() => duplicateVisual(selected)} title="Seçili nesnenin kopyasını oluştur">Çoğalt</button>
-            <button type="button" onClick={() => shiftLayer(selected.id, -1)} disabled={page.visuals[0]?.id === selected.id} title="Bir katman geriye al">Geriye</button>
-            <button type="button" onClick={() => shiftLayer(selected.id, 1)} disabled={page.visuals.at(-1)?.id === selected.id} title="Bir katman öne al">Öne</button>
-            <button type="button" onClick={() => updateVisual({ ...selected, format: { ...selected.format, locked: !selected.format.locked } })}
-              aria-pressed={!!selected.format.locked} title="Nesneyi kilitle veya kilidi aç">{selected.format.locked ? "Kilidi aç" : "Kilitle"}</button>
-            <label className="design-opacity" title="Seçili nesnenin saydamlığı">Opaklık
-              <input type="range" min="0" max="100" value={Math.round((selected.format.opacity ?? 1) * 100)}
-                onChange={(e) => updateVisual({ ...selected, format: { ...selected.format, opacity: Number(e.target.value) / 100 } })} />
-              <span>{Math.round((selected.format.opacity ?? 1) * 100)}%</span>
-            </label>
-          </>}
-        </div>
+          }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+        </button>
         <PageCanvas
           page={page}
           previewActions={previewActions}
@@ -467,8 +473,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       <VisualizationsPane
         page={page}
         pages={report.pages}
+        tables={tables}
         onPageChange={(next) => updatePage(() => next)}
         visual={selected}
+        onDuplicate={() => selected && duplicateVisual(selected)}
+        onShiftLayer={(step) => selected && shiftLayer(selected.id, step)}
         onPickType={pickType}
         onChange={updateVisual}
         onDropToWell={(well, f) => selected && updateVisual(addField(selected, f, well.key, well.slot))}
@@ -479,6 +488,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         }}
       />
       <FieldsPane tables={tables} visual={selected} onToggle={toggleField} onEditMeasure={host.onEditMeasure} />
+      {actionNotice && <div className="v-action-notice" role="status"><span>{actionNotice}</span>
+        <button type="button" aria-label="Mesajı kapat" onClick={() => setActionNotice(null)}>✕</button></div>}
     </div>
   );
 }

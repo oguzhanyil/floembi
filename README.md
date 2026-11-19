@@ -106,16 +106,25 @@ PBIP sayfa gezinme düğmelerinin hedefleri aktarılır. Şeffaf tıklama katman
 şekle eylem olarak bağlanır; altta nesne yoksa görünmez bir düğme oluşturulur. Böylece menü ve kartlar
 tıklanabilir, katman içerik üstünü kapatmaz. Veri bulunmayan grafik ve kartlar **TASLAK · VERİ BEKLENİYOR**
 önizlemesini gösterir; çubuklar gerçek veri değildir. 1920 piksel genişliğindeki raporlar açılırken
-tuval geniş görünür, **Panelleri göster** düğmesiyle alan ve biçim panelleri açılır.
+tuval geniş görünür; sağ üstteki ok Görselleştirmeler ve Veri panellerini birlikte açıp kapatır.
 
 #### Etkileşimli rapor nesneleri
 
 - **Görselleştirmeler → Ekle → Düğme** ile sayfaya düğme ekleyin. Nesneyi seçip **Biçim → Düğme**
   bölümünden yazısını, simgesini, dolu/çerçeveli/sade stilini ve renklerini ayarlayın.
-- **Biçim → Tıklama olayı** bölümünde sayfaya git, sonraki/önceki sayfa, filtreleri sıfırla veya
-  nesneyi göster/gizle eylemini seçin. Metin, şekil, resim ve kartlara da tıklama olayı atanabilir.
+- **Biçim → Tıklama olayı** bölümünde sayfaya git, sonraki/önceki sayfa, filtreleri sıfırla,
+  nesneyi göster/gizle, web adresini aç, fonksiyon çalıştır veya menü aç eylemini seçin.
+  Menüye yazısı, simgesi ve eylemi ayrı ayrı ayarlanabilen öğeler eklenir. Metin, şekil, resim ve
+  kartlara da tıklama olayı atanabilir.
   Hedef nesneyi başlangıçta saklamak için onun **Biçim → Görünüm → Başlangıçta gizle** seçeneğini açın.
-- Desktop'ta **Etkileşimi dene** ile düğmeleri sınayın; **Tasarımı düzenle** ile tuvale dönün.
+- **Fonksiyon çalıştır** ile görünümü yeniden sorgulayın, seçimi temizleyin veya modelde kayıtlı
+  bir FDX ölçüsünü hesaplayıp sonucunu ekranda gösterin. Özel JavaScript çalıştırılmaz.
+- Tablo veya matris için **Biçim → Satır eylemi** bölümünde her satıra ikonlu hücre ekleyin.
+  Hazır simge veya en fazla 256 KB PNG/JPG/WebP ikon seçilebilir. Satır alanı bir hedef sayfaya
+  filtre değeri olarak taşınabilir; web adresinde `{value}` yer tutucusuyla kullanılabilir veya
+  satır filtresiyle FDX ölçüsü hesaplanabilir. Web bağlantıları yalnızca HTTP(S) adreslerini açar.
+- Desktop'ta tuvalin sol üstündeki imleç simgesine basarak etkileşim önizlemesini açıp kapatın.
+  Tuval rengi ve seçili nesnenin katman, kilit ve opaklık ayarları Görselleştirmeler panelindedir.
   Kaydedilip yayımlanan raporda eylemler web görüntüleyicisinde de çalışır. Görünürlük ve filtre
   değişiklikleri yalnızca izleyicinin oturumundadır; rapor tasarımını değiştirmez.
 
@@ -142,7 +151,7 @@ uygulamasında ve geliştirme penceresinde aynı simge kullanılır.
 - **Biçim** panelinde hazır stiller, arka plan, kenarlık, köşe, gölge, boşluk ve başlık ayarlanır.
   Şekil, görsel dosyası ve canlanan sayı nesneleri eklenebilir. Belirme, yükselme ve hafif vurgu
   hareketleri Desktop ile web'de aynı çalışır; sistemin hareket azaltma tercihi uygulanır.
-- Tuval üstündeki **Serbest tasarım** araçlarıyla sayfa rengi değiştirilir. Seçili nesne çoğaltılır,
+- **Görselleştirmeler → Biçim** bölümünden sayfa rengi değiştirilir. Seçili nesne çoğaltılır,
   öne/geriye alınır, kilitlenir ve opaklığı ayarlanır. Nesneleri sürükleyip boyutlandırırken hizalama
   çizgileri görünür; `Alt` basılıyken ızgaraya yapışmadan konumlandırılır.
 

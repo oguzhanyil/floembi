@@ -1,19 +1,32 @@
 /* ---- Rapor görünümü ---- */
-.report-view { display: grid; grid-template-columns: minmax(0, 1fr) 260px 240px; height: 100%; min-height: 0; }
+.report-view { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 260px 240px; height: 100%; min-height: 0; }
 .report-view.canvas-focus { grid-template-columns: minmax(0, 1fr); }
 .report-view.canvas-focus > .viz-pane, .report-view.canvas-focus > .data-pane { display: none; }
 .report-main { display: grid; grid-template-rows: 1fr auto; min-width: 0; min-height: 0; background: #e9e8e6; }
-.canvas-shell { display: grid; grid-template-rows: 44px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.canvas-shell { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
 .page-outer { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; height: 100%; }
-.design-toolbar { position: relative; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 5px 8px; background: #f7f9fc; border-bottom: 1px solid #d7dfe9; white-space: nowrap; font-size: 11px; }
-.design-toolbar-label { font-weight: 700; color: #254063; padding: 0 4px; }
-.design-toolbar button { border: 0; border-radius: 6px; background: transparent; padding: 6px 8px; font-size: 11px; }
-.design-toolbar button:hover:not(:disabled), .design-toolbar button[aria-pressed="true"] { background: #eaf1ff; color: #2059ac; }
-.design-toolbar button:disabled { opacity: .35; }
-.design-toolbar-separator { width: 1px; height: 22px; background: #d9e2ee; margin: 0 4px; }
-.design-page-color, .design-opacity { display: flex; align-items: center; gap: 5px; color: #516276; }
-.design-page-color input { width: 25px; height: 25px; padding: 0; border: 0; background: none; cursor: pointer; }
-.design-opacity input { width: 80px; accent-color: #2563eb; }
+.panes-toggle, .canvas-mode-toggle { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #cbd7e7; border-radius: 10px; background: rgba(255,255,255,.96); color: #335478; box-shadow: 0 4px 14px #102a4d22; cursor: pointer; }
+.panes-toggle:hover, .canvas-mode-toggle:hover, .canvas-mode-toggle[aria-pressed="true"] { color: #155ec0; border-color: #8db7ef; background: #eaf3ff; }
+.panes-toggle svg, .canvas-mode-toggle svg { width: 19px; height: 19px; }
+.panes-toggle { position: absolute; z-index: 80; right: 12px; top: 12px; }
+.panes-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.canvas-mode-toggle { position: absolute; z-index: 40; left: 12px; top: 12px; }
+.canvas-mode-toggle.with-drill { top: 50px; }
+.report-view > .data-pane h3 { padding-right: 52px; }
+.fmt-actions { display: flex; gap: 5px; }
+.fmt-actions button { flex: 1; padding: 6px 3px; font-size: 11px; }
+.fmt-actions button:disabled { opacity: .4; }
+.action-menu-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.action-menu-item { display: flex; flex-direction: column; gap: 6px; padding: 9px; border: 1px solid #d6e2f2; border-radius: 8px; background: #f7faff; }
+.action-menu-item-head { display: flex; align-items: center; justify-content: space-between; color: #37516f; font-size: 11px; }
+.action-menu-item-head button { border: 0; background: transparent; color: #6b7f97; cursor: pointer; }
+.action-menu-item-controls { display: flex; gap: 4px; }
+.action-menu-item-controls button:disabled { opacity: .35; cursor: default; }
+.fmt-body input[type="file"] { max-width: 100%; font-size: 11px; }
+.row-icon-preview { display: flex; align-items: center; gap: 8px; }
+.row-icon-preview img { width: 26px; height: 26px; object-fit: contain; }
+.row-icon-preview button { border: 0; background: transparent; color: #185aa9; cursor: pointer; font-size: 11px; }
+.action-add { padding: 7px 9px; border: 1px dashed #8db7ef; border-radius: 7px; background: #f2f7ff; color: #185aa9; cursor: pointer; }
 
 .visual:hover { border-color: var(--border-strong); }
 .visual.drop { border-color: var(--accent); background: var(--accent-soft); }

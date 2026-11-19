@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SERIES, formatCompact, formatValue, isNumericType, valueLabel } from "./reportUtils";
 
 import type { CrossSelect } from "./charts";
+import { ActionGlyph } from "./ActionGlyph";
+import { safeActionIcon } from "./visualActions";
 
 type Raw = string | number | boolean | null;
 
@@ -27,7 +29,7 @@ const ROW_H = 26;
 
 /** Sanal kaydırmalı tablo: başlığa tıklayınca sıralar, toplam satırı, satıra tıklayınca çapraz filtre. */
 export function DataGrid({
-  result, selected, onSelect, selectedKey, onSelectRow, sort, onSort, format,
+  result, selected, onSelect, selectedKey, onSelectRow, onRowAction, sort, onSort, format,
 }: {
   result: VisualResult;
   selected?: unknown;
@@ -35,6 +37,7 @@ export function DataGrid({
   /** Satır seçimi (ana-ayrıntı): seçili satırın gruplama değerleri (JSON) */
   selectedKey?: string;
   onSelectRow?: (row: Raw[]) => void;
+  onRowAction?: (value: Raw) => void;
   sort?: VisualState["sort"];
   onSort?: (s: VisualState["sort"]) => void;
   format: VisualFormat;
@@ -77,7 +80,8 @@ export function DataGrid({
     const ratio = Math.min(1, need / shrinkable);
     return natural.map((w, i) => (columns[i].kind === "group" ? w - (w - 72) * ratio : w));
   }, [natural, boxW, columns]);
-  const template = widths.map((w) => `${w}px`).join(" ") + " 1fr";
+  const rowAction = format.rowAction;
+  const template = widths.map((w) => `${w}px`).join(" ") + (rowAction ? " 48px" : "") + " 1fr";
 
   return (
     <div className="v-grid" ref={scroller}>
@@ -96,6 +100,7 @@ export function DataGrid({
             </div>
           );
         })}
+        {rowAction && <div className="v-grid-th action" title={rowAction.label}>⋯</div>}
       </div>
       <div style={{ height: v.getTotalSize(), position: "relative" }}>
         {v.getVirtualItems().map((it) => {
@@ -114,6 +119,13 @@ export function DataGrid({
                   {fmt(val, columns[ci])}
                 </div>
               ))}
+              {rowAction && <div className="v-row-action-cell"><button type="button" title={rowAction.label}
+                aria-label={`${rowAction.label}: ${String(r[rowAction.sourceIndex] ?? "boş")}`}
+                disabled={rowAction.sourceIndex < 0 || rowAction.sourceIndex >= r.length}
+                onClick={(e) => { e.stopPropagation(); onRowAction?.(r[rowAction.sourceIndex] ?? null); }}>
+                {safeActionIcon(rowAction.iconData)
+                  ? <img className="v-row-action-image" src={safeActionIcon(rowAction.iconData)} alt="" /> : <ActionGlyph icon={rowAction.icon} />}
+              </button></div>}
             </div>
           );
         })}
@@ -129,6 +141,7 @@ export function DataGrid({
               </div>
             ),
           )}
+          {rowAction && <div />}
         </div>
       )}
       {result.truncated && <div className="v-note">İlk {rows.length.toLocaleString("tr-TR")} satır gösteriliyor</div>}

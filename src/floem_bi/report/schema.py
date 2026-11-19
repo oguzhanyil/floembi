@@ -128,9 +128,22 @@ def rename_column_refs(report: dict, table: str, old: str, new: str) -> None:
 
 
 def rename_measure_refs(report: dict, old: str, new: str) -> None:
+    def action_refs(action: dict) -> None:
+        if not isinstance(action, dict):
+            return
+        if action.get("type") == "function" and action.get("functionName") == "measure" and \
+                (action.get("measure") or "").lower() == old.lower():
+            action["measure"] = new
+        for item in action.get("items") or []:
+            if isinstance(item, dict):
+                action_refs(item.get("action"))
+
     for page in report.get("pages", []):
         for v in page.get("visuals", []):
             for key in ("values", "target"):
                 for ref in v.get(key, []):
                     if (ref.get("measure") or "").lower() == old.lower():
                         ref["measure"] = new
+            fmt = v.get("format") or {}
+            action_refs(fmt.get("action"))
+            action_refs((fmt.get("rowAction") or {}).get("action"))

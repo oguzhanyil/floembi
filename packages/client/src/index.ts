@@ -392,12 +392,14 @@ export interface VisualFormat {
   imageData?: string;
   imageFit?: "contain" | "cover";
   altText?: string;
-  /** Tıklama olayı; sayfa geçişi, filtre sıfırlama veya nesne görünürlüğü. */
-  action?: { type: "none" | "page" | "next" | "previous" | "reset" | "toggle"; pageId?: string; visualId?: string };
+  /** Düğme/nesne tıklama olayı. Yalnızca tanımlı işlevler çalıştırılır. */
+  action?: VisualAction;
+  /** Tablo ve matris satırlarının sağındaki ikonlu eylem. */
+  rowAction?: { label: string; icon: ActionIcon; iconData?: string; sourceIndex: number; action: VisualAction };
   buttonStyle?: "solid" | "outline" | "ghost";
   buttonColor?: string;
   buttonTextColor?: string;
-  buttonIcon?: "none" | "arrow" | "back" | "refresh" | "eye";
+  buttonIcon?: ActionIcon;
   buttonInvisible?: boolean;
   /** Başka bir düğmenin göstereceği nesne başlangıçta saklanır. */
   initiallyHidden?: boolean;
@@ -415,6 +417,19 @@ export interface VisualFormat {
   slicerStyle?: "list" | "dropdown" | "range";
   /** Satır renklendirme, yazı boyutu vb. */
   [k: string]: unknown;
+}
+
+export type ActionIcon = "none" | "arrow" | "back" | "refresh" | "eye" | "link" | "play" | "file" | "menu";
+
+export interface VisualAction {
+  type: "none" | "page" | "next" | "previous" | "reset" | "toggle" | "url" | "function" | "menu";
+  pageId?: string;
+  visualId?: string;
+  url?: string;
+  functionName?: "refresh" | "clearSelection" | "filterByValue" | "measure";
+  /** Modelde kayıtlı FDX ölçüsü. */
+  measure?: string;
+  items?: { id: string; label: string; icon?: ActionIcon; action: VisualAction }[];
 }
 
 export interface VisualState {

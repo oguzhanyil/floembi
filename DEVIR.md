@@ -12,11 +12,17 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 ## 1. Proje ve kullanıcı
 
 **19.11.2026 etkileşim güncellemesi:** Rapor tasarımcısına `button` nesnesi, tıklama olayları
-(sayfaya git, sonraki/önceki, filtreleri sıfırla, nesne göster/gizle), başlangıçta gizlenen nesneler
-ve **Etkileşimi dene** modu eklendi. Aynı olaylar `packages/report/src/visualActions.ts` üzerinden
-Desktop ve web görüntüleyicisinde çözülür. PBIP içe aktarıcısı `PageNavigation` düğmelerini
-alttaki kart/metin/şekle bağlar; içerik yoksa saydam düğme üretir. Pavezyum yönetici panosunda
-menü ve yeni düğmeyle sayfa geçişi Desktop duman testinde doğrulandı. Taslaklarda gerçek veri yoktur.
+(sayfaya git, sonraki/önceki, filtreleri sıfırla, nesne göster/gizle, URL aç, fonksiyon, menü),
+başlangıçta gizlenen nesneler ve ikonlu etkileşim önizleme anahtarı eklendi. Sağ üst ok Veri ve
+Görselleştirmeler panellerini birlikte açar/kapatır; sayfa rengi ve nesne düzeni araçları Biçim panelindedir.
+Tablo ve matriste satır eylem hücresi hazır veya yüklenen ikonla URL'ye kodlanmış `{value}` değeri
+aktarır, hedef sayfayı aynı değerle filtreler ya da satır filtresiyle kayıtlı FDX ölçüsünü hesaplar.
+Yalnızca HTTP(S) URL ve tanımlı fonksiyonlar çalıştırılır. Aynı olaylar
+`packages/report/src/visualActions.ts` üzerinden Desktop ve web görüntüleyicisinde çözülür.
+PBIP içe aktarıcısı `PageNavigation` düğmelerini alttaki kart/metin/şekle bağlar; içerik yoksa
+saydam düğme üretir. Pavezyum yönetici panosunda menü ve yeni düğmeyle sayfa geçişi, sentetik
+veride satır değeriyle detay sayfası ve FDX ölçüsü Desktop duman testinde doğrulandı.
+PBIP taslaklarında gerçek veri yoktur.
 
 - **Floem BI**, Power BI'ın karşılığı olan, kendi sunucuda çalışan, ticari ve kapalı kaynak bir BI ürünü.
   - Üç parçası var: Desktop (Electron), floembi.app (web sunucusu) ve Floemway (şirket içi ağ geçidi).
@@ -151,7 +157,7 @@ Kullanıcı Pavezyum taslaklarının görünmediğini bildirdi. Nedeni PBIP'deki
 katmanlarının beyaz şekil olarak aktarılması ve 1920×1080 sayfada yalnızca dış kutu boyutunun
 ölçeklenmesi, iç metnin ölçeklenmemesiydi. İçe aktarıcı artık şeffaf katmanları atlar, sayfa arka
 planını ve görünüm biçimini korur; görselin tüm içeriği tuval ölçeğiyle birlikte küçülür. Boş verili
-grafiklerde açıkça taslak olarak işaretlenen önizlemeler gösterilir. Serbest tasarım çubuğunda sayfa
+grafiklerde açıkça taslak olarak işaretlenen önizlemeler gösterilir. Görselleştirmeler panelinde sayfa
 rengi, katman, çoğaltma, kilit ve opaklık araçları bulunur. `local-reports/` altındaki yedi dosya
 yeniden üretildi; önceki sürümleri git dışındaki `data/pbip-before-repair/` klasörüne kopyalandı.
 Gerçek veriye bağlama yine ayrı iştir.

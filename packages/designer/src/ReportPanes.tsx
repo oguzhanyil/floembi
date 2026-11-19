@@ -1,6 +1,6 @@
-import type { Agg, FieldRef, ModelTable, ReportPage, ValueRef, Visual, VisualFormat, VisualType } from "@floem/client";
+import type { ActionIcon, Agg, FieldRef, ModelTable, ReportPage, ValueRef, Visual, VisualAction, VisualFormat, VisualType } from "@floem/client";
 import {
-  AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, valueLabel, type WellDef, type WellKey,
+  AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, safeActionIcon, valueLabel, type WellDef, type WellKey,
 } from "@floem/report";
 import { useState, type ReactNode } from "react";
 import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from "./fields";
@@ -157,19 +157,27 @@ function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: V
   );
 }
 
-function ActionPanel({ visual, page, pages, onChange }: {
-  visual: Visual; page: ReportPage; pages: ReportPage[]; onChange: (v: Visual) => void;
+const ACTION_ICONS: { value: ActionIcon; label: string }[] = [
+  { value: "none", label: "Yok" }, { value: "arrow", label: "İleri" }, { value: "back", label: "Geri" },
+  { value: "refresh", label: "Yenile" }, { value: "eye", label: "Göz" }, { value: "link", label: "Bağlantı" },
+  { value: "play", label: "Çalıştır" }, { value: "file", label: "Dosya" }, { value: "menu", label: "Menü" },
+];
+
+function ActionOptions({ action, onChange, visual, page, pages, measures, allowMenu = false, row = false }: {
+  action: VisualAction; onChange: (action: VisualAction) => void; visual: Visual; page: ReportPage;
+  pages: ReportPage[]; measures: string[]; allowMenu?: boolean; row?: boolean;
 }) {
-  const action = visual.format.action ?? { type: "none" as const };
-  const setAction = (next: VisualFormat["action"]) => onChange({ ...visual, format: { ...visual.format, action: next } });
   const targets = page.visuals.filter((item) => item.id !== visual.id);
-  return <Section title="Tıklama olayı">
+  return <>
     <label>Eylem
       <select value={action.type} onChange={(e) => {
-        const type = e.target.value as NonNullable<VisualFormat["action"]>["type"];
-        setAction({ type,
-          pageId: type === "page" ? pages.find((item) => item.id !== page.id)?.id : undefined,
-          visualId: type === "toggle" ? targets[0]?.id : undefined });
+        const type = e.target.value as VisualAction["type"];
+        onChange({ type,
+          pageId: type === "page" ? pages.find((item) => item.id !== page.id)?.id ?? pages[0]?.id : undefined,
+          visualId: type === "toggle" ? targets[0]?.id : undefined,
+          functionName: type === "function" ? (row ? "filterByValue" : "refresh") : undefined,
+          url: type === "url" ? "" : undefined,
+          items: type === "menu" ? [] : undefined });
       }}>
         <option value="none">Yok</option>
         <option value="page">Sayfaya git</option>
@@ -177,27 +185,136 @@ function ActionPanel({ visual, page, pages, onChange }: {
         <option value="previous">Önceki sayfa</option>
         <option value="reset">Filtreleri sıfırla</option>
         <option value="toggle">Nesneyi göster / gizle</option>
+        <option value="url">Web adresini aç</option>
+        <option value="function">Fonksiyon çalıştır</option>
+        {allowMenu && <option value="menu">Menü aç</option>}
       </select>
     </label>
     {action.type === "page" && <label>Hedef sayfa
-      <select value={action.pageId ?? ""} onChange={(e) => setAction({ type: "page", pageId: e.target.value })}>
+      <select value={action.pageId ?? ""} onChange={(e) => onChange({ ...action, pageId: e.target.value })}>
         <option value="">Sayfa seçin</option>
         {pages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select>
     </label>}
     {action.type === "toggle" && <label>Hedef nesne
-      <select value={action.visualId ?? ""} onChange={(e) => setAction({ type: "toggle", visualId: e.target.value })}>
+      <select value={action.visualId ?? ""} onChange={(e) => onChange({ ...action, visualId: e.target.value })}>
         <option value="">Nesne seçin</option>
         {targets.map((item) => <option key={item.id} value={item.id}>{item.title || (typeof item.format.text === "string" ? item.format.text : "") || `${VISUAL_DEFS[item.type].label} · ${item.id}`}</option>)}
       </select>
     </label>}
-    <p className="hint">Desktop'ta “Etkileşimi dene” ile sınayın. Web raporunda tıklama doğrudan çalışır.</p>
+    {action.type === "url" && <><label>Web adresi
+      <input type="text" value={action.url ?? ""} placeholder="https://..." onChange={(e) => onChange({ ...action, url: e.target.value })} />
+    </label>{row && <p className="hint">Satır değerini adrese eklemek için <code>{"{value}"}</code> yazın. Değer URL için güvenli biçimde kodlanır.</p>}</>}
+    {action.type === "function" && <label>Fonksiyon
+      <select value={action.functionName ?? "refresh"} onChange={(e) => onChange({ ...action, functionName: e.target.value as VisualAction["functionName"] })}>
+        <option value="refresh">Görünümü yeniden sorgula</option>
+        <option value="clearSelection">Seçimi temizle</option>
+        {row && <option value="filterByValue">Satır değeriyle filtrele</option>}
+        <option value="measure">FDX ölçüsünü hesapla</option>
+      </select>
+    </label>}
+    {action.type === "function" && action.functionName === "measure" && <label>FDX ölçüsü
+      <select value={action.measure ?? ""} onChange={(e) => onChange({ ...action, measure: e.target.value })}>
+        <option value="">Ölçü seçin</option>
+        {measures.map((name) => <option key={name} value={name}>{name}</option>)}
+      </select>
+      {!measures.length && <span className="hint">Önce Desktop'ta Yeni ölçü ile FDX ölçüsü oluşturun.</span>}
+    </label>}
+    {row && action.type === "page" && <p className="hint">Seçilen satır alanı hedef sayfaya filtre değeri olarak taşınır.</p>}
+  </>;
+}
+
+function ActionPanel({ visual, page, pages, measures, onChange }: {
+  visual: Visual; page: ReportPage; pages: ReportPage[]; measures: string[]; onChange: (v: Visual) => void;
+}) {
+  const action = visual.format.action ?? { type: "none" as const };
+  const setAction = (next: VisualAction) => onChange({ ...visual, format: { ...visual.format, action: next } });
+  const items = action.items ?? [];
+  const updateItem = (index: number, patch: Partial<(typeof items)[number]>) =>
+    setAction({ ...action, items: items.map((item, i) => i === index ? { ...item, ...patch } : item) });
+  return <Section title="Tıklama olayı">
+    <ActionOptions action={action} onChange={setAction} visual={visual} page={page} pages={pages} measures={measures} allowMenu={visual.type === "button"} />
+    {action.type === "menu" && <div className="action-menu-editor">
+      <div className="well-label">Menü öğeleri</div>
+      {items.map((item, index) => <div className="action-menu-item" key={item.id}>
+        <div className="action-menu-item-head"><strong>{index + 1}. öğe</strong>
+          <div className="action-menu-item-controls">
+            <button type="button" aria-label="Menü öğesini yukarı taşı" disabled={index === 0} onClick={() => {
+              const next = [...items]; [next[index - 1], next[index]] = [next[index], next[index - 1]];
+              setAction({ ...action, items: next });
+            }}>↑</button>
+            <button type="button" aria-label="Menü öğesini aşağı taşı" disabled={index === items.length - 1} onClick={() => {
+              const next = [...items]; [next[index + 1], next[index]] = [next[index], next[index + 1]];
+              setAction({ ...action, items: next });
+            }}>↓</button>
+            <button type="button" aria-label="Menü öğesini kaldır" onClick={() => setAction({ ...action, items: items.filter((_, i) => i !== index) })}>✕</button>
+          </div>
+        </div>
+        <label>Yazı<input type="text" value={item.label} onChange={(e) => updateItem(index, { label: e.target.value })} /></label>
+        <label>Simge<select value={item.icon ?? "arrow"} onChange={(e) => updateItem(index, { icon: e.target.value as ActionIcon })}>
+          {ACTION_ICONS.map((icon) => <option key={icon.value} value={icon.value}>{icon.label}</option>)}
+        </select></label>
+        <ActionOptions action={item.action} onChange={(next) => updateItem(index, { action: next })}
+          visual={visual} page={page} pages={pages} measures={measures} />
+      </div>)}
+      <button type="button" className="action-add" onClick={() => setAction({ ...action, items: [...items, {
+        id: `m${Date.now()}${Math.floor(Math.random() * 1000)}`, label: `Öğe ${items.length + 1}`, icon: "arrow",
+        action: { type: "page", pageId: pages.find((item) => item.id !== page.id)?.id ?? pages[0]?.id },
+      }] })}>+ Menü öğesi ekle</button>
+    </div>}
+    <p className="hint">Soldaki etkileşim ikonunu açarak sınayın. Web raporunda tıklama doğrudan çalışır.</p>
+  </Section>;
+}
+
+function RowActionPanel({ visual, page, pages, measures, onChange }: {
+  visual: Visual; page: ReportPage; pages: ReportPage[]; measures: string[]; onChange: (v: Visual) => void;
+}) {
+  const [iconError, setIconError] = useState<string | null>(null);
+  const rowAction = visual.format.rowAction;
+  const sources = [...visual.group.map((f) => `${f.table}[${f.column}]`),
+    ...(visual.type === "table" ? visual.values.map(valueLabel) : [])];
+  const setRowAction = (patch: Partial<NonNullable<VisualFormat["rowAction"]>>) => {
+    if (!rowAction) return;
+    onChange({ ...visual, format: { ...visual.format, rowAction: { ...rowAction, ...patch } } });
+  };
+  return <Section title="Satır eylemi (ikonlu öğe)">
+    <label className="inline"><input type="checkbox" checked={!!rowAction} onChange={(e) => onChange({ ...visual,
+      format: { ...visual.format, rowAction: e.target.checked ? { label: "Aç", icon: "link", sourceIndex: 0,
+        action: { type: "url", url: "" } } : undefined } })} /> Her satıra eylem ekle</label>
+    {rowAction && <>
+      <label>İpucu<input type="text" value={rowAction.label} onChange={(e) => setRowAction({ label: e.target.value })} /></label>
+      <label>Simge<select value={rowAction.icon} onChange={(e) => setRowAction({ icon: e.target.value as ActionIcon })}>
+        {ACTION_ICONS.map((icon) => <option key={icon.value} value={icon.value}>{icon.label}</option>)}
+      </select></label>
+      <label>Özel ikon (isteğe bağlı)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 256 * 1024) {
+          setIconError("PNG, JPG veya WebP dosyası seçin; en fazla 256 KB.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => { if (typeof reader.result === "string") { setRowAction({ iconData: reader.result }); setIconError(null); } };
+        reader.onerror = () => setIconError("İkon okunamadı.");
+        reader.readAsDataURL(file);
+      }} /></label>
+      {iconError && <p className="hint" role="alert">{iconError}</p>}
+      {safeActionIcon(rowAction.iconData) && <div className="row-icon-preview"><img src={safeActionIcon(rowAction.iconData)} alt="Yüklenen ikon" />
+        <button type="button" onClick={() => setRowAction({ iconData: undefined })}>Özel ikonu kaldır</button></div>}
+      <label>Taşınacak satır alanı<select value={rowAction.sourceIndex} onChange={(e) => setRowAction({ sourceIndex: Number(e.target.value) })}>
+        {sources.map((source, index) => <option key={index} value={index}>{source}</option>)}
+      </select></label>
+      {!sources.length && <p className="hint">Önce tabloya veya matrise alan ekleyin.</p>}
+      <ActionOptions action={rowAction.action} onChange={(next) => setRowAction({ action: next })}
+        visual={visual} page={page} pages={pages} measures={measures} row />
+    </>}
   </Section>;
 }
 
 /** Power BI "Görseli biçimlendir": türün desteklediği seçenekler. */
-function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: ReportPage; pages: ReportPage[]; onChange: (v: Visual) => void }) {
+function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual; page: ReportPage; pages: ReportPage[]; tables: ModelTable[]; onChange: (v: Visual) => void }) {
   const f = visual.format;
+  const measures = tables.flatMap((table) => table.olculer.map((measure) => measure.ad));
   const def = VISUAL_DEFS[visual.type];
   const set = (patch: Partial<VisualFormat>) => onChange({ ...visual, format: { ...f, ...patch } });
   const isPie = visual.type === "pie" || visual.type === "donut";
@@ -248,7 +365,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
           <input type="color" value={typeof f.color === "string" ? f.color : "#201f1e"} onChange={(e) => set({ color: e.target.value })} />
         </label>
       </Section>
-      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+      <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />
       </>
     );
   }
@@ -266,7 +383,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
         </label>
         <label>Metin<input type="text" value={typeof f.text === "string" ? f.text : ""} onChange={(e) => set({ text: e.target.value })} /></label>
       </Section>
-      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+      <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />
     </>
   );
 
@@ -289,7 +406,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
         </label>
         <label>Alternatif metin<input type="text" value={f.altText ?? ""} onChange={(e) => set({ altText: e.target.value })} /></label>
       </Section>
-      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+      <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />
     </>
   );
 
@@ -305,15 +422,14 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
           <option value="solid">Dolu</option><option value="outline">Çerçeveli</option><option value="ghost">Sade</option>
         </select></label>
         <label>Simge<select value={f.buttonIcon ?? "arrow"} onChange={(e) => set({ buttonIcon: e.target.value as VisualFormat["buttonIcon"] })}>
-          <option value="none">Yok</option><option value="arrow">İleri oku</option><option value="back">Geri oku</option>
-          <option value="refresh">Yenile</option><option value="eye">Göster</option>
+          {ACTION_ICONS.map((icon) => <option key={icon.value} value={icon.value}>{icon.label}</option>)}
         </select></label>
         <div className="fmt-row">
           <label>Düğme rengi<input type="color" value={/^#[0-9a-f]{6}$/i.test(f.buttonColor ?? "") ? f.buttonColor : "#2563eb"} onChange={(e) => set({ buttonColor: e.target.value })} /></label>
           <label>Yazı rengi<input type="color" value={/^#[0-9a-f]{6}$/i.test(f.buttonTextColor ?? "") ? f.buttonTextColor : "#ffffff"} onChange={(e) => set({ buttonTextColor: e.target.value })} /></label>
         </div>
       </Section>
-      <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+      <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />
     </>
   );
 
@@ -391,7 +507,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
         </Section>
       )}
       {(visual.type === "table" || visual.type === "matrix") && (
-        <Section title={visual.type === "matrix" ? "Matris" : "Tablo"}>
+        <><Section title={visual.type === "matrix" ? "Matris" : "Tablo"}>
           <label className="inline">
             <input type="checkbox" checked={f.banded !== false} onChange={(e) => set({ banded: e.target.checked })} />
             Satırları dönüşümlü renklendir
@@ -410,6 +526,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
             </>
           )}
         </Section>
+        <RowActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} /></>
       )}
       {(visual.type === "card" || visual.type === "ticker") && (
         <Section title="Kart">
@@ -456,7 +573,7 @@ function FormatPanel({ visual, page, pages, onChange }: { visual: Visual; page: 
         </Section>
       )}
       {(visual.type === "card" || visual.type === "multicard" || visual.type === "kpi") &&
-        <ActionPanel visual={visual} page={page} pages={pages} onChange={onChange} />}
+        <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />}
     </>
   );
 }
@@ -468,6 +585,10 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
   return (
     <>
       <div className="viz-selected">Sayfa: {page.name}</div>
+      <Section title="Tuval">
+        <label>Sayfa rengi<input type="color" value={page.backgroundColor && /^#[0-9a-f]{6}$/i.test(page.backgroundColor) ? page.backgroundColor : "#ffffff"}
+          onChange={(e) => onChange({ ...page, backgroundColor: e.target.value })} /></label>
+      </Section>
       <div
         className={`well ${over ? "over" : ""}`}
         onDragOver={(e) => {
@@ -513,12 +634,15 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, pages, onPageChange, visual, onPickType, onChange, onDropToWell, onMoveWell,
+  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell,
 }: {
   page: ReportPage;
   pages: ReportPage[];
+  tables: ModelTable[];
   onPageChange: (p: ReportPage) => void;
   visual: Visual | null;
+  onDuplicate: () => void;
+  onShiftLayer: (step: -1 | 1) => void;
   onPickType: (t: VisualType) => void;
   onChange: (v: Visual) => void;
   onDropToWell: (well: WellDef, field: FieldPayload) => void;
@@ -564,7 +688,21 @@ export function VisualizationsPane({
               <Well key={`${w.key}-${w.slot ?? ""}`} def={w} visual={visual} onDrop={onDropToWell} onMove={onMoveWell} onChange={onChange} />
             ))
           ) : (
-            <FormatPanel visual={visual} page={page} pages={pages} onChange={onChange} />
+            <>
+              <Section title="Nesne düzeni">
+                <div className="fmt-actions">
+                  <button type="button" onClick={onDuplicate}>Çoğalt</button>
+                  <button type="button" onClick={() => onShiftLayer(-1)} disabled={page.visuals[0]?.id === visual.id}>Geriye</button>
+                  <button type="button" onClick={() => onShiftLayer(1)} disabled={page.visuals.at(-1)?.id === visual.id}>Öne</button>
+                </div>
+                <label className="inline"><input type="checkbox" checked={!!visual.format.locked}
+                  onChange={(e) => onChange({ ...visual, format: { ...visual.format, locked: e.target.checked } })} /> Nesneyi kilitle</label>
+                <label>Opaklık ({Math.round((visual.format.opacity ?? 1) * 100)}%)<input type="range" min="0" max="100"
+                  value={Math.round((visual.format.opacity ?? 1) * 100)}
+                  onChange={(e) => onChange({ ...visual, format: { ...visual.format, opacity: Number(e.target.value) / 100 } })} /></label>
+              </Section>
+              <FormatPanel visual={visual} page={page} pages={pages} tables={tables} onChange={onChange} />
+            </>
           )}
         </>
       ) : (

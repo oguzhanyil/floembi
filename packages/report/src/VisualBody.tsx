@@ -1,5 +1,6 @@
-import type { ColumnType, FilterRef, ReportPage, Visual, VisualState } from "@floem/client";
-import { useEffect, useMemo, useState } from "react";
+import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActionGlyph } from "./ActionGlyph";
 import { CategoryChart, PieChartVisual } from "./charts";
 import { GaugeVisual, HeatmapVisual, ScatterVisual, TreemapVisual, WaterfallVisual } from "./charts2";
 import { MatrixVisual, ProgressVisual } from "./matrix";
@@ -190,7 +191,7 @@ function TemplateVisual({ v }: { v: Visual }) {
 
 /** Bir görselin içeriği: veriyi getirir ve türüne göre çizer. */
 export function VisualBody({
-  v, extra, dataRev, cross, onCross, onCrossRow, detailReady, run, state, onState, fieldType,
+  v, extra, dataRev, cross, onCross, onCrossRow, onRowAction, onAction, pageWidth, pageHeight, detailReady, run, state, onState, fieldType,
 }: {
   v: Visual;
   extra: FilterRef[];
@@ -199,6 +200,10 @@ export function VisualBody({
   onCross: (value: string | number | boolean | null) => void;
   /** Tablo satırı seçimi (verilirse satırın tüm alanlarıyla filtreler) */
   onCrossRow?: (row: unknown[]) => void;
+  onRowAction?: (value: string | number | boolean | null) => void;
+  onAction?: (action: VisualAction) => void;
+  pageWidth?: number;
+  pageHeight?: number;
   /** Ana-ayrıntı: dışarıdan bir seçim (başka görsel ya da detaya git) var mı */
   detailReady?: boolean;
   run: QueryFn;
@@ -217,6 +222,14 @@ export function VisualBody({
   const tdata = useQueryData(tq, dataRev, run);
   const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
   const [drillMode, setDrillMode] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: PointerEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false); };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [menuOpen]);
   const drillable = supportsDrill(v) && v.group.length > 1;
   const drill = drillOf(vq);
   const handleClick = (value: string | number | boolean | null) => {
@@ -267,15 +280,25 @@ export function VisualBody({
   if (v.type === "image") return <ImageVisual format={v.format} />;
   if (v.type === "button") {
     const label = typeof v.format.text === "string" ? v.format.text : "Düğme";
-    if (v.format.buttonInvisible) return <button type="button" className="v-action-button hotspot" aria-label={label} />;
-    const icon = v.format.buttonIcon === "none" ? "" : v.format.buttonIcon === "back" ? "←" :
-      v.format.buttonIcon === "refresh" ? "↻" : v.format.buttonIcon === "eye" ? "◉" : "→";
-    return <button type="button" className={`v-action-button ${v.format.buttonStyle ?? "solid"}`}
-      style={{ backgroundColor: v.format.buttonStyle === "solid" ? v.format.buttonColor || "#2563eb" : undefined,
-        color: v.format.buttonTextColor || (v.format.buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"),
-        borderColor: v.format.buttonColor || "#2563eb" }}>
-      <span>{label}</span>{icon && <span aria-hidden="true" className="v-action-icon">{icon}</span>}
-    </button>;
+    const action = v.format.action;
+    return <div className={`v-button-wrap ${pageHeight && v.y + v.h > pageHeight - 280 ? "menu-up" : ""} ${pageWidth && v.x + v.w > pageWidth - 180 ? "menu-left" : ""}`} ref={menuRef}>
+      <button type="button" aria-label={label} aria-expanded={action?.type === "menu" ? menuOpen : undefined}
+        className={`v-action-button ${v.format.buttonInvisible ? "hotspot" : v.format.buttonStyle ?? "solid"}`}
+        style={{ backgroundColor: v.format.buttonStyle === "solid" && !v.format.buttonInvisible ? v.format.buttonColor || "#2563eb" : undefined,
+          color: v.format.buttonTextColor || (v.format.buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"),
+          borderColor: v.format.buttonColor || "#2563eb" }}
+        onClick={(e) => { e.stopPropagation(); if (!onAction || !action) return;
+          if (action.type === "menu") setMenuOpen((open) => !open); else onAction(action); }}>
+        {!v.format.buttonInvisible && <><span>{label}</span><ActionGlyph icon={v.format.buttonIcon ?? (action?.type === "menu" ? "menu" : "arrow")} /></>}
+      </button>
+      {menuOpen && action?.type === "menu" && onAction && <div className="v-action-menu-list" role="menu">
+        {!action.items?.length && <span className="v-action-menu-empty">Menü öğesi eklenmedi</span>}
+        {(action.items ?? []).map((item) => <button type="button" key={item.id} role="menuitem"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onAction(item.action); }}>
+          <ActionGlyph icon={item.icon ?? "arrow"} /><span>{item.label}</span>
+        </button>)}
+      </div>}
+    </div>;
   }
   if (v.type === "text") {
     if (data.state === "error") return <ErrorView {...data.error} />;
@@ -301,7 +324,8 @@ export function VisualBody({
     if (!parts) return <div className="v-empty v-loading">Yükleniyor…</div>;
     return (
       <div className={"v-body " + (mdata.state === "loading" ? "loading" : "")}>
-        <MatrixVisual v={v} parts={parts} state={st} onState={onState} selected={selected} onSelect={onCross} />
+        <MatrixVisual v={v} parts={parts} state={st} onState={onState} selected={selected} onSelect={onCross}
+          onRowAction={onRowAction} />
       </div>
     );
   }
@@ -343,6 +367,7 @@ export function VisualBody({
           result={result} selected={selected} onSelect={onCross} format={v.format}
           selectedKey={cross && cross.visualId === v.id ? cross.key : undefined}
           onSelectRow={onCrossRow}
+          onRowAction={onRowAction}
           sort={st.sort} onSort={onState ? (sort) => onState({ ...st, sort }) : undefined}
         />
       )}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from floem_bi.report.schema import rename_measure_refs
 
 from test_document import ALL, H, client, do_import, doc, ops  # noqa: F401  (client fixture)
 
@@ -69,6 +70,18 @@ def test_query_errors_are_readable(sap):
 
 def test_empty_query(sap):
     assert q(sap).json() == {"columns": [], "rows": [], "truncated": False, "total": None}
+
+
+def test_measure_rename_updates_button_menu_and_row_action():
+    report = {"pages": [{"visuals": [
+        {"format": {"action": {"type": "menu", "items": [
+            {"action": {"type": "function", "functionName": "measure", "measure": "Eski"}}]}}},
+        {"format": {"rowAction": {"action": {"type": "function", "functionName": "measure", "measure": "Eski"}}}},
+    ]}]}
+    rename_measure_refs(report, "Eski", "Yeni")
+    visuals = report["pages"][0]["visuals"]
+    assert visuals[0]["format"]["action"]["items"][0]["action"]["measure"] == "Yeni"
+    assert visuals[1]["format"]["rowAction"]["action"]["measure"] == "Yeni"
 
 
 REPORT = {

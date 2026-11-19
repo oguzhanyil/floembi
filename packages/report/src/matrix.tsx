@@ -1,6 +1,8 @@
 import type { Visual, VisualResult, VisualState } from "@floem/client";
 import { useMemo } from "react";
 import type { CrossSelect } from "./charts";
+import { ActionGlyph } from "./ActionGlyph";
+import { safeActionIcon } from "./visualActions";
 import { formatValue, valueLabel } from "./reportUtils";
 import type { MatrixPart } from "./useVisualData";
 
@@ -18,7 +20,7 @@ interface RowNode {
  * toplam. Yalnızca satır alanları verilirse ağaç tablo (tree grid) gibi davranır.
  */
 export function MatrixVisual({
-  v, parts, state, onState, selected, onSelect,
+  v, parts, state, onState, selected, onSelect, onRowAction,
 }: {
   v: Visual;
   parts: MatrixPart[];
@@ -26,6 +28,7 @@ export function MatrixVisual({
   onState?: (s: VisualState) => void;
   selected?: unknown;
   onSelect?: CrossSelect;
+  onRowAction?: (value: Raw) => void;
 }) {
   const R = v.group.length;
   const C = (v.legend ?? []).length;
@@ -135,6 +138,7 @@ export function MatrixVisual({
                   {g.label}
                 </th>
               ))}
+              {v.format.rowAction && <th className="v-row-action-head" title={v.format.rowAction.label}>⋯</th>}
             </tr>
           ) : (
             <>
@@ -146,6 +150,7 @@ export function MatrixVisual({
                       {g.label}
                     </th>
                   ))}
+                  {v.format.rowAction && <th className="v-row-action-head" rowSpan={2} title={v.format.rowAction.label}>⋯</th>}
                 </tr>
               )}
               <tr>
@@ -157,6 +162,7 @@ export function MatrixVisual({
                     </th>
                   )),
                 )}
+                {v.format.rowAction && C === 0 && <th className="v-row-action-head" title={v.format.rowAction.label}>⋯</th>}
               </tr>
             </>
           )}
@@ -193,6 +199,15 @@ export function MatrixVisual({
                     </td>
                   ));
                 })}
+                {v.format.rowAction && <td className="v-row-action-cell">
+                  {leaf && <button type="button" title={v.format.rowAction.label}
+                    aria-label={`${v.format.rowAction.label}: ${String(n.path[v.format.rowAction.sourceIndex] ?? "boş")}`}
+                    disabled={v.format.rowAction.sourceIndex < 0 || v.format.rowAction.sourceIndex >= n.path.length}
+                    onClick={(e) => { e.stopPropagation(); onRowAction?.(n.path[v.format.rowAction!.sourceIndex] ?? null); }}>
+                    {safeActionIcon(v.format.rowAction.iconData)
+                      ? <img className="v-row-action-image" src={safeActionIcon(v.format.rowAction.iconData)} alt="" /> : <ActionGlyph icon={v.format.rowAction.icon} />}
+                  </button>}
+                </td>}
               </tr>
             );
           })}
@@ -208,6 +223,7 @@ export function MatrixVisual({
                 </td>
               ));
             })}
+            {v.format.rowAction && <td />}
           </tr>
         </tfoot>
       </table>
