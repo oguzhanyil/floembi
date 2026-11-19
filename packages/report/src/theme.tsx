@@ -51,8 +51,8 @@ export function themeStyle(theme: ThemeSnapshot = DEFAULT_THEME): CSSProperties 
   } as CSSProperties;
 }
 
-export function ReportThemeScope({ theme, style, children, ...props }: HTMLAttributes<HTMLDivElement> & { theme?: ThemeSnapshot | null }) {
-  return <ThemeContext.Provider value={theme ? resolveTheme(theme) : null}><div {...props} data-report-theme={theme?.id ?? "legacy"}
+export function ReportThemeScope({ theme, style, children, rootRef, ...props }: HTMLAttributes<HTMLDivElement> & { theme?: ThemeSnapshot | null; rootRef?: import("react").Ref<HTMLDivElement> }) {
+  return <ThemeContext.Provider value={theme ? resolveTheme(theme) : null}><div {...props} ref={rootRef} data-report-theme={theme?.id ?? "legacy"}
     data-theme-mode={theme?.mode ?? "light"} data-reduced-motion={theme?.reducedMotion || undefined}
     style={{ ...themeStyle(theme ?? DEFAULT_THEME), ...style }}>{children}</div></ThemeContext.Provider>;
 }

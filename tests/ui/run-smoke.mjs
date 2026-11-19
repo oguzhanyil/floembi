@@ -13,6 +13,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { testMatrix } from "./matrix-smoke.mjs";
 import { testThemes } from "./theme-smoke.mjs";
 import { testImportAudit } from "./import-audit-smoke.mjs";
+import { testLayouts } from "./layout-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -248,12 +249,12 @@ try {
     await waitFor('!document.querySelector(".v-context-menu")');
   };
   for (const type of types) {
-    const selector = `[data-visual-id="object-${type}"] .visual-content ${type === 'table' ? '.ag-cell' : '*'} `;
+    const selector = `[data-visual-id="object-${type}"] .visual-content ${type === 'table' ? '.ag-cell' : type === 'container' ? '' : '*'} `;
     await openMenu(selector);
     const text = await evaluate('document.querySelector(".v-context-menu").textContent');
     assert.match(text, /Nesne bilgileri/, type);
     assert.doesNotMatch(text, /Çoğalt|Kilitle|Bir katman|Biçim \/ özellikler/, type);
-    if (!['shape', 'image', 'button'].includes(type)) assert.match(text, /PDF indir.*Excel \(.xlsx\) indir.*CSV indir/, type);
+    if (!['container', 'shape', 'image', 'button'].includes(type)) assert.match(text, /PDF indir.*Excel \(.xlsx\) indir.*CSV indir/, type);
     else assert.doesNotMatch(text, /indir/, type);
     await dismissMenu();
   }
@@ -339,6 +340,18 @@ try {
   await testMatrix({ call, evaluate, waitFor, openMenu, choose, input, dir });
   await testThemes({ call, evaluate, waitFor, openMenu, choose, dir });
   await testImportAudit({ call, evaluate, waitFor, input, dir });
+  await testLayouts({ call, evaluate, waitFor, input });
+  if (process.env.FLOEM_UI_LAYOUT_REPORT) {
+    const definition = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_LAYOUT_REPORT), 'utf8'));
+    await evaluate(`window.setAllReport(${JSON.stringify(definition)});window.setTestMode('all-viewer')`);
+    await waitFor('document.querySelector("[data-visual-id=f05-kpi-0-value] .v-card-value") && document.querySelector("[data-visual-id=f05-detail-table] .ag-cell")');
+    assert(await evaluate(`(()=>{const box=id=>document.querySelector('[data-visual-id="'+id+'"]').getBoundingClientRect();const a=box('f05-notes'),b=box('f05-detail'),k=box('f05-kpis');return a.x+a.width<b.x && a.y>=k.y+k.height && b.y>=k.y+k.height})()`));
+    if (process.env.FLOEM_UI_ARTIFACT_DIR) {
+      const shot = await call('Page.captureScreenshot', { format: 'png' });
+      await writeFile(join(resolve(process.env.FLOEM_UI_ARTIFACT_DIR), 'f05-atolye.png'), Buffer.from(shot.data,'base64'));
+    }
+    console.log('PASS: Yerel F05 dosyasının gerçek atölye düzeninde birleşik KPI, açıklama/eylem ve tablo sınırları (sentetik ekran verisi).');
+  }
   // İsteğe bağlı gerçek rapor düzeni: kayıtlar yerine fixture değerleri kullanılır.
   // Alan/ölçü adları korunur; uzun başlıklar ve sayfa düğmeleri böylece denenir.
   if (process.env.FLOEM_UI_REPORT) {

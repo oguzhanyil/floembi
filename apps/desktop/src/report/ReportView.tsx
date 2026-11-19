@@ -32,5 +32,5 @@ export function ReportView({ onEditMeasure, viewAs = null }: { onEditMeasure?: (
     () => ({ tables, report: doc!.report, dataRev, run, save, onError, registerFlush, onEditMeasure }),
     [tables, doc, dataRev, run, save, onError, registerFlush, onEditMeasure],
   );
-  return <ReportDesigner host={host} />;
+  return <ReportDesigner key={doc!.id} host={host} />;
 }

@@ -4,16 +4,18 @@ import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualSt
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
   visualMotion, visualStyle,
-  visualIsVisible, rowActionValue, ReportViewport, VisualContextMenu,
+  rowActionValue, ReportViewport, VisualContextMenu, usePageLayout, inheritedLayoutStyle, visibleInLayout,
+  lockedInLayout, selectionRoots, descendants, rectUnion, containerOptions,
   type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
-import { useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { canGroup, selectionTarget, transformSelection, reparent, reorderSibling } from "./layoutEditing";
 
 import { FIELD_MIME, readPayload, type FieldPayload } from "./fields";
 
 export { FIELD_MIME };
 
-type Drag = { id: string; mode: "move" | "resize"; sx: number; sy: number; orig: Visual; moved: boolean };
+type Drag = { ids: string[]; mode: "move" | "resize"; sx: number; sy: number; original: ReportPage; resolved: Visual[]; box: Rect; last: Rect; moved: boolean };
 
 /** Hizalama kılavuzu: dikey (v) çizgi x'te, yatay (h) çizgi y'de; from–to arası çizilir */
 type Guide = { o: "v" | "h"; pos: number; from: number; to: number };
@@ -96,11 +98,12 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 
 /** Sabit boyutlu rapor sayfası (Power BI'daki 16:9 tuval); görseller taşınır ve boyutlandırılır. */
 export function PageCanvas({
-  page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
+  page, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
   pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
-  onDuplicate, onShiftLayer, onFormat, theme,
+  onDuplicate, onShiftLayer, onFormat, theme, selection, onSelection, onPageChange, onGestureStart, onGestureEnd, onGroup, onUngroup, layout,
 }: {
   page: ReportPage;
+  layout: ReturnType<typeof usePageLayout>;
   theme?: ThemeSnapshot | null;
   previewActions: boolean;
   visibleOverrides: Record<string, boolean>;
@@ -114,6 +117,13 @@ export function PageCanvas({
   onDrillThrough: (t: DrillTarget) => void;
   banner?: ReactNode;
   selectedId: string | null;
+  selection: string[];
+  onSelection: (ids: string[]) => void;
+  onPageChange: (page: ReportPage) => void;
+  onGestureStart: () => void;
+  onGestureEnd: (cancel?: boolean) => void;
+  onGroup: () => void;
+  onUngroup: (id: string) => void;
   onSelect: (id: string | null) => void;
   onChange: (v: Visual) => void;
   onDelete: (id: string) => void;
@@ -128,44 +138,60 @@ export function PageCanvas({
   columnOf: (table: string, column: string) => ModelColumn | undefined;
   run: QueryFn;
 }) {
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const drag = useRef<Drag | null>(null);
   const [dropHover, setDropHover] = useState<string | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
 
-  function start(e: RPointerEvent, v: Visual, mode: Drag["mode"]) {
+  function choose(e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }, id: string) {
+    const target = selection.includes(id) ? id : selectionTarget(page, id, e.ctrlKey || e.metaKey);
+    if (e.shiftKey) onSelection(selection.includes(target) ? selection.filter((v) => v !== target) : [...selection, target]);
+    else if (!selection.includes(target)) onSelection([target]);
+    return target;
+  }
+
+  function start(e: RPointerEvent, v: Visual | null, mode: Drag["mode"]) {
     if (e.button !== 0) return;
     e.stopPropagation();
     if (previewActions) return;
-    onSelect(v.id);
-    if (v.format.locked) return;
+    const target = v ? choose(e, v.id) : null;
+    if (e.shiftKey) return;
+    const ids = selectionRoots(page, target && !selection.includes(target) ? [target] : selection).filter((node) => !lockedInLayout(page, node.id)).map((node) => node.id);
+    const box = rectUnion(layout.visuals.filter((node) => ids.includes(node.id)));
+    if (!box) return;
+    if (document.activeElement instanceof HTMLElement && document.activeElement.matches("input,textarea,select")) document.activeElement.blur();
+    (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-visual-id]")?.focus({ preventScroll: true });
+    onGestureStart();
     try {
       (e.target as Element).setPointerCapture(e.pointerId);
     } catch {
       /* işaretçi yakalanamazsa (dokunmatik/test olayları) sürükleme yine de çalışır */
     }
-    setDrag({ id: v.id, mode, sx: e.clientX, sy: e.clientY, orig: v, moved: false });
+    drag.current = { ids, mode, sx: e.clientX, sy: e.clientY, original: page, resolved: layout.visuals, box, last: box, moved: false };
   }
 
   function move(e: RPointerEvent, scale: number) {
-    if (!drag) return;
-    const dx = (e.clientX - drag.sx) / scale;
-    const dy = (e.clientY - drag.sy) / scale;
-    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
-    const o = drag.orig;
+    const d = drag.current;
+    if (!d) return;
+    const dx = (e.clientX - d.sx) / scale;
+    const dy = (e.clientY - d.sy) / scale;
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+    const o = d.box;
     const raw: Rect =
-      drag.mode === "move" ? { x: o.x + dx, y: o.y + dy, w: o.w, h: o.h } : { x: o.x, y: o.y, w: o.w + dx, h: o.h + dy };
+      d.mode === "move" ? { x: o.x + dx, y: o.y + dy, w: o.w, h: o.h } : { x: o.x, y: o.y, w: o.w + dx, h: o.h + dy };
     // Alt basılıyken kılavuz ve yapışma yok (serbest konum)
-    const others = page.visuals.filter((v) => v.id !== o.id);
-    const a = e.altKey ? null : alignRect(raw, drag.mode, others, page);
+    const excluded = descendants(d.original, d.ids);
+    const others = layout.visuals.filter((v) => !excluded.has(v.id));
+    const a = e.altKey ? null : alignRect(raw, d.mode, others, page);
     const r = a?.rect ?? raw;
     // Kılavuza yapışmayan eksende 8 px ızgara
     const gx = (v: number) => (a?.snappedX ? v : e.altKey ? Math.round(v) : snap(v));
     const gy = (v: number) => (a?.snappedY ? v : e.altKey ? Math.round(v) : snap(v));
-    const compact = o.type === "button" || o.type === "text" || o.type === "shape";
-    const minW = compact ? 40 : o.type === "image" ? 48 : 120;
-    const minH = compact ? 28 : o.type === "image" ? 48 : 80;
-    const next =
-      drag.mode === "move"
+    const single = page.visuals.find((v) => v.id === d.ids[0]);
+    const compact = single && ["container", "button", "text", "shape"].includes(single.type);
+    const minW = compact || d.ids.length > 1 ? 40 : single?.type === "image" ? 48 : 120;
+    const minH = compact || d.ids.length > 1 ? 28 : single?.type === "image" ? 48 : 80;
+    const next: Rect =
+      d.mode === "move"
         ? {
             ...o,
             x: Math.max(0, Math.min(page.width - o.w, gx(r.x))),
@@ -177,14 +203,46 @@ export function PageCanvas({
             h: Math.max(minH, Math.min(page.height - o.y, gy(r.h))),
           };
     setGuides(a?.guides ?? []);
-    if (!drag.moved) setDrag({ ...drag, moved: true });
-    onChange(next);
+    d.moved = true; d.last = next;
+    onPageChange(transformSelection(d.original, d.ids, o, next, d.mode === "resize", d.resolved));
   }
 
-  function end() {
-    setDrag(null);
+  function end(e?: RPointerEvent, cancel = false) {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    if (!cancel && d.moved && d.mode === "move") {
+      if (e?.ctrlKey && e.altKey) {
+        const excluded = descendants(d.original, d.ids);
+        const target = [...layout.visuals].reverse().find((v) => v.type === "container" && !excluded.has(v.id) && !lockedInLayout(page, v.id)
+          && d.last.x + d.last.w / 2 >= v.x && d.last.x + d.last.w / 2 <= v.x + v.w && d.last.y + d.last.h / 2 >= v.y && d.last.y + d.last.h / 2 <= v.y + v.h);
+        const detached = reparent(d.original, d.ids, null, d.resolved);
+        const moved = transformSelection(detached, d.ids, d.box, d.last);
+        onPageChange(reparent(moved, d.ids, target?.id ?? null));
+      } else if (d.ids.length === 1) {
+        const v = d.original.visuals.find((node) => node.id === d.ids[0])!;
+        const parent = d.original.visuals.find((node) => node.id === v.parentId);
+        if (parent && containerOptions(parent).mode !== "free") {
+          const options = containerOptions(parent);
+          const siblings = layout.visuals.filter((node) => node.parentId === parent.id);
+          const distance = (node: Visual) => options.mode === "vertical" ? Math.abs(node.y + node.h / 2 - d.last.y - d.last.h / 2)
+            : options.mode === "horizontal" && !options.wrap ? Math.abs(node.x + node.w / 2 - d.last.x - d.last.w / 2)
+            : Math.hypot(node.x + node.w / 2 - d.last.x - d.last.w / 2, node.y + node.h / 2 - d.last.y - d.last.h / 2);
+          const target = siblings.sort((a, b) => distance(a) - distance(b))[0];
+          if (target && target.id !== v.id) onPageChange(reorderSibling(d.original, v.id, target.id));
+        }
+      }
+    }
     setGuides([]);
+    onGestureEnd(cancel);
   }
+
+  useEffect(() => {
+    const cancel = (e: KeyboardEvent) => { if (e.key === "Escape" && drag.current) { e.preventDefault(); e.stopImmediatePropagation(); end(undefined, true); } };
+    window.addEventListener("keydown", cancel, true);
+    return () => window.removeEventListener("keydown", cancel, true);
+  });
+  const selectedBox = rectUnion(layout.visuals.filter((v) => selectionRoots(page, selection).some((node) => node.id === v.id)));
 
   const readField = readPayload;
 
@@ -194,8 +252,13 @@ export function PageCanvas({
       onBackground={() => { if (!previewActions) onSelect(null); setCross(null); }}>
       {(scale) => (
       <ReportThemeScope theme={theme}
+        rootRef={layout.root}
         className="page"
         style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}
+        onPointerMove={(e) => move(e, scale)}
+        onPointerUp={(e) => end(e)}
+        onPointerCancel={(e) => end(e, true)}
+        onLostPointerCapture={(e) => end(e)}
         onDragOver={(e) => {
           if (previewActions) return;
           if (e.dataTransfer.types.includes(FIELD_MIME)) e.preventDefault();
@@ -227,32 +290,37 @@ export function PageCanvas({
             }
           />
         ))}
-        {page.visuals.filter((v) => !previewActions || visualIsVisible(v, visibleOverrides)).map((v) => {
-          const selected = v.id === selectedId;
+        {layout.visuals.filter((v) => !previewActions || visibleInLayout(page, v, visibleOverrides)).map((v) => {
+          const raw = page.visuals.find((node) => node.id === v.id)!;
+          const selected = selection.includes(v.id);
+          const locked = lockedInLayout(page, v.id);
           const title = visualTitle(v);
           return (
-            <VisualContextMenu key={`${page.id}:${v.id}`} visual={v} onSelect={previewActions ? undefined : () => onSelect(v.id)}
+            <VisualContextMenu key={`${page.id}:${v.id}`} visual={v} onSelect={previewActions ? undefined : () => { if (!selection.includes(v.id)) onSelect(v.id); }}
               editItems={previewActions ? [] : [
                 { label: "Biçim / özellikler", action: () => onFormat(v.id) },
-                { label: "Çoğalt", action: () => onDuplicate(v) },
-                { label: v.format.locked ? "Kilidi aç" : "Kilitle", action: () => onChange({ ...v, format: { ...v.format, locked: !v.format.locked } }) },
-                { label: "Bir katman öne", disabled: !!v.format.locked || page.visuals.at(-1)?.id === v.id, action: () => onShiftLayer(v.id, 1) },
-                { label: "Bir katman geriye", disabled: !!v.format.locked || page.visuals[0]?.id === v.id, action: () => onShiftLayer(v.id, -1) },
-                { label: "Sil", disabled: !!v.format.locked, action: () => onDelete(v.id) },
+                { label: "Çoğalt", action: () => onDuplicate(raw) },
+                { label: "Grupla", disabled: !canGroup(page, selection), action: onGroup },
+                { label: "Grubu çöz", disabled: v.type !== "container" || locked, action: () => onUngroup(v.id) },
+                { label: v.format.locked ? "Kilidi aç" : "Kilitle", action: () => onChange({ ...raw, format: { ...raw.format, locked: !raw.format.locked } }) },
+                { label: "Bir katman öne", disabled: locked || page.visuals.at(-1)?.id === v.id, action: () => onShiftLayer(v.id, 1) },
+                { label: "Bir katman geriye", disabled: locked || page.visuals[0]?.id === v.id, action: () => onShiftLayer(v.id, -1) },
+                { label: "Sil", disabled: locked, action: () => onDelete(v.id) },
               ]}>
             <div
               key={v.id}
               data-visual-id={v.id}
-              className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
-              style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v, theme)) }}
+              className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${locked ? "locked" : ""} ${v.type === "container" ? "container-frame" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
+              style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v.type === "text" ? { ...v, h: raw.h } : v, theme)), ...inheritedLayoutStyle(page, v, layout.visuals) }}
               role={previewActions && v.format.action && v.type !== "button" ? "button" : undefined}
               tabIndex={0}
               onKeyDown={(e) => { if (previewActions && v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAction(v); } }}
               onClick={(e) => { if (previewActions && v.type !== "button" && v.format.action) { e.stopPropagation(); onAction(v); } }}
               onPointerDown={(e) => {
                 e.stopPropagation();
-                if (!previewActions) onSelect(v.id);
+                if (!previewActions) choose(e, v.id);
               }}
+              onDoubleClick={(e) => { if (!previewActions) { e.stopPropagation(); onSelection([v.id]); } }}
               onDragOver={(e) => {
                 if (previewActions) return;
                 if (!e.dataTransfer.types.includes(FIELD_MIME)) return;
@@ -274,9 +342,6 @@ export function PageCanvas({
               <div
                 className="visual-head"
                 onPointerDown={(e) => start(e, v, "move")}
-                onPointerMove={(e) => move(e, scale)}
-                onPointerUp={end}
-                onPointerCancel={end}
                 title="Taşımak için sürükleyin"
               >
                 <span className="visual-title" title={title}>{title}</span>
@@ -306,17 +371,14 @@ export function PageCanvas({
                   onCross={(value) => setCross(toggleCross(v, cross, value))}
                   run={run}
                   state={previewActions ? previewStates[v.id] ?? v.state : v.state}
-                  onState={(state) => previewActions ? onPreviewState(v.id, state) : onChange({ ...v, state })}
+                  onState={(state) => previewActions ? onPreviewState(v.id, state) : onChange({ ...raw, state })}
                   fieldType={v.group[0] ? columnOf(v.group[0].table, v.group[0].column)?.tip : undefined}
                 />
               </div>
-              {selected && !previewActions && (
+              {selected && selection.length === 1 && !previewActions && !locked && (
                 <div
                   className="visual-resize"
                   onPointerDown={(e) => start(e, v, "resize")}
-                  onPointerMove={(e) => move(e, scale)}
-                  onPointerUp={end}
-                onPointerCancel={end}
                   title="Boyutlandır"
                 />
               )}
@@ -328,6 +390,10 @@ export function PageCanvas({
             </VisualContextMenu>
           );
         })}
+        {selection.length > 1 && selectedBox && !previewActions && <div className="multi-selection" style={{ left: selectedBox.x * scale, top: selectedBox.y * scale, width: selectedBox.w * scale, height: selectedBox.h * scale }}>
+          <button type="button" className="multi-selection-move" aria-label="Seçili nesneleri taşı" onPointerDown={(e) => start(e, null, "move")}>{selection.length} nesne</button>
+          <div className="visual-resize" role="button" aria-label="Seçili nesneleri boyutlandır" onPointerDown={(e) => start(e, null, "resize")} />
+        </div>}
       </ReportThemeScope>)}
     </ReportViewport>
   );

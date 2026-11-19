@@ -1,6 +1,6 @@
 import { ReportThemeScope, themedVisual } from "./theme";
 import { ImportCompatibility } from "./ImportCompatibility";
-import type { FilterRef, ReportDefinition, Visual, VisualAction, VisualState } from "@floem/client";
+import type { FilterRef, ReportDefinition, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import { useState } from "react";
 import { ReportViewport } from "./ReportViewport";
 import { VisualContextMenu } from "./VisualContextMenu";
@@ -11,6 +11,10 @@ import {
 import { slicerFilters, type QueryFn } from "./useVisualData";
 import { visualMotion, visualStyle } from "./visualStyle";
 import { resolveVisualAction, rowActionValue, runMeasureAction, visualIsVisible, type ActionValue } from "./visualActions";
+import { usePageLayout } from "./usePageLayout";
+import { visibleInLayout, inheritedLayoutStyle } from "./layout";
+
+const emptyPage: ReportPage = { id: "empty", name: "", width: 1280, height: 720, visuals: [] };
 
 /**
  * Salt okunur ama etkileşimli rapor görüntüleyici (floembi.app): sayfa sekmeleri,
@@ -37,6 +41,7 @@ export function ReportViewer({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
+  const layout = usePageLayout(page ?? emptyPage, JSON.stringify(visibility[page?.id ?? ""] ?? {}));
   if (!page) return <div className="viewer-empty">Bu raporda sayfa yok.</div>;
   // Power BI "Sayfaya sığdır" görünümü
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
@@ -92,17 +97,18 @@ export function ReportViewer({
           />
         )}>
         {(scale) => (
-        <ReportThemeScope theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
+        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: page.height * scale, backgroundColor: page.backgroundColor || undefined }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
-          {page.visuals.filter((v) => visualIsVisible(v, visibility[page.id] ?? {})).map((v) => {
+          {layout.visuals.filter((v) => visibleInLayout(page, v, visibility[page.id] ?? {})).map((v) => {
+            const raw = page.visuals.find((node) => node.id === v.id)!;
             const title = visualTitle(v);
             return (
               <VisualContextMenu key={`${page.id}:${v.id}`} visual={v}>
               <div
                 key={v.id}
                 data-visual-id={v.id}
-                className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
-                style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v, report.theme)) }}
+                className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "container" ? "container-frame" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
+                style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(themedVisual(v.type === "text" ? { ...v, h: raw.h } : v, report.theme)), ...inheritedLayoutStyle(page, v, layout.visuals) }}
                 role={v.format.action && v.type !== "button" ? "button" : undefined}
                 tabIndex={0}
                 onKeyDown={(e) => { if (v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); runAction(v); } }}

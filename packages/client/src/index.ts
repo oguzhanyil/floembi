@@ -338,7 +338,7 @@ export type VisualType =
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "button" | "ticker";
+  | "text" | "shape" | "image" | "button" | "ticker" | "container";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -364,6 +364,10 @@ export interface Visual {
   w: number;
   h: number;
   title?: string;
+  /** Konum, üst kapsayıcının sol üst köşesine göredir; yoksa sayfaya göredir. */
+  parentId?: string | null;
+  container?: ContainerLayout;
+  layoutItem?: LayoutItem;
   group: FieldRef[];
   /** Grafik: Gösterge (seriyi böler) */
   legend?: FieldRef[];
@@ -374,6 +378,27 @@ export interface Visual {
   format: VisualFormat;
   /** Etkileşim durumu: dilimleyici seçimi, tablo sıralaması */
   state?: VisualState;
+}
+
+export interface LayoutItem {
+  grow?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+}
+
+export interface ContainerLayout {
+  kind?: "group" | "frame";
+  mode?: "free" | "horizontal" | "vertical" | "grid";
+  gap?: number;
+  padding?: number;
+  columns?: number;
+  align?: "start" | "center" | "end" | "stretch";
+  justify?: "start" | "center" | "end" | "space-between";
+  wrap?: boolean;
+  autoHeight?: boolean;
+  overflow?: "visible" | "clip";
 }
 
 export interface VisualFormat {

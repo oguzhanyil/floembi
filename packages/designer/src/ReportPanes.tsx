@@ -328,6 +328,8 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
   const colors = Array.isArray(f.colors) ? (f.colors as string[]) : [];
   const swatches = isPie || visual.legend?.length ? 8 : Math.max(1, Math.min(8, visual.values.length));
 
+  if (visual.type === "container") return <><AppearancePanel visual={visual} onChange={onChange} /><ActionPanel visual={visual} pages={pages} page={page} measures={measures} onChange={onChange} /></>;
+
   if (visual.type === "text") {
     const labels = visual.values.map(valueLabel);
     return (
@@ -682,9 +684,10 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0, themeControls,
+  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0, themeControls, layoutControls,
 }: {
   themeControls?: ReactNode;
+  layoutControls?: ReactNode;
   page: ReportPage;
   pages: ReportPage[];
   tables: ModelTable[];
@@ -714,7 +717,7 @@ export function VisualizationsPane({
                 <button
                   key={t}
                   className={`viz-type ${visual?.type === t ? "active" : ""}`}
-                  title={visual ? `${VISUAL_DEFS[t].label} olarak değiştir` : `Yeni ${VISUAL_DEFS[t].label.toLowerCase()}`}
+                  title={visual && visual.type !== "container" && t !== "container" ? `${VISUAL_DEFS[t].label} olarak değiştir` : `Yeni ${VISUAL_DEFS[t].label.toLowerCase()}`}
                   aria-label={VISUAL_DEFS[t].label}
                   onClick={() => onPickType(t)}
                 >
@@ -724,6 +727,7 @@ export function VisualizationsPane({
           </div>
         </div>
       ))}
+      {layoutControls}
       {visual ? (
         <>
           <div className="viz-tabs" role="tablist">
@@ -756,7 +760,7 @@ export function VisualizationsPane({
               <Section title="Sağ tık ve indirme">
                 <label className="inline"><input type="checkbox" checked={visual.format.contextMenu ?? visual.format.gridContextMenu ?? true}
                   onChange={(e) => onChange({ ...visual, format: { ...visual.format, contextMenu: e.target.checked } })} />Sağ tık menüsü</label>
-                {!["shape", "image", "button"].includes(visual.type) && <>
+                {!["container", "shape", "image", "button"].includes(visual.type) && <>
                   <label className="inline"><input type="checkbox" checked={visual.format.exportData ?? visual.format.gridExport ?? true}
                     onChange={(e) => onChange({ ...visual, format: { ...visual.format, exportData: e.target.checked } })} />Veri indirmeye izin ver</label>
                   {([ ["exportPdf", "gridExportPdf", "PDF"], ["exportExcel", "gridExportExcel", "Excel"], ["exportCsv", "gridExportCsv", "CSV"] ] as const).map(([key, legacy, label]) =>

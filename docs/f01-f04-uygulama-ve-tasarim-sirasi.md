@@ -11,7 +11,7 @@
 | F03 | Her görsel için hata sınırı ve yeniden deneme; sorgu hatasında yeniden deneme; sıfır, boş sonuç, eksik alan ve yükleme ayrımı. Eski sonuç gösterilirken güncelleniyor işareti. | Chromium StrictMode altında bilerek bozulan görsel, sağlam komşu kart, hata sonrası toparlanma ve sorgu yeniden denemesi. |
 | F04 | Ortak Desktop/web tuvalinde sayfaya/genişliğe sığdırma, %100, +/− ve odak tuvaldeyken Ctrl+/−/0. Büyük sayfada kaydırma. Sağ panel dış kenarından toplam genişlik, ara kenarından bölme genişliği; klavye okları da çalışır. Dar alanda paneller çekmece olur. Dar üst şerit kaydırılabilir. | 6 viewport/DPR bileşimi, panel boyutu/çekmece, %100 ve genişliğe sığdırma, gerçek pointer olaylarıyla rapor koordinatında taşıma. |
 
-Zoom ve panel genişlikleri görünüm ayarıdır; raporun kayıtlı nesne koordinatlarını değiştirmez. Otomatik yüksekliği seçilen metin büyürken komşu nesneler kendiliğinden taşınmaz; kapsayıcı/akış düzeni F05 işidir.
+Zoom ve panel genişlikleri görünüm ayarıdır; raporun kayıtlı nesne koordinatlarını değiştirmez. **F05 güncellemesi:** otomatik yüksekliği seçilen metin akış kapsayıcısında büyürken komşularını iter; serbest sayfa nesneleri kendi konumunu korur. [Kullanım ve testler](f05-grup-kapsayici-ve-yerlesim.md).
 
 ### Demo dosyaları
 
@@ -80,7 +80,7 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 ## Güncel geliştirme sırası
 
 PBIP sayfa görünümü bulguları için [F10A-01–04 alt işleri](pbip-bulgularindan-gelistirme-listesi.md)
-planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak; ana sıradaki F06 değişmedi.
+planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak. F06 ortak temeli ve F05 uygulandı; ana sıradaki **F07B**. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
 
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
@@ -88,7 +88,7 @@ planlandı. F04/F07A iyileştirmesi olarak F08 öncesinde ele alınacak; ana sı
 | 5 | **F07A: tema/tipografi/boşluk/durum altyapısı ve karşılaştırma** | Uygulandı; [kullanım ve doğrulama](f07a-tema-altyapisi.md). Nihai marka ailesi seçilmedi. |
 | 6 | **F10: PBIP uyumluluk ve kayıp raporu** | Uygulandı; [kullanım ve yedi raporun bulguları](f10-pbip-uyumluluk.md). |
 | 7 | **F06: ortak model ve ölçü geçişi** | Ortak temel, 29 yerel ölçü ve 135 kaynak ölçünün haritası uygulandı; tam motor/sonuç uyumu açık. [Kapsam ve kalan işler](f06-ortak-model-ve-olcu-gecisi.md). |
-| 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | F07A tokenlarını kullanır; serbest tasarımın düzen temeli. |
+| 8 | **F05: grup, kapsayıcı, otomatik yerleşim, undo/redo** | Uygulandı; [kullanım, demo ve doğrulama](f05-grup-kapsayici-ve-yerlesim.md). |
 | 9 | **F07B: kullanıcı bileşenleri, marka ve ikon kitaplığı** | F05 üzerinde yeniden kullanılabilir nesneler; ortak stil ve yerel istisna. |
 | 10 | **F08: ekranlara göre düzen varyantları** | Aynı bileşen/ölçü farklı ekran düzenlerinde korunur. |
 | 11 | **F09: büyük Grid/Tree Grid** | Sunucu arama/sayfalama, toplam ve dışa aktarım kapsamı. |

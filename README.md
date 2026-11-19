@@ -38,6 +38,14 @@ Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panelleri
 sürüklenebilir; sağ üstteki **Görselleştirmeler** ve **Veri** düğmeleriyle ayrı ayrı gizlenir.
 UI regresyon kontrolü: `node tests/ui/run-smoke.mjs`.
 
+**F05 tasarım düzeni hazır:** Shift+tık ile çoklu seçim, **Ctrl+G** ile gruplama,
+**Ctrl+Shift+G** ile çözme, **Ctrl+Z / Ctrl+Y** ile geri al/yinele. Görselleştirmeler içindeki
+**Düzen ve katmanlar** bölümünden iç içe kapsayıcı, yatay/dikey/ızgara düzeni, boşluk,
+hizalama ve boyut sınırlarını ayarlayın. Büyüyen metin akıştaki komşularını iter.
+Yeni verili örnek: **`data/SAPB1Demo-Floem-F05.floem` → Tasarım Atölyesi**.
+[Kullanım, dosya sözleşmesi ve testler](docs/f05-grup-kapsayici-ve-yerlesim.md).
+Yerleşim/geçmiş testleri: `node tests/design/run.mjs`. Sırada F07B kullanıcı bileşenleri var.
+
 ## Kurulum ve çalıştırma
 
 ```bash

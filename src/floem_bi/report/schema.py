@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 VisualType = Literal[
     "table",                                    # veri ızgarası (Data Grid)
@@ -20,7 +20,7 @@ VisualType = Literal[
     "treegrid",                                 # hiyerarşik ağaç tablo
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
-    "text", "shape", "image", "button", "ticker", # tasarım nesneleri ve animasyonlu sayı kartı
+    "text", "shape", "image", "button", "ticker", "container", # tasarım nesneleri
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
@@ -61,14 +61,44 @@ class FilterRef(_B):
     values: list[str | int | float | bool | None]
 
 
+class LayoutItem(_B):
+    grow: FiniteFloat = Field(default=0, ge=0, le=100)
+    minWidth: FiniteFloat = Field(default=40, ge=1, le=20000)
+    maxWidth: FiniteFloat = Field(default=20000, ge=1, le=20000)
+    minHeight: FiniteFloat = Field(default=28, ge=1, le=20000)
+    maxHeight: FiniteFloat = Field(default=20000, ge=1, le=20000)
+
+    @model_validator(mode="after")
+    def _bounds(self) -> "LayoutItem":
+        if self.minWidth > self.maxWidth or self.minHeight > self.maxHeight:
+            raise ValueError("En küçük boyut en büyük boyutu aşamaz")
+        return self
+
+
+class ContainerLayout(_B):
+    kind: Literal["group", "frame"] = "frame"
+    mode: Literal["free", "horizontal", "vertical", "grid"] = "free"
+    gap: FiniteFloat = Field(default=12, ge=0, le=128)
+    padding: FiniteFloat = Field(default=16, ge=0, le=128)
+    columns: int = Field(default=2, ge=1, le=12)
+    align: Literal["start", "center", "end", "stretch"] = "stretch"
+    justify: Literal["start", "center", "end", "space-between"] = "start"
+    wrap: bool = True
+    autoHeight: bool = False
+    overflow: Literal["visible", "clip"] = "visible"
+
+
 class Visual(_B):
     id: str = Field(min_length=1, max_length=64)
     type: VisualType
-    x: float = 0
-    y: float = 0
-    w: float = Field(default=420, gt=0)
-    h: float = Field(default=280, gt=0)
+    x: FiniteFloat = 0
+    y: FiniteFloat = 0
+    w: FiniteFloat = Field(default=420, gt=0)
+    h: FiniteFloat = Field(default=280, gt=0)
     title: str | None = None
+    parentId: str | None = None
+    container: ContainerLayout | None = None
+    layoutItem: LayoutItem | None = None
     group: list[FieldRef] = Field(default_factory=list)     # Tablo: Sütunlar · Grafik: X ekseni · Dilimleyici: Alan
     legend: list[FieldRef] = Field(default_factory=list)    # Grafik: Gösterge (seriyi böler)
     values: list[ValueRef] = Field(default_factory=list)    # Tablo: Değerler · Grafik: Y ekseni · Kart: Alan
@@ -118,6 +148,21 @@ class Report(_B):
         for p in self.pages:
             if len({v.id for v in p.visuals}) != len(p.visuals):
                 raise ValueError(f"'{p.name}' sayfasında görsel kimlikleri benzersiz olmalı")
+            by_id = {v.id: v for v in p.visuals}
+            for v in p.visuals:
+                if v.container is not None and v.type != "container":
+                    raise ValueError("Kapsayıcı düzeni yalnız kapsayıcı nesnesine uygulanabilir")
+                current, seen = v, {v.id}
+                while current.parentId is not None:
+                    parent = by_id.get(current.parentId)
+                    if parent is None or parent.type != "container":
+                        raise ValueError("Üst nesne aynı sayfada bir kapsayıcı olmalı")
+                    if parent.id in seen:
+                        raise ValueError("Kapsayıcılar döngü oluşturamaz")
+                    seen.add(parent.id)
+                    if len(seen) > 16:
+                        raise ValueError("En fazla 16 iç içe nesne düzeyi kullanılabilir")
+                    current = parent
         return self
 
 

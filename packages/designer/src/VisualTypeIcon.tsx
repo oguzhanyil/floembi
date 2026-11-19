@@ -58,6 +58,9 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     case "text":
       content = <><path d="M7 10h18M11 10v15m10-15v15" stroke="currentColor" strokeWidth="2" /><path d="M7 25h8m2 0h8" stroke="currentColor" strokeWidth="1.5" /></>;
       break;
+    case "container":
+      content = <><rect x="4" y="5" width="24" height="22" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" /><rect x="8" y="10" width="6" height="12" rx="1" fill="currentColor" opacity=".65" /><rect x="17" y="10" width="7" height="5" rx="1" fill="currentColor" /><rect x="17" y="18" width="7" height="4" rx="1" fill="currentColor" opacity=".35" /></>;
+      break;
     case "shape":
       content = <><rect x="6" y="9" width="20" height="14" rx="4" fill="currentColor" opacity=".7" /><path d="M8 19h16" stroke="var(--surface, #fff)" strokeWidth="1.5" opacity=".75" /></>;
       break;

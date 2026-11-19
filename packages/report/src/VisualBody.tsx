@@ -293,7 +293,7 @@ function VisualBodyContent({
   const selected = cross && cross.visualId === v.id ? cross.value : undefined;
   const outerSelection = detailReady ?? (!!cross && cross.visualId !== v.id);
   useVisualMenuSource("body", () => [
-    ...(!["shape", "image", "button"].includes(v.type) ? [{ label: "Veriyi yeniden sorgula", action: retry }] : []),
+    ...(!["container", "shape", "image", "button"].includes(v.type) ? [{ label: "Veriyi yeniden sorgula", action: retry }] : []),
     ...(v.type === "slicer" && onState ? [{ label: "Dilimleyici seçimini temizle", action: () => onState({ ...st, selected: [], range: [null, null] }) }] : []),
     ...(drillable && drill.level > 0 && onState ? [{ label: "En üst düzeye dön", action: () => onState({ ...st, drill: { level: 0, path: [] } }) }] : []),
   ]);
@@ -302,6 +302,7 @@ function VisualBodyContent({
     return { ...data.result, title: v.title || VISUAL_DEFS[v.type].label };
   });
 
+  if (v.type === "container") return null;
   if (v.type === "shape") return <ShapeVisual format={v.format} />;
   if (v.type === "image") return <ImageVisual format={v.format} />;
   if (v.type === "button") {

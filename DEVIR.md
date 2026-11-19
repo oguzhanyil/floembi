@@ -139,6 +139,32 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 20.11.2026 F05 tasarım düzeni uygulandı; sırada F07B
+
+[Kullanım ve sözleşme](docs/f05-grup-kapsayici-ve-yerlesim.md). Shift çoklu seçim, grup/kapsayıcı,
+iç içe katmanlar, grup orantılı boyutu, hizalama/eşit aralık, yatay/dikey/ızgara düzen,
+boşluk/satır kaydırma/min-max/büyüme payı, otomatik yükseklik ve taşma uyarısı eklendi.
+Ctrl+Alt sürükleme veya üst nesne listesiyle kapsayıcı değişir; akış kardeşleri sürüklenerek sıralanır.
+Kapsayıcı kilidi, görünürlüğü, opaklığı ve kırpması alt ağaca uygulanır.
+Grup çözme ve serbeste geçişte ölçülen metin konumları korunur; taşıma otomatik yüksekliği sabitlemez.
+
+`parentId`/yerel koordinat/`container`/`layoutItem` sözleşmesi geriye uyumlu; Python ağaç,
+döngü, aynı sayfa, 16 düzey ve sonlu boyut doğrulaması yapar. Ortak `layout.ts` ve
+`usePageLayout.ts` Desktop/web'de aynı yerleşimi çözer. 75 adım oturum geçmişi;
+sürükleme tek adımdır, Escape iptal eder; metin girişinin doğal undo davranışı korunur.
+Kayıt kuyruğu ve kendi eski kayıt cevaplarını ayırma, undo'nun eski veriyle ezilmesini önler.
+Yeni belge kimliği tasarımcıyı yeniden kurar. Geçmiş dosyaya yazılmaz.
+
+Yeni `data/SAPB1Demo-Floem-F05.floem`: F06'nın yerel kopyası, 10 sayfa; ilk sayfa
+Tasarım Atölyesi, 26 nesne, 4 çalışan veri sorgusu. `python -m floem_bi.layout_demo`
+yeni hedefe yeniden üretir; eski dosya ezilmez. Kullanıcı DB'si ve canlı yayın değiştirilmedi.
+227 Python testi geçti, 1 atlandı; 20 saf tasarım testi ve Chromium regresyonları başarılı.
+Gerçek atölye geometrisi sentetik ekran verisiyle incelendi; yeni bağımlılık yok.
+
+**Ana sıradaki F07B:** birleşik nesneleri sürümlü kitaplığa kaydetme, alan yuvaları,
+ortak stil/yerel istisna ve marka/ikon varyantları. Sonrasında F08 düzen varyantları;
+F10A görünüm alt işleri F08 öncesinde. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
+
 ### 20.11.2026 F06 ortak model ve ölçü geçiş haritası uygulandı
 
 [Kullanım, kapsam ve kalan F06 işleri](docs/f06-ortak-model-ve-olcu-gecisi.md).

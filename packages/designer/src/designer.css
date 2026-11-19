@@ -30,6 +30,32 @@
 .canvas-mode-toggle { position: absolute; z-index: 40; left: 12px; top: 12px; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; line-height: 0; }
 .canvas-mode-toggle svg { display: block; width: 16px; height: 16px; }
 .canvas-mode-toggle.with-drill { top: 50px; }
+.design-history { position: absolute; z-index: 40; left: 50px; top: 12px; display: flex; border: 1px solid var(--border, #cbd7e7); border-radius: 8px; background: var(--surface, #fff); box-shadow: 0 4px 14px #102a4d22; overflow: hidden; }
+.design-history button { width: 31px; height: 30px; border: 0; background: transparent; color: var(--text, #335478); font: 22px/1 system-ui; cursor: pointer; }
+.design-history button:hover:enabled { background: var(--accent-soft, #eaf3ff); }
+.design-history button:disabled { opacity: .35; cursor: default; }
+.multi-selection { position: absolute; z-index: 35; outline: 1px dashed var(--accent, #0866e8); pointer-events: none; }
+.multi-selection-move { position: absolute; left: 0; top: -24px; height: 22px; border: 0; border-radius: 4px; background: var(--accent, #0866e8); color: var(--accent-text, #fff); font-size: 11px; pointer-events: auto; cursor: move; touch-action: none; }
+.multi-selection .visual-resize { pointer-events: auto; }
+.layout-controls { margin: 0 10px 10px; border: 1px solid var(--border, #d6e2f2); border-radius: 8px; padding: 8px; min-width: 0; color: var(--text, #172033); font-size: 11px; }
+.layout-controls summary { cursor: pointer; font-weight: 600; color: var(--text, #335478); }
+.layout-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.layout-actions button { flex: 1 1 auto; padding: 5px; font-size: 11px; background: var(--surface-2, #f0f4f8); color: var(--text, #172033); border: 1px solid var(--border, #d6e2f2); border-radius: 4px; cursor: pointer; }
+.layout-actions button:disabled { opacity: .45; cursor: default; }
+.layout-hint { color: var(--muted, #64748b); font-size: 10px; line-height: 1.5; margin: 7px 0; }
+.layout-settings { min-width: 0; padding: 7px 0; margin: 0; border: 0; }
+.layout-settings legend { padding: 0; font-weight: 600; color: var(--text, #335478); }
+.layout-settings label, .layout-align { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; min-width: 0; }
+.layout-settings label.inline { flex-direction: row; align-items: center; }
+.layout-settings input, .layout-settings select, .layout-align select { box-sizing: border-box; width: 100%; min-width: 0; padding: 5px; font-size: 11px; color: var(--text, #172033); background: var(--surface, #fff); border: 1px solid var(--border, #d6e2f2); border-radius: 4px; }
+.layout-settings input[type=checkbox] { width: auto; }
+.layout-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 8px; }
+.layout-warning { padding: 7px; border-radius: 5px; color: #805300; background: #fff5d5; line-height: 1.5; }
+.layout-tree { max-height: 220px; overflow: auto; margin-top: 6px; }
+.layout-tree button { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; border: 0; border-radius: 4px; padding: 6px; background: transparent; color: var(--text, #37516f); font-size: 11px; text-align: left; cursor: pointer; }
+.layout-tree button[aria-selected=true] { background: var(--accent-soft, #eaf3ff); color: var(--accent, #155ec0); }
+.layout-tree button > span:nth-child(2) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layout-tree small { font-size: 9px; color: var(--muted, #64748b); }
 .fmt-actions { display: flex; gap: 5px; }
 .fmt-actions button { flex: 1; padding: 6px 3px; font-size: 11px; }
 .fmt-actions button:disabled { opacity: .4; }
@@ -50,6 +76,7 @@
 .visual-del { visibility: hidden; border: none; background: none; padding: 0 4px; color: var(--muted); font-size: 11px; }
 .visual:hover .visual-del, .visual.selected .visual-del { visibility: visible; }
 .visual-resize { position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px; background: var(--surface); border: 2px solid var(--accent); border-radius: 2px; cursor: nwse-resize; touch-action: none; }
+.visual.container-frame.no-title > .visual-head { top: -24px; height: 22px; min-height: 22px; border: 1px solid var(--border, #d6e2f2); border-radius: 4px; }
 .visual-broken { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 4px 8px; font-size: 11px; color: #8a5300; background: #fff4ce; border-radius: 4px; }
 
 

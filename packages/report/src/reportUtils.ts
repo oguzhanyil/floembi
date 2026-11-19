@@ -146,6 +146,9 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
   shape: {
     label: "Şekil", icon: "▢", group: "Ekle", size: [280, 120], wells: [],
   },
+  container: {
+    label: "Kapsayıcı", icon: "▣", group: "Ekle", size: [480, 320], wells: [],
+  },
   image: {
     label: "Görsel", icon: "▣", group: "Ekle", size: [320, 220], wells: [],
   },

@@ -4,6 +4,7 @@ import {
   DrillBanner, VISUAL_DEFS, crossFiltersFor, defaultAgg, defaultRole, newId, resolveVisualAction, runMeasureAction,
   sameField, slicerFilters, snap, visualIsVisible,
   type ActionValue, type CrossFilter, type QueryFn, type WellKey,
+  containerOptions, lockedInLayout, ancestors, usePageLayout,
 } from "@floem/report";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
@@ -11,6 +12,9 @@ import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
 import { moveWellItem } from "./wells";
 import { DesignerPanels } from "./DesignerPanels";
+import { DesignHistory } from "./history";
+import { groupSelection, ungroup, deleteSelection, duplicateSelection, reorderSibling, transformSelection } from "./layoutEditing";
+import { LayoutControls } from "./LayoutControls";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -41,9 +45,16 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const [report, setReport] = useState<ReportDefinition>(host.report);
   const reportRef = useRef(report);
   const lastSent = useRef(JSON.stringify(host.report));
+  const acknowledged = useRef(lastSent.current);
+  const sentReports = useRef(new Set([lastSent.current]));
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveGeneration = useRef(0);
+  const history = useRef(new DesignHistory(host.report));
   const timer = useRef<number | null>(null);
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const selectedId = selection.at(-1) ?? null;
+  const setSelectedId = (id: string | null) => setSelection(id ? [id] : []);
   const [formatRequest, setFormatRequest] = useState(0);
   const [visualizationsOpen, setVisualizationsOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
   const [dataOpen, setDataOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
@@ -62,10 +73,16 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   // Dışarıdan gelen değişiklik (dosya aç, yeniden adlandırma) yerel taslağı günceller
   useEffect(() => {
     const s = JSON.stringify(host.report);
-    if (s !== lastSent.current) {
+    if (s !== JSON.stringify(reportRef.current) && !sentReports.current.has(s)) {
+      saveGeneration.current++;
+      if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }
       lastSent.current = s;
+      acknowledged.current = s;
+      sentReports.current = new Set([s]);
       reportRef.current = host.report;
+      history.current.reset(host.report);
       setReport(host.report);
+      setSelection([]);
       if (!host.report.pages.some((p) => p.id === pageId)) setPageId(host.report.pages[0]?.id ?? "p1");
       const showPanels = (host.report.pages[0]?.width ?? 0) < 1600;
       setVisualizationsOpen(showPanels);
@@ -74,7 +91,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       setPreviewVisibility({});
       setPreviewStates({});
     }
-  }, [host.report, pageId]);
+  }, [host.report]);
 
   const send = useCallback(async () => {
     if (timer.current !== null) {
@@ -83,29 +100,38 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     }
     const r = reportRef.current;
     const s = JSON.stringify(r);
-    if (s === lastSent.current) return;
+    if (s === lastSent.current) return saveQueue.current;
     lastSent.current = s;
-    try {
-      await save(r);
-    } catch (e) {
-      onError(e);
-    }
+    sentReports.current.add(s);
+    if (sentReports.current.size > 150) sentReports.current.delete(sentReports.current.values().next().value!);
+    const generation = saveGeneration.current;
+    const job = saveQueue.current.catch(() => {}).then(async () => {
+      if (generation !== saveGeneration.current) return;
+      try { await save(r); acknowledged.current = s; }
+      catch (e) { if (lastSent.current === s) lastSent.current = acknowledged.current; sentReports.current.delete(s); onError(e); throw e; }
+    });
+    saveQueue.current = job;
+    return job;
   }, [save, onError]);
 
   useEffect(() => registerFlush?.(send), [registerFlush, send]);
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
 
   const update = useCallback(
     (fn: (r: ReportDefinition) => ReportDefinition) => {
       const next = fn(reportRef.current);
+      if (next === reportRef.current) return;
+      history.current.update(next);
       reportRef.current = next;
       setReport(next);
       if (timer.current !== null) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void send(), SAVE_DELAY);
+      timer.current = window.setTimeout(() => void send().catch(() => {}), SAVE_DELAY);
     },
     [send],
   );
 
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
+  const layout = usePageLayout(page, JSON.stringify(previewVisibility[page?.id] ?? {}));
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
   const dataRev = `${host.dataRev}:${actionRev}`;
@@ -116,33 +142,71 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     [tables],
   );
 
-  const updatePage = (fn: (p: ReportPage) => ReportPage) =>
-    update((r) => ({ ...r, pages: r.pages.map((p) => (p.id === page.id ? fn(p) : p)) }));
-  const updateVisual = (v: Visual) => updatePage((p) => ({ ...p, visuals: p.visuals.map((x) => (x.id === v.id ? v : x)) }));
+  const updatePage = (fn: (p: ReportPage) => ReportPage) => update((r) => {
+    const before = r.pages.find((p) => p.id === page.id)!;
+    const next = fn(before);
+    return before === next ? r : { ...r, pages: r.pages.map((p) => p.id === page.id ? next : p) };
+  });
+  const updateVisual = (v: Visual) => updatePage((p) => {
+    if (ancestors(p, v.id).some((parent) => parent.format.locked)) return p;
+    const old = p.visuals.find((node) => node.id === v.id);
+    if (!old || old === v) return p;
+    if (old.type === "container" && containerOptions(old).kind === "group" && (old.w !== v.w || old.h !== v.h)) {
+      const before = layout.visuals.find((node) => node.id === v.id)!;
+      const parent = layout.visuals.find((node) => node.id === old.parentId);
+      const resized = transformSelection(p, [v.id], before, { x: v.x + (parent?.x ?? 0), y: v.y + (parent?.y ?? 0), w: v.w, h: v.h }, true, layout.visuals);
+      return { ...resized, visuals: resized.visuals.map((node) => node.id === v.id ? { ...v, x: node.x, y: node.y, w: node.w, h: node.h } : node) };
+    }
+    const resolved = old.type === "container" && containerOptions(old).mode !== "free" && containerOptions(v).mode === "free" ? layout.visuals : null;
+    const parent = resolved?.find((node) => node.id === v.id);
+    return { ...p, visuals: p.visuals.map((x) => x.id === v.id ? v : resolved && x.parentId === v.id ? (() => {
+      const r = resolved.find((node) => node.id === x.id)!;
+      const growing = x.type === "text" && x.format.textOverflow === "grow" || x.type === "container" && containerOptions(x).autoHeight;
+      return { ...x, x: r.x - parent!.x, y: r.y - parent!.y, w: r.w, h: growing ? x.h : r.h };
+    })() : x) };
+  });
+
+  function changeHistory(direction: "undo" | "redo") {
+    const next = history.current[direction]();
+    reportRef.current = next; setReport(next);
+    if (!next.pages.some((p) => p.id === pageId)) setPageId(next.pages[0]?.id ?? "p1");
+    setSelection((ids) => ids.filter((id) => next.pages.some((p) => p.visuals.some((v) => v.id === id))));
+    setCross(null);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void send().catch(() => {}), SAVE_DELAY);
+  }
+  const beginGesture = () => history.current.begin();
+  function endGesture(cancel = false) {
+    if (cancel) {
+      const next = history.current.cancel(); reportRef.current = next; setReport(next);
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => void send().catch(() => {}), SAVE_DELAY);
+    }
+    else history.current.commit();
+  }
+  function groupChosen(frame = false) {
+    const result = groupSelection(page, selection, frame, new Set(report.pages.flatMap((p) => p.visuals.map((v) => v.id))), layout.visuals);
+    if (result.id) { updatePage(() => result.page); setSelectedId(result.id); }
+  }
 
   function duplicateVisual(v: Visual) {
-    const ids = new Set(page.visuals.map((item) => item.id));
-    const copy = { ...v, id: newId("v", ids), x: Math.min(page.width - v.w, v.x + 24),
-      y: Math.min(page.height - v.h, v.y + 24), format: { ...v.format, locked: false } };
-    updatePage((p) => ({ ...p, visuals: [...p.visuals, copy] }));
-    setSelectedId(copy.id);
+    const result = duplicateSelection(page, selection.includes(v.id) ? selection : [v.id], new Set(report.pages.flatMap((p) => p.visuals.map((x) => x.id))));
+    updatePage(() => result.page); setSelection(result.ids);
   }
 
   function shiftLayer(id: string, direction: -1 | 1) {
     updatePage((p) => {
-      const visuals = [...p.visuals];
-      const from = visuals.findIndex((v) => v.id === id);
-      const to = from + direction;
-      if (from < 0 || to < 0 || to >= visuals.length) return p;
-      [visuals[from], visuals[to]] = [visuals[to], visuals[from]];
-      return { ...p, visuals };
+      const node = p.visuals.find((v) => v.id === id);
+      const siblings = p.visuals.filter((v) => (v.parentId ?? null) === (node?.parentId ?? null));
+      const target = siblings[siblings.findIndex((v) => v.id === id) + direction];
+      return target ? reorderSibling(p, id, target.id) : p;
     });
   }
 
   function deleteVisual(id: string) {
-    if (page.visuals.find((v) => v.id === id)?.format.locked) return;
-    updatePage((p) => ({ ...p, visuals: p.visuals.filter((v) => v.id !== id) }));
-    if (selectedId === id) setSelectedId(null);
+    const ids = selection.includes(id) ? selection : [id];
+    updatePage((p) => deleteSelection(p, ids));
+    setSelection([]);
     if (cross?.visualId === id) setCross(null);
   }
 
@@ -150,7 +214,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     // Basit yerleşim: soldan sağa, yukarıdan aşağı ilk boş yer
     for (let y = 16; y + h <= page.height; y += 16) {
       for (let x = 16; x + w <= page.width; x += 16) {
-        const clash = page.visuals.some((v) => x < v.x + v.w + 8 && x + w + 8 > v.x && y < v.y + v.h + 8 && y + h + 8 > v.y);
+        const clash = page.visuals.some((v) => !v.parentId && x < v.x + v.w + 8 && x + w + 8 > v.x && y < v.y + v.h + 8 && y + h + 8 > v.y);
         if (!clash) return { x, y };
       }
     }
@@ -222,7 +286,12 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         buttonColor: "#2563eb", buttonTextColor: "#ffffff", buttonIcon: "arrow" as const,
         action: { type: "none" as const } } :
       type === "ticker" ? { animation: "count" as const, animationDuration: 800, shadow: true } : {};
-    return { id: newId("v", ids), type, ...pos, w, h, group: [], values: [], filters: [], format };
+    const parent = !at && type !== "container" && selected?.type === "container" && !lockedInLayout(page, selected.id) ? selected : null;
+    return { id: newId("v", ids), type, ...pos, w: parent ? Math.min(w, Math.max(40, parent.w - 32)) : w,
+      h: parent ? Math.min(h, Math.max(28, parent.h - 32)) : h,
+      ...(parent ? { parentId: parent.id, x: 16, y: 16 } : {}),
+      ...(type === "container" ? { title: "Kapsayıcı", container: { kind: "frame" as const, mode: "free" as const, padding: 16 }, } : {}),
+      group: [], values: [], filters: [], format: type === "container" ? { showTitle: false, padding: 0 } : format };
   }
 
   function insert(v: Visual) {
@@ -231,7 +300,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   function pickType(t: VisualType) {
-    if (selected) {
+    if (selected && selected.type !== "container" && t !== "container") {
       // Türü değiştir: alanları yeni türün kutularına taşı, sığmayanları kırp
       const wells = VISUAL_DEFS[t].wells;
       const w = (k: WellKey) => wells.find((x) => x.key === k);
@@ -285,9 +354,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       });
       return;
     }
-    if (selected && !usesField(selected, field)) {
+    if (selected && selected.type !== "container" && !usesField(selected, field)) {
       updateVisual(addField(selected, field));
-    } else if (!selected) {
+    } else if (!selected || selected.type === "container") {
       const t = typeFor(field);
       if (t) insert(addField(createVisual(t), field));
     }
@@ -296,9 +365,16 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   // Delete: seçili görseli sil (bir giriş kutusunda değilken)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Delete" || !selectedId) return;
-      if ((e.target as HTMLElement).closest("input,select,textarea,.monaco-editor")) return;
-      deleteVisual(selectedId);
+      if (previewActions || !(e.target instanceof HTMLElement) || !e.target.closest(".report-view")) return;
+      if (e.target.closest("input,select,textarea,[contenteditable=true],.monaco-editor,[role=dialog]")) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); changeHistory(e.shiftKey ? "redo" : "undo"); }
+      else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); changeHistory("redo"); }
+      else if (mod && e.key.toLowerCase() === "g") { e.preventDefault(); if (e.shiftKey && selected) updatePage((p) => ungroup(p, selected.id, layout.visuals)); else groupChosen(); }
+      else if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); setSelection(page.visuals.filter((v) => !v.parentId && !v.format.locked).map((v) => v.id)); }
+      else if (mod && e.key.toLowerCase() === "d" && selected) { e.preventDefault(); duplicateVisual(selected); }
+      else if (e.key === "Delete" && selectedId) { e.preventDefault(); deleteVisual(selectedId); }
+      else if (e.key === "Escape") { if (selected?.parentId) setSelectedId(selected.parentId); else setSelectedId(null); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -370,7 +446,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   return (
-    <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}>
+    <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`}
+      onFocusCapture={(e) => { if ((e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
+      onBlurCapture={(e) => { if ((e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
       <div className="panel-toggles" role="group" aria-label="Sağ paneller">
         <button className="panel-toggle" type="button" aria-controls={`${panelId}-visualizations`}
           aria-label={`Görselleştirmeler panelini ${visualizationsOpen ? "gizle" : "göster"}`}
@@ -385,6 +463,10 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       </div>
       <div className="report-main">
         <div className="canvas-shell">
+        <div className="design-history" role="group" aria-label="Tasarım geçmişi">
+          <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" disabled={previewActions || !history.current.canUndo} onClick={() => changeHistory("undo")}>↶</button>
+          <button type="button" aria-label="Yinele" title="Yinele (Ctrl+Y)" disabled={previewActions || !history.current.canRedo} onClick={() => changeHistory("redo")}>↷</button>
+        </div>
         <button className={`canvas-mode-toggle ${pageFilters.length ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
           title={previewActions ? "Etkileşim açık · tasarıma dön" : "Serbest tasarım açık · etkileşimi dene"} onClick={() => {
             setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
@@ -394,12 +476,20 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         <PageCanvas
           theme={report.theme}
           page={page}
+          layout={layout}
           previewActions={previewActions}
           visibleOverrides={previewVisibility[page.id] ?? {}}
           previewStates={previewStates}
           onPreviewState={(id, state) => setPreviewStates((current) => ({ ...current, [id]: state }))}
           onAction={runAction}
           selectedId={selectedId}
+          selection={selection}
+          onSelection={setSelection}
+          onPageChange={(next) => updatePage(() => next)}
+          onGestureStart={beginGesture}
+          onGestureEnd={endGesture}
+          onGroup={() => groupChosen()}
+          onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }}
           onSelect={setSelectedId}
           onChange={updateVisual}
           onDelete={deleteVisual}
@@ -409,6 +499,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           onDropField={dropOnCanvas}
           onDropOnVisual={(id, f) => {
             const v = page.visuals.find((x) => x.id === id);
+            if (v?.type === "container" && !lockedInLayout(page, id)) {
+              const type = typeFor(f);
+              if (type) insert(addField({ ...createVisual(type), parentId: id, x: 16, y: 16 }, f));
+              return;
+            }
             if (v) updateVisual(addField(v, f));
             setSelectedId(id);
           }}
@@ -490,6 +585,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
+        layoutControls={!previewActions && <LayoutControls page={page} resolved={layout.visuals} selection={selection} onSelect={setSelection}
+          onChange={(next) => updatePage(() => next)} onVisual={updateVisual} onGroup={groupChosen}
+          onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }} />}
         themeControls={<><ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
           <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
             if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {
