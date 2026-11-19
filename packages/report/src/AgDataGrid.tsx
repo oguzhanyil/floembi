@@ -116,7 +116,7 @@ export function AgDataGrid({
           rowHeight={30} headerHeight={34} floatingFiltersHeight={32}
           pagination={format.gridPagination === true} paginationPageSize={Number(format.gridPageSize) || 100}
           paginationPageSizeSelector={false} animateRows={false}
-          pinnedBottomRowData={search || columnFiltered ? [] : pinnedBottomRowData}
+          pinnedBottomRowData={search || columnFiltered || format.showTotals === false ? [] : pinnedBottomRowData}
           getRowClass={(params) => {
             if (params.node.rowPinned) return "v-ag-total";
             const row = params.data;

@@ -60,7 +60,7 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     case "table": {
       if (!v.group.length && !v.values.length) return null;
       const sort = v.state?.sort;
-      return { group: v.group, values: v.values, filters, totals: true, limit: 10000, order_by: sort ? [sort] : [] };
+      return { group: v.group, values: v.values, filters, totals: v.format.showTotals !== false, limit: 10000, order_by: sort ? [sort] : [] };
     }
     case "pie":
     case "donut":

@@ -53,13 +53,13 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Cari": ([
         ("Tarih", "date"), ("Donem", "string"), ("FisNo", "int64"),
-        ("SatirNo", "int64"), ("Muhatap", "string"), ("Borc", "double"),
+        ("SatirNo", "int64"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("Borc", "double"),
         ("Alacak", "double"), ("Bakiye", "double"), ("YuruyenBakiye", "double"),
     ], """
         SELECT CONVERT(date, J.RefDate) AS Tarih,
                CONVERT(char(7), J.RefDate, 120) AS Donem,
                L.TransId AS FisNo, L.Line_ID AS SatirNo,
-               C.CardName AS Muhatap,
+               C.CardCode AS MuhatapKod, CONCAT(C.CardCode, N' · ', C.CardName) AS Muhatap,
                CONVERT(float, COALESCE(L.Debit, 0)) AS Borc,
                CONVERT(float, COALESCE(L.Credit, 0)) AS Alacak,
                CONVERT(float, COALESCE(L.Debit, 0) - COALESCE(L.Credit, 0)) AS Bakiye,
@@ -73,32 +73,44 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Satis": ([
         ("Tarih", "date"), ("Donem", "string"), ("BelgeNo", "int64"),
-        ("BelgeTuru", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
-        ("NetSatis", "double"), ("Siparis", "double"), ("BrutKar", "double"),
-        ("Miktar", "double"), ("SatirAdedi", "int64"),
+        ("BelgeKimlik", "string"), ("SatirNo", "int64"), ("KayitAnahtari", "string"),
+        ("BelgeTuru", "string"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
+        ("NetSatis", "double"), ("Siparis", "double"), ("AcikSiparis", "double"), ("BrutKar", "double"),
+        ("Birim", "string"), ("NetFaturaMiktar", "double"), ("SiparisMiktar", "double"),
+        ("AcikSiparisMiktar", "double"), ("SatirAdedi", "int64"),
     ], """
         WITH Satir AS (
           SELECT 'Fatura' AS Tur, 1 AS Isaret, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 L.LineTotal, L.GrssProfit, L.Quantity
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity,
+                 CAST(0 AS decimal(19,6)) AS OpenQty
           FROM dbo.OINV H JOIN dbo.INV1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'İade', -1, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 L.LineTotal, L.GrssProfit, L.Quantity
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity, 0
           FROM dbo.ORIN H JOIN dbo.RIN1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'Sipariş', 1, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 L.LineTotal, L.GrssProfit, L.Quantity
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.GrssProfit, L.Quantity,
+                 CASE WHEN H.DocStatus = 'O' AND L.LineStatus = 'O' THEN L.OpenQty ELSE 0 END
           FROM dbo.ORDR H JOIN dbo.RDR1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
         )
         SELECT CONVERT(date, X.DocDate) AS Tarih,
                CONVERT(char(7), X.DocDate, 120) AS Donem,
-               X.DocNum AS BelgeNo, X.Tur AS BelgeTuru,
-               COALESCE(C.CardName, N'Demo muhatap') AS Muhatap,
+               X.DocNum AS BelgeNo,
+               CONCAT(N'DEMO_FIRMA1:', X.Tur, ':', X.DocEntry) AS BelgeKimlik,
+               X.LineNum AS SatirNo,
+               CONCAT(N'DEMO_FIRMA1:', X.Tur, ':', X.DocEntry, ':', X.LineNum) AS KayitAnahtari,
+               X.Tur AS BelgeTuru, X.CardCode AS MuhatapKod,
+               CONCAT(X.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
                COALESCE(S.SlpName, N'Atanmamış') AS SatisElemani,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN 0 ELSE X.Isaret * X.LineTotal END) AS NetSatis,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.LineTotal ELSE 0 END) AS Siparis,
+               CONVERT(float, CASE WHEN X.OpenQty > 0 THEN X.LineTotal * X.OpenQty / NULLIF(X.Quantity, 0) ELSE 0 END) AS AcikSiparis,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN 0 ELSE X.Isaret * X.GrssProfit END) AS BrutKar,
-               CONVERT(float, X.Isaret * X.Quantity) AS Miktar,
+               COALESCE(NULLIF(X.UomCode, ''), N'Belirsiz') AS Birim,
+               CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN 0 ELSE X.Isaret * X.Quantity END) AS NetFaturaMiktar,
+               CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.Quantity ELSE 0 END) AS SiparisMiktar,
+               CONVERT(float, X.OpenQty) AS AcikSiparisMiktar,
                CONVERT(bigint, 1) AS SatirAdedi
         FROM Satir X
         LEFT JOIN dbo.OCRD C ON C.CardCode = X.CardCode
@@ -106,27 +118,39 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Satinalma": ([
         ("Tarih", "date"), ("Donem", "string"), ("BelgeNo", "int64"),
-        ("BelgeTuru", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
-        ("FaturaTutar", "double"), ("SiparisTutar", "double"),
-        ("Miktar", "double"), ("SatirAdedi", "int64"),
+        ("BelgeKimlik", "string"), ("SatirNo", "int64"), ("KayitAnahtari", "string"),
+        ("BelgeTuru", "string"), ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"),
+        ("FaturaTutar", "double"), ("SiparisTutar", "double"), ("AcikSiparisTutar", "double"),
+        ("Birim", "string"), ("FaturaMiktar", "double"), ("SiparisMiktar", "double"),
+        ("AcikSiparisMiktar", "double"), ("SatirAdedi", "int64"),
     ], """
         WITH Satir AS (
           SELECT N'Fatura' AS Tur, H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 L.LineTotal, L.Quantity
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity,
+                 CAST(0 AS decimal(19,6)) AS OpenQty
           FROM dbo.OPCH H JOIN dbo.PCH1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
           UNION ALL
           SELECT N'Sipariş', H.DocNum, H.DocDate, H.CardCode, H.SlpCode,
-                 L.LineTotal, L.Quantity
+                 H.DocEntry, L.LineNum, L.UomCode, L.LineTotal, L.Quantity,
+                 CASE WHEN H.DocStatus = 'O' AND L.LineStatus = 'O' THEN L.OpenQty ELSE 0 END
           FROM dbo.OPOR H JOIN dbo.POR1 L ON L.DocEntry = H.DocEntry WHERE H.CANCELED = 'N'
         )
         SELECT CONVERT(date, X.DocDate) AS Tarih,
                CONVERT(char(7), X.DocDate, 120) AS Donem,
-               X.DocNum AS BelgeNo, X.Tur AS BelgeTuru,
-               COALESCE(C.CardName, N'Demo muhatap') AS Muhatap,
+               X.DocNum AS BelgeNo,
+               CONCAT(N'DEMO_FIRMA1:', X.Tur, ':', X.DocEntry) AS BelgeKimlik,
+               X.LineNum AS SatirNo,
+               CONCAT(N'DEMO_FIRMA1:', X.Tur, ':', X.DocEntry, ':', X.LineNum) AS KayitAnahtari,
+               X.Tur AS BelgeTuru, X.CardCode AS MuhatapKod,
+               CONCAT(X.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
                COALESCE(S.SlpName, N'Atanmamış') AS SatisElemani,
                CONVERT(float, CASE WHEN X.Tur = N'Fatura' THEN X.LineTotal ELSE 0 END) AS FaturaTutar,
                CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.LineTotal ELSE 0 END) AS SiparisTutar,
-               CONVERT(float, X.Quantity) AS Miktar,
+               CONVERT(float, CASE WHEN X.OpenQty > 0 THEN X.LineTotal * X.OpenQty / NULLIF(X.Quantity, 0) ELSE 0 END) AS AcikSiparisTutar,
+               COALESCE(NULLIF(X.UomCode, ''), N'Belirsiz') AS Birim,
+               CONVERT(float, CASE WHEN X.Tur = N'Fatura' THEN X.Quantity ELSE 0 END) AS FaturaMiktar,
+               CONVERT(float, CASE WHEN X.Tur = N'Sipariş' THEN X.Quantity ELSE 0 END) AS SiparisMiktar,
+               CONVERT(float, X.OpenQty) AS AcikSiparisMiktar,
                CONVERT(bigint, 1) AS SatirAdedi
         FROM Satir X
         LEFT JOIN dbo.OCRD C ON C.CardCode = X.CardCode
@@ -134,14 +158,15 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
     """),
     "Firsat": ([
         ("Tarih", "date"), ("Donem", "string"), ("FirsatNo", "int64"),
-        ("Muhatap", "string"), ("SatisElemani", "string"), ("Asama", "string"),
+        ("MuhatapKod", "string"), ("Muhatap", "string"), ("SatisElemani", "string"), ("Asama", "string"),
         ("Durum", "string"), ("Tutar", "double"), ("AgirlikliTutar", "double"),
         ("AcikTutar", "double"), ("Adet", "int64"), ("AcikAdet", "int64"),
     ], """
         SELECT CONVERT(date, COALESCE(O.PredDate, O.OpenDate)) AS Tarih,
                CONVERT(char(7), COALESCE(O.PredDate, O.OpenDate), 120) AS Donem,
                O.OpprId AS FirsatNo,
-               COALESCE(C.CardName, N'Demo muhatap') AS Muhatap,
+               O.CardCode AS MuhatapKod,
+               CONCAT(O.CardCode, N' · ', COALESCE(C.CardName, N'Demo muhatap')) AS Muhatap,
                COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani,
                COALESCE(S.Descript, N'Belirsiz') AS Asama,
                CASE O.Status WHEN 'O' THEN N'Açık' WHEN 'W' THEN N'Kazanıldı'
@@ -157,13 +182,16 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
         LEFT JOIN dbo.OOST S ON S.Num = O.StepLast
     """),
     "Muhatap": ([
-        ("Muhatap", "string"), ("Tur", "string"), ("Bakiye", "double"),
+        ("MuhatapKod", "string"), ("Muhatap", "string"), ("Tur", "string"), ("Bakiye", "double"),
+        ("MusteriAlacak", "double"), ("TedarikciBorc", "double"),
         ("Adet", "int64"), ("MusteriAdet", "int64"), ("TedarikciAdet", "int64"),
     ], """
-        SELECT C.CardName AS Muhatap,
+        SELECT C.CardCode AS MuhatapKod, CONCAT(C.CardCode, N' · ', C.CardName) AS Muhatap,
                CASE C.CardType WHEN 'C' THEN N'Müşteri' WHEN 'S' THEN N'Tedarikçi'
                     WHEN 'L' THEN N'Aday' ELSE N'Diğer' END AS Tur,
                CONVERT(float, COALESCE(C.Balance, 0)) AS Bakiye,
+               CONVERT(float, CASE WHEN C.CardType = 'C' AND C.Balance > 0 THEN C.Balance ELSE 0 END) AS MusteriAlacak,
+               CONVERT(float, CASE WHEN C.CardType = 'S' AND C.Balance < 0 THEN -C.Balance ELSE 0 END) AS TedarikciBorc,
                CONVERT(bigint, 1) AS Adet,
                CONVERT(bigint, CASE WHEN C.CardType = 'C' THEN 1 ELSE 0 END) AS MusteriAdet,
                CONVERT(bigint, CASE WHEN C.CardType = 'S' THEN 1 ELSE 0 END) AS TedarikciAdet
@@ -171,14 +199,15 @@ TABLES: dict[str, tuple[list[tuple[str, str]], str]] = {
         WHERE C.CardName IS NOT NULL
     """),
     "Aktivite": ([
-        ("Tarih", "date"), ("Donem", "string"), ("Muhatap", "string"),
+        ("Tarih", "date"), ("Donem", "string"), ("AktiviteNo", "int64"), ("MuhatapKod", "string"), ("Muhatap", "string"),
         ("SatisElemani", "string"), ("Tur", "string"), ("Durum", "string"),
         ("Oncelik", "string"), ("Adet", "int64"), ("AcikAdet", "int64"),
         ("YuksekAdet", "int64"),
     ], """
         SELECT CONVERT(date, A.CntctDate) AS Tarih,
                CONVERT(char(7), A.CntctDate, 120) AS Donem,
-               COALESCE(C.CardName, N'Muhatap yok') AS Muhatap,
+               A.ClgCode AS AktiviteNo, A.CardCode AS MuhatapKod,
+               CONCAT(A.CardCode, N' · ', COALESCE(C.CardName, N'Muhatap yok')) AS Muhatap,
                COALESCE(P.SlpName, N'Atanmamış') AS SatisElemani,
                CASE A.Action WHEN 'C' THEN N'Telefon' WHEN 'M' THEN N'Toplantı'
                     WHEN 'T' THEN N'Görev' WHEN 'E' THEN N'Not' ELSE N'Diğer' END AS Tur,
@@ -273,11 +302,11 @@ def _table(page: dict, table: str, groups: tuple[str, ...], values: tuple[str, .
 def _report() -> dict:
     pages = []
     p = _base("genel", "SAP B1 Demo · Genel Bakış", "Maskelenmiş yerel demo verisi · Floem BI uyarlaması")
-    _cards(p, [("Net satış", "Satis", "NetSatis"), ("Satınalma faturası", "Satinalma", "FaturaTutar"),
+    _cards(p, [("Fatura − iade tutarı", "Satis", "NetSatis"), ("Satınalma faturası", "Satinalma", "FaturaTutar"),
                ("Fırsat sayısı", "Firsat", "Adet"), ("Aktivite sayısı", "Aktivite", "Adet")])
     _chart(p, "line", "trend", "Aylık net satış", 0, "Satis", "Donem", "NetSatis")
     _chart(p, "bar", "firsatlar", "Fırsat durumu", 1, "Firsat", "Durum", "Adet")
-    _table(p, "Satis", ("Tarih", "BelgeNo", "Muhatap"), ("NetSatis", "BrutKar"))
+    _table(p, "Satis", ("Tarih", "BelgeNo", "BelgeKimlik", "SatirNo", "Muhatap"), ("NetSatis", "BrutKar"))
     pages.append(p)
 
     p = _base("mizan", "Finans · Mizan", "Hesap sınıfı, ana hesap ve alt hesap kırılımı · yerel tutarlar")
@@ -288,7 +317,7 @@ def _report() -> dict:
     _table(p, "Finans", ("HesapSinifi", "AnaHesap", "Hesap"), ("Borc", "Alacak", "Bakiye"), tree=True)
     pages.append(p)
 
-    p = _base("cari", "Finans · Cari Ekstre", "Muhatap bazında hareketler ve kaynak sırasına göre yürüyen bakiye")
+    p = _base("cari", "Finans · Cari Ekstre", "Yürüyen bakiye tüm kaynak geçmişinden gelir; tarih filtresiyle yeniden başlamaz · Genel toplam kapalı")
     _cards(p, [("Cari borç", "Cari", "Borc"), ("Cari alacak", "Cari", "Alacak"),
                ("Cari bakiye", "Cari", "Bakiye"), ("Muhatap sayısı", "Cari", "Muhatap")])
     p["visuals"][-1]["values"] = [_value("Cari", "Muhatap", "distinctcount")]
@@ -296,24 +325,28 @@ def _report() -> dict:
     _chart(p, "line", "trend", "Aylık cari hareket", 1, "Cari", "Donem", "Borc", "Alacak")
     _table(p, "Cari", ("Tarih", "FisNo", "SatirNo", "Muhatap"),
            ("Borc", "Alacak", "YuruyenBakiye"), slicer="Muhatap")
+    p["visuals"][-1]["format"]["showTotals"] = False
+    p["visuals"][-1]["values"][-1] = _value("Cari", "YuruyenBakiye", "max")
     pages.append(p)
 
-    p = _base("satis", "Satış Analizi", "Fatura ve iadeler net satışa, açık siparişler ayrı toplama alınır")
-    _cards(p, [("Net satış", "Satis", "NetSatis"), ("Sipariş", "Satis", "Siparis"),
-               ("Brüt kâr", "Satis", "BrutKar"), ("Miktar", "Satis", "Miktar")])
+    p = _base("satis", "Satış Analizi", "Yerel para birimi · Fatura − iade satır tutarı · Açık sipariş: kalan miktarın satır tutarı; belge indirimi/vergi hariç")
+    _cards(p, [("Fatura − iade tutarı", "Satis", "NetSatis"), ("Açık sipariş tutarı", "Satis", "AcikSiparis"),
+               ("Satır brüt kârı", "Satis", "BrutKar"), ("Belge satırı", "Satis", "SatirAdedi")])
     _chart(p, "line", "trend", "Aylık net satış", 0, "Satis", "Donem", "NetSatis")
     _chart(p, "bar", "muhatap", "Müşteri bazında net satış", 1, "Satis", "Muhatap", "NetSatis")
-    _table(p, "Satis", ("Tarih", "BelgeNo", "Muhatap", "BelgeTuru"),
-           ("NetSatis", "Siparis", "BrutKar"), slicer="BelgeTuru")
+    _table(p, "Satis", ("Tarih", "BelgeNo", "BelgeKimlik", "SatirNo", "Muhatap", "BelgeTuru", "Birim"),
+           ("NetSatis", "AcikSiparis", "BrutKar", "NetFaturaMiktar", "AcikSiparisMiktar"), slicer="BelgeTuru")
+    p["visuals"][-1]["format"]["showTotals"] = False
     pages.append(p)
 
-    p = _base("satinalma", "Satınalma Analizi", "Satınalma fatura ve sipariş satırları")
-    _cards(p, [("Fatura tutarı", "Satinalma", "FaturaTutar"), ("Sipariş tutarı", "Satinalma", "SiparisTutar"),
-               ("Miktar", "Satinalma", "Miktar"), ("Satır sayısı", "Satinalma", "SatirAdedi")])
+    p = _base("satinalma", "Satınalma Analizi", "Yerel satır tutarları · Kaynakta satınalma iadeleri yok; net satınalma değildir · Belge indirimi/vergi hariç")
+    _cards(p, [("Fatura satır tutarı", "Satinalma", "FaturaTutar"), ("Açık sipariş tutarı", "Satinalma", "AcikSiparisTutar"),
+               ("Tüm sipariş tutarı", "Satinalma", "SiparisTutar"), ("Satır sayısı", "Satinalma", "SatirAdedi")])
     _chart(p, "line", "trend", "Aylık satınalma faturası", 0, "Satinalma", "Donem", "FaturaTutar")
     _chart(p, "bar", "tedarikci", "Tedarikçi bazında tutar", 1, "Satinalma", "Muhatap", "FaturaTutar")
-    _table(p, "Satinalma", ("Tarih", "BelgeNo", "Muhatap", "BelgeTuru"),
-           ("FaturaTutar", "SiparisTutar"), slicer="BelgeTuru")
+    _table(p, "Satinalma", ("Tarih", "BelgeNo", "BelgeKimlik", "SatirNo", "Muhatap", "BelgeTuru", "Birim"),
+           ("FaturaTutar", "AcikSiparisTutar", "FaturaMiktar", "AcikSiparisMiktar"), slicer="BelgeTuru")
+    p["visuals"][-1]["format"]["showTotals"] = False
     pages.append(p)
 
     p = _base("firsat", "Satış Fırsatları", "Aşama, durum ve ağırlıklı beklenen gelir")
@@ -325,12 +358,13 @@ def _report() -> dict:
            ("Tutar", "AgirlikliTutar"), slicer="Durum")
     pages.append(p)
 
-    p = _base("muhatap", "Muhatap Analizi", "Maskelenmiş müşteri ve tedarikçi adları")
-    _cards(p, [("Muhatap sayısı", "Muhatap", "Adet"), ("Müşteri sayısı", "Muhatap", "MusteriAdet"),
-               ("Tedarikçi sayısı", "Muhatap", "TedarikciAdet"), ("Net bakiye", "Muhatap", "Bakiye")])
+    p = _base("muhatap", "Muhatap Analizi", "Güncel kaynak bakiyesi · Müşteri alacağı ve tedarikçi borcu ayrı; avanslar kartlara netlenmez")
+    _cards(p, [("Müşteri sayısı", "Muhatap", "MusteriAdet"), ("Tedarikçi sayısı", "Muhatap", "TedarikciAdet"),
+               ("Müşteri alacağı", "Muhatap", "MusteriAlacak"), ("Tedarikçi borcu", "Muhatap", "TedarikciBorc")])
     _chart(p, "donut", "tur", "Muhatap türü", 0, "Muhatap", "Tur", "Adet")
     _chart(p, "bar", "bakiye", "Muhatap bakiyesi", 1, "Muhatap", "Muhatap", "Bakiye")
-    _table(p, "Muhatap", ("Muhatap", "Tur"), ("Bakiye",), slicer="Tur")
+    _table(p, "Muhatap", ("Muhatap", "Tur"), ("Bakiye", "MusteriAlacak", "TedarikciBorc"), slicer="Tur")
+    p["visuals"][-1]["format"]["showTotals"] = False
     pages.append(p)
 
     p = _base("aktivite", "Aktiviteler", "Telefon, toplantı ve görev kayıtları")
@@ -339,7 +373,7 @@ def _report() -> dict:
     p["visuals"][-1]["values"] = [_value("Aktivite", "Muhatap", "distinctcount")]
     _chart(p, "bar", "tur", "Aktivite türü", 0, "Aktivite", "Tur", "Adet")
     _chart(p, "donut", "durum", "Tamamlanma durumu", 1, "Aktivite", "Durum", "Adet")
-    _table(p, "Aktivite", ("Tarih", "Muhatap", "Tur", "Oncelik", "Durum"),
+    _table(p, "Aktivite", ("Tarih", "AktiviteNo", "Muhatap", "Tur", "Oncelik", "Durum"),
            ("Adet",), slicer="Durum")
     pages.append(p)
     return Report.model_validate({"version": 1, "pages": pages}).model_dump(mode="json", exclude_none=True)
@@ -370,6 +404,18 @@ def _copy_table(source: pyodbc.Connection, doc: Document, name: str,
             doc.con.unregister("_demo_batch")
         count += len(batch)
     cursor.close()
+    if name in ("Satis", "Satinalma"):
+        amount = "AcikSiparis" if name == "Satis" else "AcikSiparisTutar"
+        invalid = doc.con.execute(
+            f'SELECT COUNT(*) FROM veri.{_quote(name)} WHERE AcikSiparisMiktar > 0 AND {_quote(amount)} IS NULL'
+        ).fetchone()[0]
+        if invalid:
+            raise ValueError(f"{name}: {invalid} açık satırın tutarı hesaplanamıyor; kaynak miktarı sıfır. Dosya kaydedilmedi.")
+        duplicate = doc.con.execute(
+            f'SELECT COUNT(*) - COUNT(DISTINCT KayitAnahtari) FROM veri.{_quote(name)}'
+        ).fetchone()[0]
+        if duplicate:
+            raise ValueError(f"{name}: yinelenen belge/satır anahtarı bulundu. Dosya kaydedilmedi.")
     return count
 
 
@@ -392,7 +438,11 @@ def build(output: Path) -> dict[str, int]:
                 doc.content.tanim = ModelTanimi(
                     model=ModelBilgisi(ad="SAP B1 Demo · Floem"),
                     tablolar=[Tablo(ad=name, kaynak=TabloKaynak(katman="veri", tablo=name),
-                                   sutunlar=[Sutun(ad=col, tip=typ) for col, typ in columns])
+                                   sutunlar=[Sutun(ad=col, tip=typ,
+                                                  anahtar=col == "KayitAnahtari",
+                                                  gizli=col == "KayitAnahtari",
+                                                  ozet="none" if col.endswith("Miktar") or col == "YuruyenBakiye" else None)
+                                             for col, typ in columns])
                              for name, (columns, _query) in TABLES.items()],
                 )
                 SemanticModel(doc.tanim)

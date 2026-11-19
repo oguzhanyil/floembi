@@ -522,6 +522,8 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
           </label>
           <p className="hint">Sıralamak için sütun başlığına tıklayın.</p>
           {visual.type === "table" && <>
+            <label className="inline"><input type="checkbox" checked={f.showTotals !== false}
+              onChange={(e) => set({ showTotals: e.target.checked })} />Genel toplamı göster</label>
             <label className="inline"><input type="checkbox" checked={f.gridFilters !== false}
               onChange={(e) => set({ gridFilters: e.target.checked })} />Sütun filtreleri</label>
             <label className="inline"><input type="checkbox" checked={f.gridPinFirstColumn === true}
