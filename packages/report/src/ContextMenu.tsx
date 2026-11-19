@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-export interface TableMenuItem { label: string; action: () => void; disabled?: boolean; separator?: boolean }
-export interface TableMenuPosition { x: number; y: number; origin: HTMLElement }
+export interface ContextMenuItem { label: string; action: () => void; disabled?: boolean; separator?: boolean }
+export interface ContextMenuPosition { x: number; y: number; origin: HTMLElement }
 
 /** Portal: tuval ölçeği ve görselin overflow sınırı menüyü etkilemez. */
-export function TableMenu({ position, items, onClose }: {
-  position: TableMenuPosition; items: TableMenuItem[]; onClose: () => void;
+export function ContextMenu({ position, items, onClose }: {
+  position: ContextMenuPosition; items: ContextMenuItem[]; onClose: () => void;
 }) {
   const menu = useRef<HTMLDivElement>(null);
   const [point, setPoint] = useState({ x: position.x, y: position.y });
@@ -26,7 +26,7 @@ export function TableMenu({ position, items, onClose }: {
     };
   }, [position, onClose]);
   const close = () => { onClose(); if (position.origin.isConnected) position.origin.focus({ preventScroll: true }); };
-  return createPortal(<div ref={menu} className="v-table-menu" role="menu" aria-label="Tablo işlemleri"
+  return createPortal(<div ref={menu} className="v-context-menu" role="menu" aria-label="Nesne işlemleri"
     style={{ left: point.x, top: point.y }} onPointerDown={(e) => e.stopPropagation()}
     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
     onKeyDown={(e) => {
@@ -41,7 +41,7 @@ export function TableMenu({ position, items, onClose }: {
       }
     }}>
     {items.map((item) => <button key={item.label} role="menuitem" type="button" disabled={item.disabled}
-      className={item.separator ? "v-table-menu-separator" : undefined}
+      className={item.separator ? "v-context-menu-separator" : undefined}
       onClick={(e) => { e.stopPropagation(); close(); item.action(); }}>{item.label}</button>)}
   </div>, document.body);
 }

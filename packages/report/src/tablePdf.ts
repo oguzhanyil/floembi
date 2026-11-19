@@ -21,7 +21,7 @@ export async function tablePdfBlob(table: ExportTable): Promise<Blob> {
     const end = Math.min(table.columns.length, start + (start ? groupSize - 1 : groupSize));
     const indices = [...(start ? [0] : []), ...Array.from({ length: end - start }, (_, i) => start + i)];
     const cols = indices.map((i) => table.columns[i]);
-    content.push({ text: "Floem BI - Tablo", fontSize: 17, bold: true, color: "#16324F", margin: [0, 0, 0, 6], ...(start ? { pageBreak: "before" as const } : {}) });
+    content.push({ text: table.title || "Floem BI - Tablo", fontSize: 17, bold: true, color: "#16324F", margin: [0, 0, 0, 6], ...(start ? { pageBreak: "before" as const } : {}) });
     content.push({ text: `${table.rows.length.toLocaleString("tr-TR")} satır · Sütunlar ${start + 1}-${end} / ${table.columns.length}${start ? " (ilk sütun tekrarlanır)" : ""}${table.truncated ? " · Sorgu sınırı nedeniyle yalnız yüklenen satırlar" : ""}`, fontSize: 9, color: "#52647A", margin: [0, 0, 0, 12] });
     const readable = (text: string) => text.replace(/(\S{24})/gu, "$1\u200b");
     content.push({
@@ -43,7 +43,7 @@ export async function tablePdfBlob(table: ExportTable): Promise<Blob> {
   const definition: TDocumentDefinitions = {
     pageSize: "A4", pageOrientation: table.columns.length > 4 ? "landscape" : "portrait",
     pageMargins: [28, 28, 28, 36], defaultStyle: { font: "Floem", fontSize: 9, color: "#233348" },
-    info: { title: "Floem BI - Tablo", creator: "Floem BI", subject: `Roboto v2.138 - Apache-2.0\n${fontLicense}` }, content,
+    info: { title: table.title || "Floem BI - Tablo", creator: "Floem BI", subject: `Roboto v2.138 - Apache-2.0\n${fontLicense}` }, content,
     footer: (page, pages) => ({ text: `${page} / ${pages}`, alignment: "center", fontSize: 8, color: "#52647A", margin: [0, 12, 0, 0] }),
   };
   return pdfMake.createPdf(definition).getBlob();

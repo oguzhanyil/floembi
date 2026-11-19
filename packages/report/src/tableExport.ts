@@ -1,12 +1,16 @@
-import type { VisualResultColumn } from "@floem/client";
+import type { VisualFormat, VisualResultColumn } from "@floem/client";
 
 export type TableValue = string | number | boolean | null;
 export interface ExportTable {
+  title?: string;
   columns: VisualResultColumn[];
   rows: TableValue[][];
   truncated: boolean;
 }
 export type TableExportKind = "pdf" | "xlsx" | "csv";
+export const allowedExportKinds = (format: VisualFormat) => (["pdf", "xlsx", "csv"] as const).filter((kind) =>
+  (format.exportData ?? format.gridExport ?? true) && (kind === "pdf" ? (format.exportPdf ?? format.gridExportPdf ?? true)
+    : kind === "xlsx" ? (format.exportExcel ?? format.gridExportExcel ?? true) : (format.exportCsv ?? format.gridExportCsv ?? true)));
 
 // CSV hücreleri Excel'de formül olarak yorumlanmasın; sayılar sayısal kalır.
 function csvCell(value: TableValue) {
@@ -36,11 +40,11 @@ export async function tableExportBlob(table: ExportTable, kind: TableExportKind)
   return tablePdfBlob(table);
 }
 
-export function downloadTableBlob(blob: Blob, kind: TableExportKind) {
+export function downloadTableBlob(blob: Blob, kind: TableExportKind, name = "floem-tablo") {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `floem-tablo.${kind}`;
+  link.download = `${name}.${kind}`;
   document.body.append(link);
   link.click();
   link.remove();

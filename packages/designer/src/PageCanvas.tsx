@@ -2,7 +2,7 @@ import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualSt
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
   visualMotion, visualStyle,
-  visualIsVisible, rowActionValue, ReportViewport,
+  visualIsVisible, rowActionValue, ReportViewport, VisualContextMenu,
   type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
 import { useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
@@ -96,6 +96,7 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 export function PageCanvas({
   page, selectedId, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
   pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
+  onDuplicate, onShiftLayer, onFormat,
 }: {
   page: ReportPage;
   previewActions: boolean;
@@ -113,6 +114,9 @@ export function PageCanvas({
   onSelect: (id: string | null) => void;
   onChange: (v: Visual) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (v: Visual) => void;
+  onShiftLayer: (id: string, direction: -1 | 1) => void;
+  onFormat: (id: string) => void;
   onDropField: (field: FieldPayload, x: number, y: number) => void;
   onDropOnVisual: (visualId: string, field: FieldPayload) => void;
   dataRev: string;
@@ -224,12 +228,22 @@ export function PageCanvas({
           const selected = v.id === selectedId;
           const title = visualTitle(v);
           return (
+            <VisualContextMenu key={`${page.id}:${v.id}`} visual={v} onSelect={previewActions ? undefined : () => onSelect(v.id)}
+              editItems={previewActions ? [] : [
+                { label: "Biçim / özellikler", action: () => onFormat(v.id) },
+                { label: "Çoğalt", action: () => onDuplicate(v) },
+                { label: v.format.locked ? "Kilidi aç" : "Kilitle", action: () => onChange({ ...v, format: { ...v.format, locked: !v.format.locked } }) },
+                { label: "Bir katman öne", disabled: !!v.format.locked || page.visuals.at(-1)?.id === v.id, action: () => onShiftLayer(v.id, 1) },
+                { label: "Bir katman geriye", disabled: !!v.format.locked || page.visuals[0]?.id === v.id, action: () => onShiftLayer(v.id, -1) },
+                { label: "Sil", disabled: !!v.format.locked, action: () => onDelete(v.id) },
+              ]}>
             <div
               key={v.id}
+              data-visual-id={v.id}
               className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.format.locked ? "locked" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
               style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
               role={previewActions && v.format.action && v.type !== "button" ? "button" : undefined}
-              tabIndex={previewActions && v.format.action && v.type !== "button" ? 0 : undefined}
+              tabIndex={0}
               onKeyDown={(e) => { if (previewActions && v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAction(v); } }}
               onClick={(e) => { if (previewActions && v.type !== "button" && v.format.action) { e.stopPropagation(); onAction(v); } }}
               onPointerDown={(e) => {
@@ -308,6 +322,7 @@ export function PageCanvas({
                 <div className="visual-broken">Bu görseldeki bir alan modelde artık yok</div>
               ) : null}
             </div>
+            </VisualContextMenu>
           );
         })}
       </div>)}

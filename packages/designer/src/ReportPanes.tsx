@@ -2,7 +2,7 @@ import type { ActionIcon, Agg, FieldRef, ModelTable, ReportPage, ValueRef, Visua
 import {
   AGG_LABEL, SERIES, VISUAL_DEFS, VISUAL_GROUPS, safeActionIcon, valueLabel, type WellDef, type WellKey,
 } from "@floem/report";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from "./fields";
 import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 import { VisualTypeIcon } from "./VisualTypeIcon";
@@ -531,18 +531,6 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
               onChange={(e) => set({ gridSearch: e.target.checked })} />Tabloda ara</label>
             <label className="inline"><input type="checkbox" checked={f.gridColumnChooser !== false}
               onChange={(e) => set({ gridColumnChooser: e.target.checked })} />Sütun seçici</label>
-            <label className="inline"><input type="checkbox" checked={f.gridExport !== false}
-              onChange={(e) => set({ gridExport: e.target.checked })} />İndirmeye izin ver</label>
-            {f.gridExport !== false && <>
-              <label className="inline"><input type="checkbox" checked={f.gridExportPdf !== false}
-                onChange={(e) => set({ gridExportPdf: e.target.checked })} />PDF indirme</label>
-              <label className="inline"><input type="checkbox" checked={f.gridExportExcel !== false}
-                onChange={(e) => set({ gridExportExcel: e.target.checked })} />Excel indirme</label>
-              <label className="inline"><input type="checkbox" checked={f.gridExportCsv !== false}
-                onChange={(e) => set({ gridExportCsv: e.target.checked })} />CSV indirme</label>
-            </>}
-            <label className="inline"><input type="checkbox" checked={f.gridContextMenu !== false}
-              onChange={(e) => set({ gridContextMenu: e.target.checked })} />Sağ tık menüsü</label>
             <label className="inline"><input type="checkbox" checked={f.gridRowCount !== false}
               onChange={(e) => set({ gridRowCount: e.target.checked })} />Satır sayısını göster</label>
             <p className="hint">Arama veya sütun filtreleri kapatılınca etkin filtreleri temizlenir.</p>
@@ -676,13 +664,14 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell,
+  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0,
 }: {
   page: ReportPage;
   pages: ReportPage[];
   tables: ModelTable[];
   onPageChange: (p: ReportPage) => void;
   visual: Visual | null;
+  formatRequest?: number;
   onDuplicate: () => void;
   onShiftLayer: (step: -1 | 1) => void;
   onPickType: (t: VisualType) => void;
@@ -691,6 +680,7 @@ export function VisualizationsPane({
   onMoveWell: (from: WellDrag, to: WellDef, index: number) => void;
 }) {
   const [tab, setTab] = useState<"fields" | "format">("fields");
+  useEffect(() => { if (formatRequest) setTab("format"); }, [formatRequest]);
   return (
     <aside className="viz-pane">
       <h3>Görselleştirmeler</h3>
@@ -742,6 +732,19 @@ export function VisualizationsPane({
                 <label>Opaklık ({Math.round((visual.format.opacity ?? 1) * 100)}%)<input type="range" min="0" max="100"
                   value={Math.round((visual.format.opacity ?? 1) * 100)}
                   onChange={(e) => onChange({ ...visual, format: { ...visual.format, opacity: Number(e.target.value) / 100 } })} /></label>
+              </Section>
+              <Section title="Sağ tık ve indirme">
+                <label className="inline"><input type="checkbox" checked={visual.format.contextMenu ?? visual.format.gridContextMenu ?? true}
+                  onChange={(e) => onChange({ ...visual, format: { ...visual.format, contextMenu: e.target.checked } })} />Sağ tık menüsü</label>
+                {!["shape", "image", "button"].includes(visual.type) && <>
+                  <label className="inline"><input type="checkbox" checked={visual.format.exportData ?? visual.format.gridExport ?? true}
+                    onChange={(e) => onChange({ ...visual, format: { ...visual.format, exportData: e.target.checked } })} />Veri indirmeye izin ver</label>
+                  {([ ["exportPdf", "gridExportPdf", "PDF"], ["exportExcel", "gridExportExcel", "Excel"], ["exportCsv", "gridExportCsv", "CSV"] ] as const).map(([key, legacy, label]) =>
+                    <label className="inline" key={key}><input type="checkbox" checked={visual.format[key] ?? visual.format[legacy] ?? true}
+                      disabled={!(visual.format.exportData ?? visual.format.gridExport ?? true)}
+                      onChange={(e) => onChange({ ...visual, format: { ...visual.format, [key]: e.target.checked } })} />{label} indirme</label>)}
+                  <p className="hint">İndirme, nesnenin gösterdiği veriyi aktarır. PDF bir veri dökümüdür.</p>
+                </>}
               </Section>
               <FormatPanel visual={visual} page={page} pages={pages} tables={tables} onChange={onChange} />
             </>

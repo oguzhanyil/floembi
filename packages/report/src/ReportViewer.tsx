@@ -1,6 +1,7 @@
 import type { FilterRef, ReportDefinition, Visual, VisualAction, VisualState } from "@floem/client";
 import { useState } from "react";
 import { ReportViewport } from "./ReportViewport";
+import { VisualContextMenu } from "./VisualContextMenu";
 import {
   DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
   type CrossFilter,
@@ -93,12 +94,14 @@ export function ReportViewer({
           {page.visuals.filter((v) => visualIsVisible(v, visibility[page.id] ?? {})).map((v) => {
             const title = visualTitle(v);
             return (
+              <VisualContextMenu key={`${page.id}:${v.id}`} visual={v}>
               <div
                 key={v.id}
+                data-visual-id={v.id}
                 className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
                 style={{ left: v.x * scale, top: v.y * scale, width: v.w, height: v.h, scale, transformOrigin: "top left", ...visualStyle(v) }}
                 role={v.format.action && v.type !== "button" ? "button" : undefined}
-                tabIndex={v.format.action && v.type !== "button" ? 0 : undefined}
+                tabIndex={0}
                 onKeyDown={(e) => { if (v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); runAction(v); } }}
                 onClick={(e) => { e.stopPropagation(); if (v.type !== "button" && v.format.action) runAction(v); }}
               >
@@ -132,6 +135,7 @@ export function ReportViewer({
                   />
                 </div>
               </div>
+              </VisualContextMenu>
             );
           })}
         </div>)}

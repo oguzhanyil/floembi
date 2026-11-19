@@ -139,10 +139,29 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
+### 19.11.2026 tüm nesnelerde ortak sağ tık
+
+`ContextMenu.tsx` portal/klavye menüsü, `VisualContextMenu.tsx` nesne kapsamı ve işlem kayıt arayüzüdür.
+PageCanvas ve ReportViewer her görseli bu kapsamla sarar. Yeni görseller temel menüyü otomatik alır;
+türe özel işlemler `useVisualMenuSource`, veri aktarımı `useVisualExports` ile eklenir.
+Tasarım modunda biçim panelini açma, çoğaltma, kilitleme, katman sırası ve silme; tüm modlarda nesne
+bilgileri; uygun türlerde metin kopyalama, yeniden sorgulama, dilimleyici temizleme ve hiyerarşi
+işlemleri vardır. Web/önizleme tasarım işlemleri içermez. Grid kendi hücre/sütun bağlamını korur
+ve aynı menüye ortak işlemleri ekler. Menü tıklaması nesnenin eylemini tetiklemez.
+
+Yeni `contextMenu`, `exportData`, `exportPdf`, `exportExcel`, `exportCsv` ayarları tüm nesnelerde
+**Biçim → Sağ tık ve indirme** bölümündedir. Eski `gridContextMenu` / `gridExport*` değerleri yeni
+alan tanımlı değilse okunur. Grafik/kart/dilimleyici güncel sorgu sonucunu; matris/ağaç mevcut
+görünür hiyerarşiyi dışa aktarır. PDF grafik resmi değil veri dökümüdür. Statik şekil/resim/düğme
+için veri indirme gösterilmez. Matris/ağaç dosyalarında ara toplam satırları bulunduğundan tüm
+satırları toplamak doğru genel toplamı vermeyebilir.
+26 görsel türünün tamamında tasarım ve izleyici menüsü, gerçek çoğaltma/kilit/katman/silme/biçim,
+grafik/ağaç CSV aktarımı ve eski tablo indirmeleri Chromium testinde doğrulandı.
+
 ### 19.11.2026 parametrik tablo araçları
 
-Biçim → AG Grid tablo bölümünde sütun filtreleri, Tabloda ara, sütun seçici, indirme ve
-satır sayısı her nesne için ayrı ayarlanır. `VisualFormat` içindeki `gridFilters`, `gridSearch`,
+Biçim → AG Grid tablo bölümünde sütun filtreleri, Tabloda ara, sütun seçici ve
+satır sayısı her tablo için ayrı ayarlanır; indirme ortak bölüme taşındı. `VisualFormat` içindeki `gridFilters`, `gridSearch`,
 `gridColumnChooser`, `gridExport`, `gridRowCount` Desktop/web ortak bileşeninde uygulanır;
 eksik değerler açık kabul edilir. Filtre/arama kapatıldığında etkin koşul temizlenir, sütun
 seçici kapatıldığında gizlenen sütunlar geri gelir. Tüm üst araçlar kapalıysa araç çubuğu kalkar.

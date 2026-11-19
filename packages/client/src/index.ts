@@ -391,6 +391,12 @@ export interface VisualFormat {
   gridExportExcel?: boolean;
   gridExportCsv?: boolean;
   gridContextMenu?: boolean;
+  /** Ortak nesne ayarları; eski grid seçenekleri geriye uyumluluk için okunur. */
+  contextMenu?: boolean;
+  exportData?: boolean;
+  exportPdf?: boolean;
+  exportExcel?: boolean;
+  exportCsv?: boolean;
   gridRowCount?: boolean;
   showTitle?: boolean;
   backgroundColor?: string;

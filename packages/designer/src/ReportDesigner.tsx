@@ -43,6 +43,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const timer = useRef<number | null>(null);
   const [pageId, setPageId] = useState(report.pages[0]?.id ?? "p1");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [formatRequest, setFormatRequest] = useState(0);
   const [visualizationsOpen, setVisualizationsOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
   const [dataOpen, setDataOpen] = useState((host.report.pages[0]?.width ?? 0) < 1600);
   const panelId = useId();
@@ -400,6 +401,9 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           onSelect={setSelectedId}
           onChange={updateVisual}
           onDelete={deleteVisual}
+          onDuplicate={duplicateVisual}
+          onShiftLayer={shiftLayer}
+          onFormat={(id) => { setSelectedId(id); setVisualizationsOpen(true); setFormatRequest((value) => value + 1); }}
           onDropField={dropOnCanvas}
           onDropOnVisual={(id, f) => {
             const v = page.visuals.find((x) => x.id === id);
@@ -489,6 +493,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         tables={tables}
         onPageChange={(next) => updatePage(() => next)}
         visual={selected}
+        formatRequest={formatRequest}
         onDuplicate={() => selected && duplicateVisual(selected)}
         onShiftLayer={(step) => selected && shiftLayer(selected.id, step)}
         onPickType={pickType}

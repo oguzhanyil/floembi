@@ -11,6 +11,7 @@ import {
 } from "./useVisualData";
 import { CardVisual, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
 import { VisualErrorBoundary } from "./VisualErrorBoundary";
+import { useVisualExports, useVisualMenuSource } from "./VisualContextMenu";
 
 type Scalar = string | number | boolean;
 
@@ -287,6 +288,15 @@ function VisualBodyContent({
   );
   const selected = cross && cross.visualId === v.id ? cross.value : undefined;
   const outerSelection = detailReady ?? (!!cross && cross.visualId !== v.id);
+  useVisualMenuSource("body", () => [
+    ...(!["shape", "image", "button"].includes(v.type) ? [{ label: "Veriyi yeniden sorgula", action: retry }] : []),
+    ...(v.type === "slicer" && onState ? [{ label: "Dilimleyici seçimini temizle", action: () => onState({ ...st, selected: [], range: [null, null] }) }] : []),
+    ...(drillable && drill.level > 0 && onState ? [{ label: "En üst düzeye dön", action: () => onState({ ...st, drill: { level: 0, path: [] } }) }] : []),
+  ]);
+  useVisualExports("data-export", v.format, () => {
+    if (v.type === "table" || isMatrix || data.state !== "ready" || (v.format.detailOnly && !outerSelection)) return null;
+    return { ...data.result, title: v.title || VISUAL_DEFS[v.type].label };
+  });
 
   if (v.type === "shape") return <ShapeVisual format={v.format} />;
   if (v.type === "image") return <ImageVisual format={v.format} />;
@@ -340,7 +350,7 @@ function VisualBodyContent({
       <div aria-busy={mdata.state === "loading"} className={"v-body " + (mdata.state === "loading" ? "loading" : "")}>
         {mdata.state === "loading" && <span className="v-refreshing" role="status">Güncelleniyor…</span>}
         <MatrixVisual v={v} parts={parts} state={st} onState={onState} selected={selected} onSelect={onCross}
-          onRowAction={onRowAction} />
+          onRowAction={onRowAction} loading={mdata.state === "loading"} />
       </div>
     );
   }
@@ -384,6 +394,7 @@ function VisualBodyContent({
       {v.type === "table" && (
         <AgDataGrid
           result={result} selected={selected} onSelect={onCross} format={v.format}
+          loading={data.state === "loading"}
           selectedKey={cross && cross.visualId === v.id ? cross.key : undefined}
           onSelectRow={onCrossRow}
           onRowAction={onRowAction}

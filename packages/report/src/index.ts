@@ -5,6 +5,8 @@ export * from "./reportUtils";
 export * from "./visualStyle";
 export * from "./visualActions";
 export * from "./ReportViewport";
+export * from "./VisualContextMenu";
+export type { ContextMenuItem } from "./ContextMenu";
 export * from "./useVisualData";
 export * from "./visuals";
 export * from "./AgDataGrid";

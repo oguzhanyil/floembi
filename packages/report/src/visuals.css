@@ -175,13 +175,19 @@
 .v-ag-grid .ag-row.v-ag-total { font-weight: 700; background: #edf3fb; }
 .v-ag-action { width: 26px; height: 26px; margin: 1px auto; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #2563eb; cursor: pointer; }
 .v-ag-action:hover { background: #dbeafe; }
-.v-table-menu { position: fixed; z-index: 10000; display: flex; flex-direction: column; width: 232px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 6px; border: 1px solid #d9e2ed; border-radius: 10px; background: #fff; color: #233348; box-shadow: 0 10px 36px #10284c30; font: 12px "Segoe UI", system-ui, sans-serif; }
-.v-table-menu button { display: block; flex: none; width: 100%; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; padding: 8px 10px; font: inherit; cursor: pointer; }
-.v-table-menu button:hover, .v-table-menu button:focus-visible { background: #eaf2ff; outline: 2px solid #2563eb; outline-offset: -2px; }
-.v-table-menu button:disabled { opacity: .45; cursor: default; }
-.v-table-menu button.v-table-menu-separator { border-top: 1px solid #e4eaf2; border-radius: 0; margin-top: 4px; padding-top: 11px; }
+.v-context-menu { position: fixed; z-index: 10000; display: flex; flex-direction: column; width: 232px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 6px; border: 1px solid #d9e2ed; border-radius: 10px; background: #fff; color: #233348; box-shadow: 0 10px 36px #10284c30; font: 12px "Segoe UI", system-ui, sans-serif; }
+.v-context-menu button { display: block; flex: none; width: 100%; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; padding: 8px 10px; font: inherit; cursor: pointer; }
+.v-context-menu button:hover, .v-context-menu button:focus-visible { background: #eaf2ff; outline: 2px solid #2563eb; outline-offset: -2px; }
+.v-context-menu button:disabled { opacity: .45; cursor: default; }
+.v-context-menu button.v-context-menu-separator { border-top: 1px solid #e4eaf2; border-radius: 0; margin-top: 4px; padding-top: 11px; }
 .v-table-feedback { flex: none; font-size: 11px; padding: 3px 5px; color: var(--muted); }
 .v-table-feedback.error { color: #b91c1c; }
+.v-object-details { max-width: min(420px, 90vw); padding: 24px; border: 1px solid #d9e2ed; border-radius: 12px; background: #fff; color: #233348; box-shadow: 0 16px 48px #10284c30; }
+.v-object-details::backdrop { background: #10284c44; }
+.v-object-details h3 { margin: 0 0 16px; }
+.v-object-details dl { display: grid; grid-template-columns: auto 1fr; gap: 10px 24px; font-size: 13px; }
+.v-object-details dt { color: #52647a; }
+.v-object-details dd { margin: 0; }
 
 /* Çok satırlı kart */
 .v-multicard { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 6px; }

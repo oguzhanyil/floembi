@@ -1,8 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { StrictMode, useState } from "react";
-import { VisualBody, visualStyle, ReportViewer, AgDataGrid } from "../../packages/report/src/index";
+import { VisualBody, visualStyle, ReportViewer, AgDataGrid, VISUAL_DEFS } from "../../packages/report/src/index";
 import { ReportDesigner } from "../../packages/designer/src/ReportDesigner";
-import type { ReportDefinition, Visual, VisualFormat, VisualResult } from "../../packages/client/src/index";
+import type { ReportDefinition, Visual, VisualFormat, VisualResult, VisualQuery, VisualType } from "../../packages/client/src/index";
 import { tableExportBlob, type TableExportKind } from "../../packages/report/src/tableExport";
 
 const result = (value: number | null): VisualResult => ({
@@ -33,6 +33,26 @@ const report: ReportDefinition = { version: 1, pages: [{ id: "p1", name: "Deneme
 ] }] };
 const save = async (value: ReportDefinition) => { Object.assign(window, { savedReport: value }); };
 const runReport = async () => result(42);
+const menuTypes = Object.keys(VISUAL_DEFS) as VisualType[];
+const menuReport: ReportDefinition = { version: 1, pages: [{ id: "objects", name: "Nesneler", width: 1280, height: 2200,
+  visuals: menuTypes.map((type, index) => visual(`object-${type}`, { type, x: (index % 3) * 420, y: Math.floor(index / 3) * 240, w: 400, h: 220,
+    group: [ { table: "T", column: "Bölge" }, ...(["matrix", "treegrid"].includes(type) ? [{ table: "T", column: "Şehir" }] : []) ],
+    legend: [ { table: "T", column: "Dönem" } ],
+    values: [{ table: "T", column: "N", agg: "sum" }, ...(type === "scatter" ? [{ table: "T", column: "N", agg: "max" as const }] : [])],
+    format: { showTitle: false, text: "Nesne metni", action: type === "button" ? { type: "page", pageId: "second" } : undefined },
+  })) }, { id: "second", name: "İkinci sayfa", width: 1280, height: 860, visuals: [] }] };
+let holdMenuQueries = false;
+const heldMenuQueries: (() => void)[] = [];
+Object.assign(window, { pauseMenuQueries: () => { holdMenuQueries = true; }, resumeMenuQueries: () => {
+  holdMenuQueries = false; heldMenuQueries.splice(0).forEach((done) => done());
+} });
+const runMenuReport = async (q: VisualQuery): Promise<VisualResult> => {
+  if (holdMenuQueries) await new Promise<void>((done) => heldMenuQueries.push(done));
+  return ({
+  columns: [...q.group.map((g) => ({ name: g.column, kind: "group" as const, type: "string" })),
+    ...q.values.map((_, i) => ({ name: `Değer ${i + 1}`, kind: "value" as const, type: "double" }))],
+  rows: (q.group.length ? [1, 2] : [1]).map((i) => [...q.group.map((g) => `${g.column} ${i}`), ...q.values.map(() => i * 10)]), truncated: false,
+}); };
 const gridResult: VisualResult = {
   columns: [{ name: "Müşteri", kind: "group", type: "string" }, { name: "Tutar", kind: "value", type: "double" }],
   rows: [["Alpha", 1], ["Beta", 2], ["Gamma", 3]], total: [6], truncated: false,
@@ -53,11 +73,12 @@ Object.assign(window, { exportSample: async (kind: TableExportKind) => {
 } });
 function App() {
   const [mode, setMode] = useState("fixtures");
-  Object.assign(window, { setTestMode: setMode });
+  const [allReport, setAllReport] = useState(menuReport);
+  Object.assign(window, { setTestMode: setMode, menuTypes, setAllReport });
   if (mode === "grid") return <GridFixture />;
   if (mode !== "fixtures") return <div className="studio" style={{ height: "100vh" }}>
-    {mode === "viewer" ? <ReportViewer report={report} run={runReport} /> :
-      <ReportDesigner host={{ report, tables: [], dataRev: "test", run: runReport, save, onError: console.error }} />}
+    {mode.endsWith("viewer") ? <ReportViewer report={mode.startsWith("all") ? allReport : report} run={mode.startsWith("all") ? runMenuReport : runReport} /> :
+      <ReportDesigner host={{ report: mode.startsWith("all") ? allReport : report, tables: [], dataRev: "test", run: mode.startsWith("all") ? runMenuReport : runReport, save, onError: console.error }} />}
   </div>;
   return <div className="fixtures">{fixtures.map((v) => <section data-fixture={v.id} key={v.id}>
     <div className="visual no-title" style={{ position: "relative", width: v.w, height: v.h, ...visualStyle(v) }}>

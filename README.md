@@ -147,14 +147,32 @@ bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalışt
   Kaydedilip yayımlanan raporda eylemler web görüntüleyicisinde de çalışır. Görünürlük ve filtre
   değişiklikleri yalnızca izleyicinin oturumundadır; rapor tasarımını değiştirmez.
 
+#### Tüm nesnelerde sağ tık menüsü
+
+- Grafik, kart, metin, şekil, resim, düğme, dilimleyici, tablo, matris ve ağaç tablo aynı menü
+  altyapısını kullanır. **Sağ tık** veya odaklı nesnede **Shift+F10** ile açılır; ok tuşları,
+  Enter ve Esc desteklenir. Menü tuvalin yakınlaştırmasından etkilenmez.
+- Desktop tasarımında **Biçim / özellikler**, **Çoğalt**, **Kilitle / Kilidi aç**, **Bir katman öne / geriye**
+  ve **Sil** bulunur. Biçim işlemi kapalıysa Görselleştirmeler panelini açar ve ilgili nesneyi seçer.
+  Kilitli nesnede silme ve katman taşıma kapalıdır. Web ve etkileşim önizlemesinde tasarım işlemleri yoktur.
+- Tüm nesnelerde **Nesne bilgileri**; metin, düğme ve kartlarda **Görünen metni kopyala** vardır.
+  Veri içeren nesneler güncel sorgu sonucunu **PDF / Excel (.xlsx) / CSV** aktarır.
+  **PDF veri dökümüdür**, grafik görüntüsünün çıktısı değildir. Sorgu sonucu yüklenirken veya hata
+  durumundayken eski veri indirmeye sunulmaz. Düğmeye sağ tıklamak onun tıklama eylemini çalıştırmaz.
+- Matris ve ağaç tabloda **Tümünü genişlet / daralt** vardır. Aktarım, görüntülenen hiyerarşi
+  satırlarını ve sütunları izler; ağaç araması ve sıralaması uygulanır. Alt toplamlar ayrı satır olarak
+  yer alabilir; dosyadaki tüm satırları tekrar toplamak aynı veriyi birden çok kez sayabilir.
+- Ortak ayarlar **Görselleştirmeler → Biçim → Sağ tık ve indirme** bölümündedir. Menü ve indirme
+  biçimleri nesne bazında kapatılabilir. Eski tablo raporlarının kapalı ayarları korunur.
+
 #### AG Grid tablo ve ağaç tablo
 
 - **Görselleştirmeler → Veri → Tablo**, AG Grid Community kullanır. Sütun başlığından sıralayın,
   başlığın altındaki alanlarla filtreleyin, sütunları sürükleyip yeniden sıralayın veya kenarından
   genişletin. Üst araç çubuğunda genel arama, sütun göster/gizle ve **İndir → PDF / Excel (.xlsx) / CSV** bulunur.
   **Biçim → AG Grid tablo** altında her tablo için **Sütun filtreleri**, **Tabloda ara**,
-  **Sütun seçici**, **Sağ tık menüsü**, **İndirmeye izin ver** ve **Satır sayısını göster** ayrı ayrı açılıp kapatılır.
-  PDF, Excel ve CSV indirmeleri de ayrı ayrı kapatılabilir.
+  **Sütun seçici** ve **Satır sayısını göster** ayrı ayrı açılıp kapatılır.
+  Menü ve PDF/Excel/CSV ayarları yukarıdaki ortak **Sağ tık ve indirme** bölümündedir.
   İlk sütunu sabitleme, genel toplam ve sayfalama ayarları da buradadır. Arama veya sütun
   filtreleri kapatılınca ilgili etkin filtre temizlenir; sütun seçici kapatılınca tüm sütunlar
   yeniden görünür. Tüm üst araçlar kapalıysa araç çubuğu yer kaplamaz. Ayarlar raporla kaydedilir

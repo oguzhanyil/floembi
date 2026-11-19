@@ -5,6 +5,8 @@ import { ActionGlyph } from "./ActionGlyph";
 import { safeActionIcon } from "./visualActions";
 import { formatValue, valueLabel } from "./reportUtils";
 import type { MatrixPart } from "./useVisualData";
+import { useVisualExports, useVisualMenuSource } from "./VisualContextMenu";
+import { allowedExportKinds } from "./tableExport";
 
 type Raw = string | number | boolean | null;
 const MAX_RENDER_ROWS = 3000;
@@ -20,7 +22,7 @@ interface RowNode {
  * toplam. Yalnızca satır alanları verilirse ağaç tablo (tree grid) gibi davranır.
  */
 export function MatrixVisual({
-  v, parts, state, onState, selected, onSelect, onRowAction,
+  v, parts, state, onState, selected, onSelect, onRowAction, loading = false,
 }: {
   v: Visual;
   parts: MatrixPart[];
@@ -29,6 +31,7 @@ export function MatrixVisual({
   selected?: unknown;
   onSelect?: CrossSelect;
   onRowAction?: (value: Raw) => void;
+  loading?: boolean;
 }) {
   const R = v.group.length;
   const C = v.type === "treegrid" ? 0 : (v.legend ?? []).length;
@@ -138,6 +141,7 @@ export function MatrixVisual({
   const hasSel = selected !== undefined;
   const rowHeader = v.group.map((g) => g.column).join(" / ");
   const exportCsv = () => {
+    if (loading) return;
     const safeCell = (value: string) => {
       const guarded = /^[\s]*[+\-=@\t\r]/.test(value) ? `'${value}` : value;
       return `"${guarded.replaceAll('"', '""')}"`;
@@ -151,6 +155,20 @@ export function MatrixVisual({
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(href), 1000);
   };
+  useVisualMenuSource("matrix", () => [
+    ...(R > 1 && onState ? [
+      { label: "Tümünü genişlet", action: () => expandAll(true) },
+      { label: "Tümünü daralt", action: () => expandAll(false) },
+    ] : []),
+    ...(treeMode ? [{ label: "Ağaç aramasını ve sıralamasını temizle", action: () => { setSearch(""); setTreeSort("source"); } }] : []),
+  ]);
+  useVisualExports("matrix-export", v.format, () => loading ? null : ({
+    title: v.title || (treeMode ? "Ağaç tablo" : "Matris"),
+    columns: [{ name: rowHeader || "Satır", kind: "group", type: "string" }, ...colGroups.flatMap((g) =>
+      valueNames.map((name, i) => ({ ...valueCols[i], name: [g.label, name].filter(Boolean).join(" · "), kind: "value" as const })))],
+    rows: visible.map((n) => [n.path.map(String).join(" / "), ...colGroups.flatMap((g) => valueNames.map((_, i) => cellValues(n.path, g.path)[i] ?? null))]),
+    truncated: visible.length >= MAX_RENDER_ROWS || parts.some((p) => p.result.truncated),
+  }));
 
   return (
     <div className="v-matrix-wrap">
@@ -162,7 +180,7 @@ export function MatrixVisual({
           <option value="za">Ad Z–A</option><option value="valueDesc">Değer büyükten</option>
           <option value="valueAsc">Değer küçükten</option>
         </select>
-        <button type="button" onClick={exportCsv}>CSV ↓</button>
+        {allowedExportKinds(v.format).includes("csv") && <button type="button" disabled={loading} onClick={exportCsv}>CSV ↓</button>}
       </div>}
       {R > 1 && onState && (
         <div className="v-matrix-tools">

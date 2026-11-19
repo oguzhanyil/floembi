@@ -100,12 +100,13 @@ try {
   assert.equal(await evaluate('document.querySelector(".v-ag-tools input[type=search]").value'), "");
   assert.equal(await evaluate('document.querySelector(".ag-floating-filter input").value'), "");
   const openMenu = async (selector = '.ag-row[row-index="0"] .ag-cell[col-id="c0"]') => {
+    await waitFor(`document.querySelector(${JSON.stringify(selector)})`);
     await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.x+10,clientY:r.y+10}))})()`);
-    await waitFor('document.querySelector(".v-table-menu")');
+    await waitFor('document.querySelector(".v-context-menu")');
   };
-  const choose = (label) => evaluate(`([...document.querySelectorAll('.v-table-menu button')].find(e=>e.textContent===${JSON.stringify(label)})).click()`);
+  const choose = (label) => evaluate(`([...document.querySelectorAll('.v-context-menu button')].find(e=>e.textContent===${JSON.stringify(label)})).click()`);
   await openMenu();
-  assert.match(await evaluate('document.querySelector(".v-table-menu").textContent'), /Hücreyi kopyala.*Satırı kopyala.*PDF indir.*Excel \(.xlsx\) indir.*CSV indir/);
+  assert.match(await evaluate('document.querySelector(".v-context-menu").textContent'), /Hücreyi kopyala.*Satırı kopyala.*PDF indir.*Excel \(.xlsx\) indir.*CSV indir/);
   await evaluate('Object.defineProperty(navigator.clipboard,"writeText",{configurable:true,value:async text=>{window.copiedText=text}})');
   await choose('Hücreyi kopyala');
   assert.equal(await evaluate('window.copiedText'), 'Alpha');
@@ -122,9 +123,9 @@ try {
   await waitFor('document.querySelector(".ag-header-cell[col-id=c0]")');
   await evaluate('window.setGridOptions({gridExport:false,gridFilters:false,gridSearch:false,gridColumnChooser:false})');
   await openMenu();
-  assert.doesNotMatch(await evaluate('document.querySelector(".v-table-menu").textContent'), /indir|filtreleri|sütunu gizle|sütunları göster/);
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-context-menu").textContent'), /indir|filtreleri|sütunu gizle|sütunları göster/);
   await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
-  await waitFor('!document.querySelector(".v-table-menu")');
+  await waitFor('!document.querySelector(".v-context-menu")');
   await evaluate('window.setGridOptions({gridContextMenu:false})');
   assert(await evaluate('document.querySelector(".v-ag-wrap").dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true}))'));
   await evaluate('window.setGridOptions({gridContextMenu:true,gridExport:true,gridFilters:true,gridSearch:true,gridColumnChooser:true})');
@@ -133,12 +134,12 @@ try {
   await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"End",bubbles:true}))');
   assert.equal(await evaluate('document.activeElement.textContent'), 'CSV indir');
   await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
-  await waitFor('!document.querySelector(".v-table-menu")');
+  await waitFor('!document.querySelector(".v-context-menu")');
   await evaluate('window.setGridOptions({gridExportPdf:false,gridExportExcel:false})');
   await openMenu();
-  assert.doesNotMatch(await evaluate('document.querySelector(".v-table-menu").textContent'), /PDF|Excel/);
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-context-menu").textContent'), /PDF|Excel/);
   await evaluate('document.body.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}))');
-  await waitFor('!document.querySelector(".v-table-menu")');
+  await waitFor('!document.querySelector(".v-context-menu")');
   await evaluate('window.setGridOptions({gridExportPdf:true,gridExportExcel:true})');
   const downloads = join(dir, 'downloads'); await mkdir(downloads);
   await call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
@@ -147,7 +148,7 @@ try {
   await waitFor('document.querySelector(".v-ag-count")?.textContent === "1 / 3 satır"');
   for (const [kind, label] of [['csv','CSV indir'],['xlsx','Excel (.xlsx) indir'],['pdf','PDF indir']]) {
     await evaluate('document.querySelector(".v-ag-tools button[aria-haspopup=menu]").click()');
-    await waitFor('document.querySelector(".v-table-menu")');
+    await waitFor('document.querySelector(".v-context-menu")');
     await choose(label);
     const path = join(downloads, `floem-tablo.${kind}`);
     for (let i=0; i<150 && !existsSync(path); i++) await delay(100);
@@ -192,8 +193,8 @@ try {
   await openMenu();
   await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
   await evaluate('document.querySelector(".ag-cell[col-id=c0]").dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:innerWidth-1,clientY:innerHeight-1}))');
-  await waitFor('document.querySelector(".v-table-menu")');
-  assert(await evaluate('(()=>{const r=document.querySelector(".v-table-menu").getBoundingClientRect();return r.right<=innerWidth && r.bottom<=innerHeight && r.left>=0 && r.top>=0})()'));
+  await waitFor('document.querySelector(".v-context-menu")');
+  assert(await evaluate('(()=>{const r=document.querySelector(".v-context-menu").getBoundingClientRect();return r.right<=innerWidth && r.bottom<=innerHeight && r.left>=0 && r.top>=0})()'));
   await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
   if (process.env.FLOEM_UI_ARTIFACT_DIR) {
     const output = resolve(process.env.FLOEM_UI_ARTIFACT_DIR); await mkdir(output, { recursive: true });
@@ -235,7 +236,103 @@ try {
   await call("Input.dispatchMouseEvent", { type: "mouseMoved", x: handle.x+40, y: handle.y+20, button: "left", buttons: 1, modifiers: 1 });
   await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: handle.x+40, y: handle.y+20, button: "left", clickCount: 1, modifiers: 1 });
   await waitFor('window.savedReport?.pages[0].visuals[0].x === 140 && window.savedReport?.pages[0].visuals[0].y === 120');
-  console.log("PASS: sağ tık/klavye/kopyalama, araç izinleri, filtre/sıralama/sütun/sayfalama ile PDF-XLSX-CSV indirme ve formül güvenliği; metin/taşma, hata yalıtımı; 6 viewport/DPR, zoom, panel ve nesne taşıma.");
+  // Her nesne aynı menü altyapısını kullanır; izleyicide tasarım işlemleri bulunmaz.
+  await evaluate('window.setTestMode("all-viewer")');
+  await waitFor('document.querySelectorAll(".viewer .visual").length === window.menuTypes.length && document.querySelector("[data-visual-id=object-table] .ag-cell") && document.querySelector("[data-visual-id=object-column] canvas")');
+  const types = await evaluate('window.menuTypes');
+  const dismissMenu = async () => {
+    await evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+    await waitFor('!document.querySelector(".v-context-menu")');
+  };
+  for (const type of types) {
+    const selector = `[data-visual-id="object-${type}"] .visual-content ${type === 'table' ? '.ag-cell' : '*'} `;
+    await openMenu(selector);
+    const text = await evaluate('document.querySelector(".v-context-menu").textContent');
+    assert.match(text, /Nesne bilgileri/, type);
+    assert.doesNotMatch(text, /Çoğalt|Kilitle|Bir katman|Biçim \/ özellikler/, type);
+    if (!['shape', 'image', 'button'].includes(type)) assert.match(text, /PDF indir.*Excel \(.xlsx\) indir.*CSV indir/, type);
+    else assert.doesNotMatch(text, /indir/, type);
+    await dismissMenu();
+  }
+  for (const type of ['card', 'table', 'matrix']) {
+    await evaluate('window.pauseMenuQueries()');
+    await openMenu(`[data-visual-id=object-${type}]`); await choose('Veriyi yeniden sorgula');
+    await waitFor(`document.querySelector('[data-visual-id=object-${type}] .v-body.loading')`);
+    await openMenu(`[data-visual-id=object-${type}]`);
+    assert(await evaluate('[...document.querySelectorAll(".v-context-menu button")].filter(e=>e.textContent.includes("indir")).every(e=>e.disabled)'));
+    await dismissMenu(); await evaluate('window.resumeMenuQueries()');
+    await waitFor(`!document.querySelector('[data-visual-id=object-${type}] .v-body.loading')`);
+  }
+  await openMenu('[data-visual-id=object-button] button'); await choose('Nesne bilgileri');
+  await waitFor('document.querySelector(".v-object-details[open]")');
+  assert.equal(await evaluate('document.querySelector(".page-tab.active").textContent'), 'Nesneler');
+  await evaluate('document.querySelector(".v-object-details button").click()');
+  await waitFor('!document.querySelector(".v-object-details")');
+  await evaluate('document.querySelector("[data-visual-id=object-text]").focus(); document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"F10",shiftKey:true,bubbles:true,cancelable:true}))');
+  await waitFor('document.querySelector(".v-context-menu")');
+  await choose('Görünen metni kopyala');
+  assert.match(await evaluate('window.copiedText'), /Nesne metni/);
+  for (const type of ['matrix', 'treegrid']) {
+    const before = await evaluate(`document.querySelectorAll('[data-visual-id=object-${type}] tbody tr').length`);
+    await openMenu(`[data-visual-id=object-${type}]`); await choose('Tümünü genişlet');
+    await waitFor(`document.querySelectorAll('[data-visual-id=object-${type}] tbody tr').length > ${before}`);
+    await openMenu(`[data-visual-id=object-${type}]`); await choose('Tümünü daralt');
+    await waitFor(`document.querySelectorAll('[data-visual-id=object-${type}] tbody tr').length === ${before}`);
+  }
+  const objectDownloads = join(dir, 'object-downloads'); await mkdir(objectDownloads);
+  await call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: objectDownloads });
+  await openMenu('[data-visual-id=object-column] canvas'); await choose('CSV indir');
+  const chartCsv = join(objectDownloads, 'floem-nesne.csv');
+  for (let i=0; i<100 && !existsSync(chartCsv); i++) await delay(100);
+  assert.match(await readFile(chartCsv,'utf8'), /Bölge 1.*10/);
+  const matrixDownloads = join(dir, 'matrix-downloads'); await mkdir(matrixDownloads);
+  await call('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: matrixDownloads });
+  await input('[data-visual-id=object-treegrid] input[type=search]', 'Şehir 1');
+  await waitFor('document.querySelectorAll("[data-visual-id=object-treegrid] tbody tr").length === 2');
+  await openMenu('[data-visual-id=object-treegrid]'); await choose('CSV indir');
+  const matrixCsv = join(matrixDownloads, 'floem-nesne.csv');
+  for (let i=0; i<100 && !existsSync(matrixCsv); i++) await delay(100);
+  const matrixText = await readFile(matrixCsv,'utf8');
+  assert.match(matrixText, /Bölge 1 \/ Şehir 1/); assert.doesNotMatch(matrixText, /Şehir 2/);
+  await evaluate('window.setAllReport(r=>({...r,pages:r.pages.map(p=>({...p,visuals:p.visuals.map(v=>v.id==="object-column"?{...v,format:{...v.format,exportData:false}}:v)}))}))');
+  await openMenu('[data-visual-id=object-column]');
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-context-menu").textContent'), /indir/);
+  await dismissMenu();
+  await evaluate('window.setAllReport(r=>({...r,pages:r.pages.map(p=>({...p,visuals:p.visuals.map(v=>v.id==="object-shape"?{...v,format:{...v.format,contextMenu:false}}:v)}))}))');
+  assert(await evaluate('document.querySelector("[data-visual-id=object-shape]").dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true}))'));
+  await evaluate('window.setAllReport(r=>({...r,pages:r.pages.map(p=>({...p,visuals:p.visuals.map(v=>({...v,format:{...v.format,contextMenu:true}}))}))})); window.setTestMode("all-designer")');
+  await waitFor('document.querySelector(".canvas-mode-toggle") && document.querySelector("[data-visual-id=object-text]")');
+  for (const type of types) {
+    await openMenu(`[data-visual-id="object-${type}"] ${type === 'table' ? '.ag-cell' : '.visual-content'}`);
+    assert.match(await evaluate('document.querySelector(".v-context-menu").textContent'), /Biçim \/ özellikler.*Çoğalt.*Kilitle.*Bir katman öne.*Sil/, type);
+    await dismissMenu();
+  }
+  await openMenu('[data-visual-id=object-text]'); await choose('Biçim / özellikler');
+  await waitFor('document.querySelector(".viz-tabs .active")?.textContent.includes("Biçim")');
+  if (process.env.FLOEM_UI_ARTIFACT_DIR) {
+    await openMenu('[data-visual-id=object-text]');
+    const screenshot = await call('Page.captureScreenshot', { format: 'png' });
+    await writeFile(join(resolve(process.env.FLOEM_UI_ARTIFACT_DIR), 'object-context-menu.png'), Buffer.from(screenshot.data, 'base64'));
+    await dismissMenu();
+  }
+  await openMenu('[data-visual-id=object-text]'); await choose('Kilitle');
+  await waitFor('document.querySelector("[data-visual-id=object-text].locked")');
+  await openMenu('[data-visual-id=object-text]');
+  assert(await evaluate('[...document.querySelectorAll(".v-context-menu button")].find(e=>e.textContent==="Sil").disabled'));
+  await choose('Kilidi aç');
+  await openMenu('[data-visual-id=object-text]'); await choose('Çoğalt');
+  await waitFor(`window.savedReport?.pages[0].visuals.length === ${types.length+1}`);
+  const cloneId = await evaluate('window.savedReport.pages[0].visuals.at(-1).id');
+  assert.notEqual(cloneId, 'object-text');
+  await openMenu(`[data-visual-id="${cloneId}"]`); await choose('Bir katman geriye');
+  await waitFor(`window.savedReport?.pages[0].visuals.at(-2)?.id === ${JSON.stringify(cloneId)}`);
+  await openMenu(`[data-visual-id="${cloneId}"]`); await choose('Sil');
+  await waitFor(`!document.querySelector('[data-visual-id="${cloneId}"]') && window.savedReport?.pages[0].visuals.length === ${types.length}`);
+  await evaluate('document.querySelector(".canvas-mode-toggle").click()');
+  await openMenu('[data-visual-id=object-text]');
+  assert.doesNotMatch(await evaluate('document.querySelector(".v-context-menu").textContent'), /Çoğalt|Kilitle|Bir katman/);
+  await dismissMenu();
+  console.log(`PASS: ${types.length} nesnede tasarım/web sağ tık menüsü; çoğaltma, kilit, katman, silme, biçim, klavye, metin kopyalama; grafik/ağaç veri aktarımı; tablo PDF-XLSX-CSV; 6 viewport/DPR ve nesne taşıma.`);
   await call("Browser.close");
 } finally {
   ws?.close();
