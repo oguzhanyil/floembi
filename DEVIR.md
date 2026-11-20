@@ -1,6 +1,6 @@
 # Floem BI: devir notu (20.11.2026)
 
-Güncel geliştirme: F10A ve F08 uygulandı. Sıradaki aşama F09 büyük Grid/Tree Grid.
+Güncel geliştirme: F10A, F08 ve F09 uygulandı. Sıradaki aşama F11 veri bağları/durumlar/tekrarlayıcı/hareket.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -142,7 +142,33 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F08 ekran düzenleri uygulandı; sırada F09
+### 20.11.2026 F09 büyük Grid/Tree Grid uygulandı; sırada F11
+
+- Tablo/Tree Grid için `format.gridDataMode: "server"` opt-in; varsayılan eski mod.
+  Tablo arama/sütun filtreleri bütün gruplarda; sayfalar 25–500 grup, API en fazla 1.000.
+- Kararlı SQL sırası, parametreli çıktı araması, FDX toplamı; toplam arama/sütun
+  filtrelerinden bağımsızdır, sayfa toplamlarından türetilmez. Rapor/çapraz seçim/RLS korunur.
+- `VisualQuery.page` + `VisualResult.page`: snapshot veri/erişim, revision sorgu bağlamı.
+  Veri/rol/sorgu değişince sayfa/indirme reddi ve ilk sayfadan yeniden yükleme.
+- Ağaç +/− yalnız açılan dalın sonraki düzeyini sorgular; her dalın araması/sayfası
+  ayrıdır. En fazla 32 açık dal ve Dalları kapat; boş dal, ikonlu satır eylemi korunur.
+- Bu sayfa / tüm eşleşen gruplar CSV/Excel/PDF; ilerleme/iptal; CSV/Excel 100.000,
+  PDF 2.000 grup sınırı, kısmi başarı yok. Yeni ağaç Excel'i o dalın **tek düzeyidir**,
+  eski matris Excel outline aktarımı ayrıca korunur. Genel toplam dosyaya detay gibi eklenmez.
+- Yeni üretici `python -m floem_bi.grid_demo data/F09-Yeni.floem`; yerel verili örnek
+  `data/F09-Buyuk-Grid.floem`: 2 sayfa, 12.150 sentetik satır ve 12.050 kimlik. Kaynak bağlantısı yok.
+- Python 291 geçti/1 atlandı; 52 saf TS; tam Chromium ve yeni F09 etkileşim kontrolleri,
+  typecheck ve iki üretim derlemesi geçti. Eski F05 sürükleme testinde taşınacak nesne
+  açıkça seçilerek, F08'de kaydırma sonrası yerleşim/hover beklenerek testler düzeltildi.
+  [Kullanım, doğrulama ve sınırlar](docs/f09-buyuk-grid-ve-aktarim.md).
+- Kullanıcı sunucuları durdurulmadı, canlıya yayımlanmadı. Güncel sorgu şeması için
+  Desktop ve web Python sunucusunu güncel kodla yeniden açmak gerekir.
+
+**Sıradaki F11:** alan/ölçüye bağlı metin-değer-renk-ikon-görünürlük; boş/yükleniyor/
+hata/seçili durumları, sanallaştırılmış satır tekrarlayıcı ve azaltılmış harekete uyan
+animasyonlar. F06-2–5 ölçü/motor/mutabakat işleri açık; kaynak yazma ayrı kapsamdır.
+
+### 20.11.2026 F08 ekran düzenleri uygulandı (tamamlanan önceki aşama)
 
 - `ReportPage.layouts[]` ile aynı görsellerin laptop/tablet/telefon yerleşimleri;
   geometri, akış ve sınırlı sunum istisnaları ayrı, semantik ve eylemler ortaktır.
@@ -162,7 +188,7 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
   Desktop/web derlemeleri geçti. Gerçek demo DuckDB sonuçları ve web stil dosyasıyla
   telefon görünümü de denetlendi; arayüzdeki uzun rapor başlığı satıra geçer.
 
-**Sıradaki F09:** 10.000 üstü sentetik kayıtta sunucu arama/sayfalama sözleşmesi,
+**Sonraki F09 (artık uygulandı):** 10.000 üstü sentetik kayıtta sunucu arama/sayfalama sözleşmesi,
 kararlı sıralama ve filtre/RLS bağlamı; toplamların kapsamı; görünen sonuç/tam kapsam
 ayrımını açıkça gösteren CSV/Excel/PDF davranışı. Kullanıcının SQL kaynağına yazılmaz.
 

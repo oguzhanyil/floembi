@@ -351,14 +351,14 @@ class Document:
         with self.lock:
             model, engine = self._semantic_engine()
             if not view_as:
-                return run_visual_query(model, engine, q)
+                return run_visual_query(model, engine, q, revision=f"{self.id}:{self.revision}")
             from ..compiler import UserInfo
 
             known = {r.ad.lower() for r in self.tanim.roller}
             missing = [r for r in view_as if r.lower() not in known]
             if missing:
                 raise ModelError(f"Rol bulunamadı: {', '.join(missing)}")
-            return run_visual_query(model, engine, q, user=UserInfo(upn=upn or ""), roles=view_as)
+            return run_visual_query(model, engine, q, user=UserInfo(upn=upn or ""), roles=view_as, revision=f"{self.id}:{self.revision}")
 
     # ---------------------------------------------------------------- veri
     def preview(self, table: str, limit: int = 100) -> dict:

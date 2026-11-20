@@ -7,8 +7,9 @@ Desktop yerel servisi ve floembi.app aynı fonksiyonu kullanır; görsel hangi t
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 from ..compiler import CompileError, QueryRequest, SqlGenerator
 from ..compiler import ir
@@ -37,6 +38,38 @@ class OrderRef(BaseModel):
     desc: bool = False
 
 
+class GridFilter(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    index: int = Field(ge=0, le=1000)
+    kind: Literal["text", "number"] = "text"
+    op: Literal["contains", "notContains", "equals", "notEqual", "startsWith", "endsWith", "blank", "notBlank", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "inRange"] = "contains"
+    value: str | FiniteFloat | None = None
+    value2: FiniteFloat | None = None
+
+    @model_validator(mode="after")
+    def _values(self):
+        if self.op in ("blank", "notBlank"):
+            return self
+        if self.kind == "number":
+            if self.op not in ("equals", "notEqual", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "inRange") or not isinstance(self.value, (int, float)):
+                raise ValueError("Sayısal sütun filtresi geçersiz")
+            if self.op == "inRange" and self.value2 is None:
+                raise ValueError("Aralık üst sınırı gerekli")
+        elif not isinstance(self.value, str) or len(self.value) > 500 or self.op not in ("contains", "notContains", "equals", "notEqual", "startsWith", "endsWith"):
+            raise ValueError("Metin sütun filtresi geçersiz")
+        return self
+
+
+class GridPage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    offset: int = Field(default=0, ge=0, le=10_000_000)
+    size: int = Field(default=100, ge=1, le=1000)
+    search: str = Field(default="", max_length=500)
+    column_filters: list[GridFilter] = Field(default_factory=list, max_length=100)
+    revision: str | None = Field(default=None, max_length=64)
+    snapshot: str | None = Field(default=None, max_length=64)
+
+
 class VisualQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     group: list[FieldRef] = Field(default_factory=list)
@@ -45,6 +78,7 @@ class VisualQuery(BaseModel):
     order_by: list[OrderRef] = Field(default_factory=list)
     limit: int = Field(default=1000, ge=1, le=MAX_ROWS)
     totals: bool = False                # tablo görselinin "Toplam" satırı
+    page: GridPage | None = None
 
 
 class QueryError(Exception):
@@ -77,6 +111,8 @@ def _filter_expr(col, f: FilterRef) -> ir.Expr:
     if len(vals) != 1:
         raise QueryError(f"{col}: '{f.op}' filtresi tek değer ister")
     op = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}[f.op]
+    if f.values[0] is None and f.op in ("eq", "ne"):
+        return ir.IsBlank(c) if f.op == "eq" else ir.Not(ir.IsBlank(c))
     return ir.Bin(op, c, vals[0])
 
 
@@ -94,6 +130,7 @@ def _value_meta(model: SemanticModel, v: ValueRef) -> dict:
 
 def run_visual_query(
     model: SemanticModel, engine: DuckDBEngine, q: VisualQuery, user=None, roles: list[str] | None = None,
+    revision: str = "",
 ) -> dict:
     """Görselin verisini döndürür: sütun bilgisi, satırlar, kesildi mi, toplam satırı."""
     try:
@@ -127,6 +164,9 @@ def run_visual_query(
             order.append((([str(g) for g in group] + labels)[o.index], o.desc))
         if not group and not labels:
             return {"columns": [], "rows": [], "truncated": False, "total": None}
+        if q.page:
+            from .paging import paged_result
+            return paged_result(model, engine, q, compile_for, group, labels, meta, revision, user, roles)
         compiled = compile_for(group, q.limit + 1, order)
         result = engine.execute(compiled)
         total = None

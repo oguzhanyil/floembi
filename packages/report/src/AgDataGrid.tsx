@@ -1,4 +1,4 @@
-import type { VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
+import type { GridColumnFilter, VisualFormat, VisualResult, VisualResultColumn, VisualState } from "@floem/client";
 import { AllCommunityModule, themeQuartz, type ColDef, type GridApi } from "ag-grid-community";
 import { AgGridProvider, AgGridReact } from "ag-grid-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { safeActionIcon } from "./visualActions";
 import { useVisualMenuSource, visualMenuEnabled } from "./VisualContextMenu";
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from "./ContextMenu";
 import { allowedExportKinds, downloadTableBlob, tableExportBlob, type ExportTable, type TableExportKind } from "./tableExport";
+import { gridColumnFilters } from "./gridPaging";
 
 type Raw = string | number | boolean | null;
 type GridRow = Record<string, Raw>;
@@ -28,7 +29,7 @@ const theme = themeQuartz.withParams({
 
 /** Community tablosu; sağ tık ve dışa aktarma Floem tarafından sağlanır. */
 export function AgDataGrid({
-  result, selected, onSelect, selectedKey, onSelectRow, onRowAction, sort, onSort, format, loading = false,
+  result, selected, onSelect, selectedKey, onSelectRow, onRowAction, sort, onSort, format, loading = false, remote,
 }: {
   result: VisualResult;
   selected?: unknown;
@@ -40,6 +41,8 @@ export function AgDataGrid({
   onSort?: (s: VisualState["sort"]) => void;
   format: VisualFormat;
   loading?: boolean;
+  remote?: { onSearch: (text: string) => void; onFilters: (filters: GridColumnFilter[]) => void;
+    exportAll: (kind: TableExportKind, columns: number[]) => Promise<Blob> };
 }) {
   const gridApi = useRef<GridApi<GridRow> | null>(null);
   const [search, setSearch] = useState("");
@@ -83,6 +86,7 @@ export function AgDataGrid({
       wrapHeaderText: fitColumns, autoHeaderHeight: fitColumns,
       filter: filtersEnabled ? (isNumericType(c.type) ? "agNumberColumnFilter" : "agTextColumnFilter") : false,
       floatingFilter: filtersEnabled,
+      filterParams: remote ? { maxNumConditions: 1 } : undefined,
       sortable: true, resizable: true,
       hide: columnsEnabled && hidden.includes(i),
       pinned: i === 0 && format.gridPinFirstColumn ? "left" : undefined,
@@ -98,13 +102,13 @@ export function AgDataGrid({
         const value = params.data[`c${rowAction.sourceIndex}`] ?? null;
         return <button type="button" className="v-ag-action" title={rowAction.label}
           aria-label={`${rowAction.label}: ${String(value ?? "boş")}`}
-          disabled={rowAction.sourceIndex < 0 || rowAction.sourceIndex >= columns.length}
+          disabled={loading || rowAction.sourceIndex < 0 || rowAction.sourceIndex >= columns.length}
           onClick={(e) => { e.stopPropagation(); onRowAction?.(value); }}>
           {actionIcon ? <img className="v-row-action-image" src={actionIcon} alt="" /> : <ActionGlyph icon={rowAction.icon} />}
         </button>;
       },
     } satisfies ColDef<GridRow>] : []),
-  ], [columns, hidden, filtersEnabled, columnsEnabled, fitColumns, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction]);
+  ], [columns, hidden, filtersEnabled, columnsEnabled, fitColumns, format.gridPinFirstColumn, sort, rowAction, actionIcon, onRowAction, !!remote, loading]);
 
   // Grid API'yi yalnız gridReady olayından sonra kullan.
   useEffect(() => { gridApi.current?.redrawRows(); }, [selected, selectedKey, rows]);
@@ -132,13 +136,13 @@ export function AgDataGrid({
     });
     return { columns: ids.map((id) => columns[Number(id.slice(1))]), rows: data, truncated: result.truncated };
   };
-  const exportTable = async (kind: TableExportKind) => {
+  const exportTable = async (kind: TableExportKind, all = false) => {
     if (exporting.current || !exportKinds.includes(kind)) return;
     if (loadingRef.current) { setError("Veri güncelleniyor; işlem tamamlanınca yeniden deneyin."); return; }
     exporting.current = true;
     setBusy(true); setError(""); setNotice("");
     try {
-      const blob = await tableExportBlob(snapshot(), kind);
+      const blob = all && remote ? await remote.exportAll(kind, displayedColumns().map((id) => Number(id.slice(1)))) : await tableExportBlob(snapshot(), kind);
       downloadTableBlob(blob, kind);
       setNotice("İndirme hazır.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Dosya oluşturulamadı. Yeniden deneyin."); }
@@ -180,14 +184,16 @@ export function AgDataGrid({
       menuItems.push({ label: "Azalan sırala", action: () => { gridApi.current?.applyColumnState({ state: [{ colId: contextColumn, sort: "desc" }], defaultState: { sort: null } }); } });
     }
     menuItems.push({ label: "Sıralamayı temizle", action: () => { gridApi.current?.applyColumnState({ defaultState: { sort: null } }); } });
-    if (filtersEnabled || searchEnabled) menuItems.push({ label: "Arama ve filtreleri temizle", action: () => { setSearch(""); gridApi.current?.setFilterModel(null); } });
+    if (filtersEnabled || searchEnabled) menuItems.push({ label: "Arama ve filtreleri temizle", action: () => { setSearch(""); remote?.onSearch(""); gridApi.current?.setFilterModel(null); } });
     if (columnsEnabled) {
       if (contextColumn) menuItems.push({ label: "Bu sütunu gizle", separator: true, action: () => setHidden((old) => [...new Set([...old, index])]) });
       menuItems.push({ label: "Tüm sütunları göster", action: () => setHidden([]) });
     }
   }
-  exportKinds.forEach((kind, i) => menuItems.push({ label: kind === "xlsx" ? "Excel (.xlsx) indir" : `${kind.toUpperCase()} indir`, disabled: busy || loading,
+  exportKinds.forEach((kind, i) => menuItems.push({ label: (remote ? "Bu sayfa · " : "") + (kind === "xlsx" ? "Excel (.xlsx) indir" : `${kind.toUpperCase()} indir`), disabled: busy || loading,
     separator: i === 0 && !menu?.exportsOnly, action: () => { void exportTable(kind); } }));
+  if (remote) exportKinds.forEach((kind, i) => menuItems.push({ label: `Tüm eşleşen gruplar · ${kind === "xlsx" ? "Excel (.xlsx)" : kind.toUpperCase()}`, disabled: busy || loading,
+    separator: i === 0, action: () => { void exportTable(kind, true); } }));
 
   const registry = useVisualMenuSource("table", () => menuItems);
 
@@ -201,8 +207,8 @@ export function AgDataGrid({
     openContextMenu(target, rect.left, rect.bottom);
   }}>
     {showTools && <div className="v-ag-tools" onPointerDown={(e) => e.stopPropagation()}>
-      {searchEnabled && <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder="Tabloda ara" aria-label="Tabloda ara" />}
+      {searchEnabled && <input type="search" value={search} onChange={(e) => { setSearch(e.target.value); remote?.onSearch(e.target.value); }}
+        placeholder={remote ? "Tüm sonuçlarda ara" : "Tabloda ara"} aria-label={remote ? "Tüm sonuçlarda ara" : "Tabloda ara"} />}
       {columnsEnabled && <div className="v-ag-column-menu">
         <button type="button" onClick={() => setColumnsOpen(!columnsOpen)} aria-expanded={columnsOpen}>Sütunlar ▾</button>
         {columnsOpen && <div className="v-ag-column-list">
@@ -218,16 +224,16 @@ export function AgDataGrid({
     {(busy || notice) && <div className="v-table-feedback" role="status">{busy ? "Dosya hazırlanıyor…" : notice}</div>}
     {error && <div className="v-table-feedback error" role="alert">{error}</div>}
     {menu && <ContextMenu position={menu} items={menu.exportsOnly ? menuItems : [...(registry?.itemsExcept("table") ?? []), ...menuItems]} onClose={closeMenu} />}
-    <div className="v-ag-grid">
+    <div className="v-ag-grid" inert={!!remote && loading}>
       <AgGridProvider modules={modules}>
         <AgGridReact<GridRow> theme={theme} rowData={rowData} columnDefs={columnDefs}
           onGridReady={(event) => { gridApi.current = event.api; }}
           onGridPreDestroyed={() => { gridApi.current = null; }}
-          defaultColDef={{ suppressHeaderMenuButton: true }} quickFilterText={activeSearch}
+          defaultColDef={{ suppressHeaderMenuButton: true }} quickFilterText={remote ? "" : activeSearch}
           rowHeight={30} headerHeight={34} floatingFiltersHeight={filtersEnabled ? 32 : 0}
-          pagination={format.gridPagination === true} paginationPageSize={Number(format.gridPageSize) || 100}
+          pagination={!remote && format.gridPagination === true} paginationPageSize={Number(format.gridPageSize) || 100}
           paginationPageSizeSelector={false} animateRows={false}
-          pinnedBottomRowData={activeSearch || (filtersEnabled && columnFiltered) || format.showTotals === false ? [] : pinnedBottomRowData}
+          pinnedBottomRowData={(!remote && (activeSearch || (filtersEnabled && columnFiltered))) || format.showTotals === false ? [] : pinnedBottomRowData}
           getRowClass={(params) => {
             if (params.node.rowPinned) return "v-ag-total";
             const row = params.data;
@@ -238,7 +244,7 @@ export function AgDataGrid({
             return isSel ? "v-ag-selected" : "v-ag-dim";
           }}
           onRowClicked={(event) => {
-            if (event.node.rowPinned || !event.data || groupCount === 0) return;
+            if (loadingRef.current || event.node.rowPinned || !event.data || groupCount === 0) return;
             const row = columns.map((_, i) => event.data![`c${i}`] ?? null);
             if (onSelectRow) onSelectRow(row); else onSelect?.(row[0]);
           }}
@@ -251,10 +257,12 @@ export function AgDataGrid({
             if (next?.index !== sort?.index || next?.desc !== sort?.desc) onSort(next);
           }}
           onModelUpdated={(event) => setDisplayCount(event.api.getDisplayedRowCount())}
-          onFilterChanged={(event) => setColumnFiltered(event.api.isColumnFilterPresent())}
+          onFilterChanged={(event) => { setColumnFiltered(event.api.isColumnFilterPresent()); if (remote) {
+            try { remote.onFilters(gridColumnFilters(event.api.getFilterModel())); } catch (e) { setError(String(e)); }
+          } }}
         />
       </AgGridProvider>
     </div>
-    {result.truncated && <div className="v-note">İlk {rows.length.toLocaleString("tr-TR")} satır gösteriliyor</div>}
+    {result.truncated && !remote && <div className="v-note">İlk {rows.length.toLocaleString("tr-TR")} satır gösteriliyor · arama ve indirme yalnız bu sonuç kapsamındadır.</div>}
   </div>;
 }

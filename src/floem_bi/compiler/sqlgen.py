@@ -41,6 +41,7 @@ class CompiledQuery:
     dialect: str
     columns: list[str]
     time_keys: set[str]
+    parameters: list = field(default_factory=list)
 
 
 def _ident(name: str) -> exp.Identifier:

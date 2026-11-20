@@ -116,6 +116,9 @@ export async function testLayouts({ call, evaluate, waitFor, input }) {
   // Kontrol+Alt ile akış kapsayıcısına gerçek bırakma; tek adımda geri alınır.
   await select(groupId); await shortcut('g', true);
   await waitFor(`!document.querySelector('[data-visual-id="${groupId}"]')`);
+  // Grubu çözmek çocukları çoklu seçer; bu senaryoda yalnız A taşınacak.
+  await select('a');
+  await waitFor('document.querySelectorAll(".visual.selected").length === 1');
   const a = await rect('a'), f = await rect('frame');
   await drag('[data-visual-id=a] .visual-head', f.x + f.w / 2 - a.x - a.w / 2, f.y + f.h / 2 - a.y - a.h / 2, 3);
   try { await waitFor('window.savedLayout.pages[0].visuals.find(v=>v.id==="a").parentId === "frame"'); }

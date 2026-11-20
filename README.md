@@ -16,11 +16,17 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 (19.11.2026). F01–F04 sonuçları ve marka belgesine göre güncellenen geliştirme sırası:
 [Uygulama notu](docs/f01-f04-uygulama-ve-tasarim-sirasi.md).
 
+**F09 büyük Grid/Tree Grid hazır:** nesnede **Biçim → Veri kapsamı → Sunucuda arama ve
+sayfalama** seçin. 10.000 ötesinde arama/sayfa, tembel ağaç dalları, açık toplam
+politikası ve bu sayfa/tüm eşleşmeler için CSV/Excel/PDF. Verili örnek:
+**`data/F09-Buyuk-Grid.floem`** (12.150 sentetik kayıt, 12.050 kimlik, 2 sayfa).
+[Kullanım ve aktarım sınırları](docs/f09-buyuk-grid-ve-aktarim.md). Sırada **F11** var.
+
 **F08 ekran düzenleri hazır:** **Görselleştirmeler → Ekran düzenleri** ile telefon,
 tablet ve laptop yerleşimleri oluşturun. Veri, ölçü ve eylemler ortak; yerleşimler
 ayrı saklanır. Web, rapor alanının genişliğine göre otomatik seçim yapar.
 Verili örnek: **`data/SAPB1Demo-Floem-F08.floem` → Ekran Düzenleri**.
-[Kullanım ve sınırlar](docs/f08-ekran-duzenleri.md). Sırada **F09** var.
+[Kullanım ve sınırlar](docs/f08-ekran-duzenleri.md).
 
 **F10A sayfa görünümü hazır:** boş tuvale tıklayın → **Görselleştirmeler → Tuval**.
 Başlangıç görünümü, zemin saydamlığı ve tuval dışı renk/saydamlık dosyayla korunur.

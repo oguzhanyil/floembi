@@ -417,6 +417,8 @@ export interface VisualFormat {
   gridColumnChooser?: boolean;
   /** Okunabilir en küçük genişliği koruyarak sütunları nesneye dağıtır; başlıklar sarılır. */
   gridFitColumns?: boolean;
+  gridDataMode?: "loaded" | "server";
+  gridPageSize?: number;
   gridExport?: boolean;
   gridExportPdf?: boolean;
   gridExportExcel?: boolean;
@@ -589,7 +591,16 @@ export interface VisualQuery {
   order_by?: { index: number; desc?: boolean }[];
   limit?: number;
   totals?: boolean;
+  page?: GridPageRequest;
 }
+
+export interface GridColumnFilter {
+  index: number; kind: "text" | "number";
+  op: "contains" | "notContains" | "equals" | "notEqual" | "startsWith" | "endsWith" | "blank" | "notBlank" | "lessThan" | "lessThanOrEqual" | "greaterThan" | "greaterThanOrEqual" | "inRange";
+  value?: string | number | null; value2?: number | null;
+}
+export interface GridPageRequest { offset: number; size: number; search?: string; column_filters?: GridColumnFilter[]; revision?: string; snapshot?: string }
+export interface GridPageResult { offset: number; size: number; totalRows: number; hasMore: boolean; revision: string; snapshot: string; totalScope: "report_filters" }
 
 export interface VisualResultColumn {
   name: string;
@@ -604,6 +615,7 @@ export interface VisualResult {
   rows: (string | number | boolean | null)[][];
   truncated: boolean;
   total: (number | null)[] | null;
+  page?: GridPageResult;
 }
 
 export interface DocumentState {

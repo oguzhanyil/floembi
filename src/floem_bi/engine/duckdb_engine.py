@@ -84,7 +84,7 @@ class DuckDBEngine:
         self.ensure_time_maps(compiled.time_keys)
         cur = self._con.cursor()
         try:
-            rows = cur.execute(compiled.sql).fetchall()
+            rows = cur.execute(compiled.sql, compiled.parameters or None).fetchall()
         finally:
             cur.close()
         return QueryResult(compiled.columns, rows)

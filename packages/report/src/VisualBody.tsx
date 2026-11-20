@@ -3,12 +3,13 @@ import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualSta
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionGlyph } from "./ActionGlyph";
 import { AgDataGrid } from "./AgDataGrid";
+import { ServerTable, ServerTree } from "./ServerGrid";
 import { CategoryChart, PieChartVisual } from "./charts";
 import { GaugeVisual, HeatmapVisual, ScatterVisual, TreemapVisual, WaterfallVisual } from "./charts2";
 import { MatrixVisual, ProgressVisual } from "./matrix";
 import { VISUAL_DEFS, formatValue, groupFields, valueLabel } from "./reportUtils";
 import {
-  currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
+  buildQuery, currentAxis, drillOf, supportsDrill, trendQuery, useMatrixData, useQueryData, useVisualData, type QueryFn,
 } from "./useVisualData";
 import { CardVisual, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
 import { VisualErrorBoundary } from "./VisualErrorBoundary";
@@ -233,8 +234,9 @@ function VisualBodyContent({
   const st = state ?? v.state ?? {};
   const vq = st !== v.state ? { ...v, state: st } : v;
   const isMatrix = v.type === "matrix" || v.type === "treegrid";
-  const data = useVisualData(vq, extra, revision, run, !isMatrix);
-  const mdata = useMatrixData(vq, extra, revision, run, isMatrix);
+  const serverGrid = v.format.gridDataMode === "server" && (v.type === "table" || v.type === "treegrid");
+  const data = useVisualData(vq, extra, revision, run, !isMatrix && !serverGrid);
+  const mdata = useMatrixData(vq, extra, revision, run, isMatrix && !serverGrid);
   const tq = useMemo(() => trendQuery(vq, extra), [vq, extra]);
   const tdata = useQueryData(tq, revision, run);
   const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
@@ -336,6 +338,12 @@ function VisualBodyContent({
     return <div className="v-detail-wait">Ayrıntıları görmek için başka bir görselde bir değer ya da satır seçin</div>;
   }
 
+  if (serverGrid) {
+    if (!v.values.length && !v.group.length || v.type === "treegrid" && (!v.group.length || !v.values.length)) return <div className="v-empty">Alan ekleyin</div>;
+    return v.type === "treegrid" ? <ServerTree {...{ v, extra, revision, run, onState, onRowAction }} state={st} onSelect={onCross} onSelectRow={onCrossRow} /> :
+      <ServerTable {...{ v, revision, run, onState, onRowAction, selected }} state={st} query={buildQuery(vq, extra)!}
+        onSelect={onCross} onSelectRow={onCrossRow} selectedKey={cross?.visualId === v.id ? cross.key : undefined} />;
+  }
   if (isMatrix) {
     if (mdata.state === "empty") {
       return (

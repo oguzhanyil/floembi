@@ -1239,9 +1239,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         try:
             with lock:
                 if roles is None:
-                    return run_visual_query(model, eng, q)
+                    return run_visual_query(model, eng, q, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}")
                 # RLS: rol filtreleri her sorguya eklenir; USERPRINCIPALNAME() oturumdaki e-posta
-                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles)
+                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}")
         except QueryError as e:
             raise ApiError(400, "query_error", "Görsel sorgusu çalıştırılamadı", str(e)) from e
 

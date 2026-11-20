@@ -529,7 +529,7 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
             <input type="checkbox" checked={f.banded !== false} onChange={(e) => set({ banded: e.target.checked })} />
             Satırları dönüşümlü renklendir
           </label>
-          {visual.type !== "table" && <>
+          {visual.type !== "table" && !(visual.type === "treegrid" && f.gridDataMode === "server") && <>
             <label>Satır hiyerarşisi
               <select value={f.matrixRowLayout ?? (visual.type === "matrix" ? "columns" : "compact")}
                 onChange={(e) => set({ matrixRowLayout: e.target.value as "columns" | "compact" })}>
@@ -538,6 +538,23 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
               </select>
             </label>
             <p className="hint">+ / − Düzey düğmeleri bir basamak açar veya kapatır. Excel çıktısında düzeyler ayrı sütunlarda, kapalı detaylar açılabilir satır gruplarındadır.</p>
+          </>}
+          {visual.type === "treegrid" && f.gridDataMode === "server" && <>
+            <label className="inline"><input type="checkbox" checked={f.gridSearch !== false}
+              onChange={(e) => set({ gridSearch: e.target.checked })} />Dal gruplarında ara</label>
+            <label className="inline"><input type="checkbox" checked={f.showTotals !== false}
+              onChange={(e) => set({ showTotals: e.target.checked })} />Dal toplamını göster</label>
+          </>}
+          {(visual.type === "table" || visual.type === "treegrid") && <>
+            <label>Veri kapsamı<select aria-label="Tablo veri kapsamı" value={f.gridDataMode ?? "loaded"} onChange={(e) => set({ gridDataMode: e.target.value as "loaded" | "server" })}>
+              <option value="loaded">Getirilen sonuçlar · mevcut davranış</option><option value="server">Sunucuda arama ve sayfalama</option>
+            </select></label>
+            {f.gridDataMode === "server" && <>
+              <label>Sunucu sayfa boyutu<select aria-label="Sunucu sayfa boyutu" value={Number(f.gridPageSize) || 100} onChange={(e) => set({ gridPageSize: Number(e.target.value) })}>
+                {[25,50,100,250,500].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select></label>
+              <p className="hint">Arama tüm sonuç gruplarını kapsar. Genel toplam rapor filtreleriyle hesaplanır; sonuç araması ve sütun filtrelerinden bağımsızdır. Excel/CSV en fazla 100.000, PDF 2.000 grup aktarır. Ağaçta her dal ayrı yüklenir; indirme o dalın bu düzeyini kapsar.</p>
+            </>}
           </>}
           {visual.type === "table" && <>
             <p className="hint">Sıralamak için sütun başlığına tıklayın.</p>
@@ -556,12 +573,12 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
             <p className="hint">Arama veya sütun filtreleri kapatılınca etkin filtreleri temizlenir.</p>
             <label className="inline"><input type="checkbox" checked={f.gridPinFirstColumn === true}
               onChange={(e) => set({ gridPinFirstColumn: e.target.checked })} />İlk sütunu sabitle</label>
-            <label className="inline"><input type="checkbox" checked={f.gridPagination === true}
+            {f.gridDataMode !== "server" && <><label className="inline"><input type="checkbox" checked={f.gridPagination === true}
               onChange={(e) => set({ gridPagination: e.target.checked })} />Sayfalama</label>
             {f.gridPagination === true && <label>Sayfa başına satır
               <select value={Number(f.gridPageSize) || 100} onChange={(e) => set({ gridPageSize: Number(e.target.value) })}>
                 {[25, 50, 100, 250].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select></label>}
+              </select></label>}</>}
           </>}
           {visual.type === "table" && (
             <>

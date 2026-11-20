@@ -37,8 +37,11 @@ export async function testResponsive({ call, evaluate, waitFor, input }) {
   await waitFor('window.savedResponsive.pages[0].layouts[0].rootLayout.mode === "free"');
   await chosen('amount');
   await evaluate('document.querySelector("[data-visual-id=amount]").scrollIntoView({block:"center"})');
+  // Kaydırma/zoom yerleşimi ve hover durumu tamamlanmadan eski koordinata basma.
+  await evaluate('new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)))');
   const point = await evaluate('(()=>{const r=document.querySelector("[data-visual-id=amount] .visual-head").getBoundingClientRect();return {x:r.x+30,y:r.y+r.height/2}})()');
   const beforeX = await evaluate('window.savedResponsive.pages[0].layouts[0].overrides.amount.x');
+  await call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
   await call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1,modifiers:1});
   for(let n=1;n<=5;n++) await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x+12*n/5,y:point.y+20*n/5,buttons:1,modifiers:1});
   await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:point.x+12,y:point.y+20,button:'left',clickCount:1,modifiers:1});
