@@ -21,6 +21,7 @@ VisualType = Literal[
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
     "text", "shape", "image", "button", "ticker", "container", "icon", "repeater", # tasarım nesneleri
+    "lineage", "tolerance",                     # seçili süreç altgrafı ve tolerans
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 

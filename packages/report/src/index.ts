@@ -4,6 +4,7 @@ import "./visuals.css";
 export * from "./reportUtils";
 export * from "./visualStyle";
 export * from "./visualActions";
+export * from "./reportJourney";
 export * from "./ReportViewport";
 export * from "./pageAppearance";
 export * from "./pageLayouts";

@@ -1,6 +1,6 @@
 # Floem BI: devir notu (20.11.2026)
 
-Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. Sıradaki aşama F12 müşteri 360° ve parti/kalite pilotları.
+Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12'nin yerel sentetik müşteri 360° ve parti/kalite pilotları hazır; gerçek kaynak kabulü açık. Sıradaki ürün aşaması F14 Analytics ölçü/uyarı entegrasyonu.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -142,7 +142,35 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F13 tasarım ve anlam denetçisi uygulandı; sırada F12
+### 20.11.2026 F12 yerel süreç pilotları uygulandı; sırada F14
+
+- `data/F12-Surec-Pilotlari.floem`: 6 düzenlenebilir sayfa; 12 tablo, 14 ilişki
+  (13 aktif), 15 FDX ölçüsü, 2 firma, 12 müşteri, 16 parti ve 64 kalite kaydı.
+  **Tamamen sentetik**; gerçek kaynak/kullanıcı kabulü F06'ya bağlı açık.
+  Yeni dosya üretimi: `python -m floem_bi.process_demo data/F12-Yeni.floem`.
+- Müşteri → olay → belge ve parti → kalite geçişleri firma/dönem/anahtarı taşır.
+  Yeni `keepContext` sayfa eylemi ve `back` düğme eylemi; 20 geçişli oturum geçmişi
+  filtreleri, çapraz seçimi, dilimleyicileri ve görünürlüğü geri yükler. Eski düğmelerin
+  varsayılan filtre davranışı korunur. Önizleme kaydetme başlatmaz.
+- Yeni `lineage` (Parti bağlantıları): tek kökten üst/alt/iki yönde sınırlı komşuluk;
+  varsayılan 2 adım / 40 düğüm / 80 kenar, sert üst sınır 4 / 100 / 200.
+  Döngü/elmas tekil düğüm/kenarla gösterilir; bağlantı miktarı üretim toplamı değildir.
+  Kök ve komşu sorguları `page.snapshot` ile aynı veri/yetki sürümüne bağlanır.
+  Grafikte düğüm seçimi yalnız grafiği değiştirir; kalite ilk seçili partide kalır.
+- Yeni `tolerance` (Kalite toleransı): tekil ölçüm, alt/üst sınır ve isteğe bağlı hedef.
+  Sınırlar dahil; eksik/ters sınır doğrulanamadı. Farklı birimler toplanmaz.
+- `compiler/sqlgen.py::_fallback_axis`: ölçüsüz alan listeleri daha önce yalnız kendi
+  tablo filtresini kullanıyordu. İlişkili boyut filtresi ve RLS'nin aktif ilişki yolu
+  da uygulanır. Yerel ve yayımlanmış raporda firma dışı anahtar sızmaması test edilir.
+- Kaynaklar: `process_demo.py`, `reportJourney.ts`, `useReportJourney.ts`, `lineage.ts`,
+  `LineageVisual.tsx`, `ToleranceVisual.tsx`. Yeni bağımlılık yok; SVG/HTML kullanılır.
+- [Kullanım, hesap sözleşmesi ve kabul sınırları](docs/f12-surec-pilotlari.md).
+  Doğrulama: 316 Python geçti / 1 atlandı, 78 saf TypeScript kontrolü, 31 nesneli
+  tam Chromium turu, typecheck ve Desktop/web üretim derlemeleri geçti.
+  Sıradaki ürün aşaması F14 Analytics ölçü/uyarı entegrasyonu; F06-2–5 ve gerçek süreç
+  kabulü açık kalır. Fiziksel kütle dengesi, ERP kapatma/yaşlandırma ve yazma iş akışı yok.
+
+### 20.11.2026 F13 tasarım ve anlam denetçisi uygulandı; ardından F12 yerel pilotları
 
 - **Görselleştirmeler → Tasarımı denetle:** hata/uyarı/bilgi, kategori/sayfa/arama;
   gerekçe/öneri, doğru sayfa ve düzenin nesnesine gitme, tüm bulguları JSON indirme.
@@ -636,7 +664,7 @@ Test: `tests/test_server.py::test_desktop_publish_auto_syncs_floemway` uçtan uc
 - **Görsellerin bilinen sınırları** (kullanıcı ileride geliştirmek istiyor):
   - Tüm içerik artık tuvalle birlikte ölçekleniyor; küçük ekranda okunabilirlik, metin taşması ve düzen varyantları açık işler (yukarıdaki inceleme).
   - Harita kararı bekliyor.
-  - Detaya gitte sağ tık menüsü, gizli sayfa ve çok adımlı geri yığını yok; başlık düğmesi ve tek adım geri var.
+  - Detaya git için başlık düğmesi ve F12'de 20 geçişli oturum geçmişi var. Gizli sayfa ve detay hedeflerini sağ tıkta listeleme açık.
   - Trend göstergesi yalnızca kart/KPI'da var, "geçen yılın aynı dönemi" seçeneği yok.
   - Ana-ayrıntıda çoklu seçim yok.
   - Metin kutusunda zengin metin yok.

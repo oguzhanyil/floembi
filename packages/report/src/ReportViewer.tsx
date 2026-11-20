@@ -1,7 +1,9 @@
 import { ReportThemeScope, themedVisual } from "./theme";
 import { ImportCompatibility } from "./ImportCompatibility";
 import type { FilterRef, ReportDefinition, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { journeyFilters, journeySlicers } from "./reportJourney";
+import { useReportJourney } from "./useReportJourney";
 import { ReportViewport } from "./ReportViewport";
 import { pageBackground } from "./pageAppearance";
 import { VisualContextMenu } from "./VisualContextMenu";
@@ -42,6 +44,12 @@ export function ReportViewer({
   const [visibility, setVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [actionRev, setActionRev] = useState(0);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const journey = useReportJourney<{ pageId: typeof pageId; drill: typeof drill; cross: typeof cross; states: typeof states; visibility: typeof visibility }>((s) => {
+    setPageId(s.pageId); setDrill(s.drill); setCross(s.cross); setStates(s.states); setVisibility(s.visibility);
+  });
+  const remember = () => journey.push({ pageId, drill, cross, states, visibility });
+  const goBack = () => { if (!journey.back() && drill) { setPageId(drill.from); setDrill(null); setCross(null); } };
+  useEffect(() => { journey.clear(); setDrill(null); setCross(null); }, [report]);
 
   const root = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
@@ -66,11 +74,17 @@ export function ReportViewer({
     const action = resolveVisualAction(visual, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
-      if (rowFilters.length) action.filters = rowFilters;
+      action.filters = action.keepContext ? journeyFilters(pageFilters, visual.filters, slicerFilters(page.visuals, states), crossFiltersFor(visual, cross), rowFilters, action.filters)
+        : rowFilters.length ? rowFilters : action.filters;
+      remember();
+      if (action.keepContext) setStates((old) => journeySlicers(report.pages.find((p) => p.id === action.pageId)!, action.filters ?? [], old));
       setPageId(action.pageId);
       setCross(null);
-      setDrill(action.filters?.length ? { pageId: action.pageId, from: page.id, filters: action.filters, label: action.label ?? "Satır değeri" } : null);
+      setDrill({ pageId: action.pageId, from: page.id, filters: action.filters ?? [], label: action.label ?? (action.keepContext ? "Firma, dönem ve seçim kapsamı" : "Sayfa geçişi") });
+    } else if (action.type === "back") {
+      goBack();
     } else if (action.type === "reset") {
+      journey.clear();
       setCross(null);
       setDrill(null);
       setVisibility({});
@@ -87,7 +101,7 @@ export function ReportViewer({
         .catch((error) => setActionNotice(`FDX ölçüsü çalıştırılamadı: ${String(error)}`));
     } else if (action.type === "function") {
       if (action.name === "refresh") setActionRev((rev) => rev + 1);
-      else if (action.name === "clearSelection") { setCross(null); setDrill(null); }
+      else if (action.name === "clearSelection") { setCross(null); setDrill(null); journey.clear(); }
       else if (action.name === "filterByValue" && action.source?.table && action.source.column && action.source.value !== null)
         setCross({ visualId: visual.id, table: action.source.table, column: action.source.column, value: action.source.value });
     } else {
@@ -107,14 +121,10 @@ export function ReportViewer({
         tools={base.layouts?.length ? <label className="viewer-layout-choice">Düzen <select aria-label="Görüntüleme düzeni" value={choice} onChange={(e) => setChoices((old) => ({ ...old, [page.id]: e.target.value }))}>
           <option value="auto">Otomatik · {base.layouts.find((v) => v.id === variantId)?.name ?? "Ana"}</option>
           <option value="base">Ana düzen</option>{base.layouts.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select></label> : undefined} banner={drill && pageFilters.length > 0 && (
+        </select></label> : undefined} banner={drill && (pageFilters.length > 0 || journey.count > 0) && (
           <DrillBanner
             label={drill.label}
-            onBack={() => {
-              setPageId(drill.from);
-              setDrill(null);
-              setCross(null);
-            }}
+            onBack={goBack}
           />
         )}>
         {(scale) => (
@@ -143,7 +153,10 @@ export function ReportViewer({
                   <DrillThroughButton
                     targets={drillTargets(report.pages, page.id, v, cross)}
                     onGo={(t) => {
-                      setDrill({ pageId: t.page.id, from: page.id, filters: t.filters, label: t.label });
+                      remember();
+                      const filters = journeyFilters(pageFilters, slicerFilters(page.visuals, states), t.filters);
+                      setStates((old) => journeySlicers(t.page, filters, old));
+                      setDrill({ pageId: t.page.id, from: page.id, filters, label: t.label });
                       setPageId(t.page.id);
                       setCross(null);
                     }}
@@ -180,6 +193,7 @@ export function ReportViewer({
               key={p.id}
               className={`page-tab ${p.id === page.id ? "active" : ""}`}
               onClick={() => {
+                journey.clear();
                 setPageId(p.id);
                 setCross(null);
                 setDrill(null);

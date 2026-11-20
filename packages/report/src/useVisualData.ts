@@ -58,6 +58,9 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
     };
   }
   switch (v.type) {
+    case "tolerance":
+      if (v.values.length < 3) return null;
+      return { group: v.group, values: v.values.slice(0, 4), filters, limit: 100 };
     case "table": {
       if (!v.group.length && !v.values.length) return null;
       const sort = v.state?.sort;

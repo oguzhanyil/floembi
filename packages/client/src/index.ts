@@ -338,7 +338,7 @@ export type VisualType =
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater";
+  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater" | "lineage" | "tolerance";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -497,7 +497,9 @@ export interface VisualFormat {
 export type ActionIcon = "none" | "arrow" | "back" | "refresh" | "eye" | "link" | "play" | "file" | "menu" | "check" | "warning" | "trendUp" | "trendDown" | "clock" | "user" | "box";
 
 export interface VisualAction {
-  type: "none" | "page" | "next" | "previous" | "reset" | "toggle" | "url" | "function" | "menu";
+  type: "none" | "page" | "next" | "previous" | "back" | "reset" | "toggle" | "url" | "function" | "menu";
+  /** Kaynak sayfanın firma/dönem/seçim filtrelerini detay sayfasına taşır. */
+  keepContext?: boolean;
   pageId?: string;
   visualId?: string;
   url?: string;

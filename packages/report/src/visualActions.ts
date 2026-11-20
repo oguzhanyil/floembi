@@ -15,7 +15,8 @@ export function rowActionValue(visual: Visual, index: number, value: ActionValue
 }
 
 export type ResolvedVisualAction =
-  | { type: "page"; pageId: string; filters?: FilterRef[]; label?: string }
+  | { type: "page"; pageId: string; filters?: FilterRef[]; label?: string; keepContext?: boolean }
+  | { type: "back" }
   | { type: "reset" }
   | { type: "toggle"; visualId: string }
   | { type: "url"; url: string }
@@ -47,7 +48,8 @@ export function resolveVisualAction(visual: Visual, pages: ReportPage[], current
     if (!pages.some((page) => page.id === action.pageId)) return null;
     const filters: FilterRef[] | undefined = source?.table && source.column && source.value !== null
       ? [{ table: source.table, column: source.column, op: "in", values: [source.value] }] : undefined;
-    return { type: "page", pageId: action.pageId!, filters, label: filters ? `${source!.column} = ${source!.value}` : undefined };
+    return { type: "page", pageId: action.pageId!, filters, label: filters ? `${source!.column} = ${source!.value}` : undefined,
+      ...(action.keepContext ? { keepContext: true } : {}) };
   }
   if (action.type === "next" || action.type === "previous") {
     const index = pages.findIndex((page) => page.id === currentPageId);
@@ -55,6 +57,7 @@ export function resolveVisualAction(visual: Visual, pages: ReportPage[], current
     return pages.length > 1 ? { type: "page", pageId: pages[(index + step + pages.length) % pages.length].id } : null;
   }
   if (action.type === "reset") return { type: "reset" };
+  if (action.type === "back") return { type: "back" };
   if (action.type === "url") {
     const url = actionUrl(action.url, source);
     return url ? { type: "url", url } : null;

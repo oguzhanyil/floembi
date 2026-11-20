@@ -7,6 +7,8 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     <rect key={`${x}-${y}`} x={x} y={y} width="4" height={h} rx=".7" fill="currentColor" opacity={light ? ".48" : "1"} />;
   let content;
   switch (type) {
+    case "lineage": content = <><path d="M8 16h8m0 0 8-8m-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="2" />{[[6,16],[17,16],[25,7],[25,25]].map(([cx,cy]) => <circle key={cx+cy} cx={cx} cy={cy} r="3" fill="currentColor" />)}</>; break;
+    case "tolerance": content = <><path d="M4 16h24" stroke="currentColor" strokeWidth="2" opacity=".4" /><rect x="10" y="11" width="12" height="10" fill="currentColor" opacity=".25" /><path d="M17 7v18" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" /><circle cx="13" cy="16" r="3" fill="currentColor" /></>; break;
     case "icon": content = <><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m10 16 4 4 8-9" fill="none" stroke="currentColor" strokeWidth="2.5" /></>; break;
     case "repeater": content = <>{[5,13,21].map(y=><g key={y}><rect x="5" y={y} width="22" height="6" rx="1.5" fill="none" stroke="currentColor"/><circle cx="9" cy={y+3} r="1.4" fill="currentColor"/><path d={`M13 ${y+3}h10`} stroke="currentColor"/></g>)}</>; break;
     case "column":

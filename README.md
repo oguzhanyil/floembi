@@ -30,7 +30,12 @@ sentetik müşteri. [Kullanım ve sınırlar](docs/f11-veri-baglari-ve-tekrarlay
 birim/toplama ve veri kapsamı için gerekçeli bulgular, nesneye gitme ve JSON çıktısı.
 Tasarımı kendiliğinden değiştirmez. **`data/F13-Tasarim-Denetimi.floem`**: 4 sayfa,
 telefon düzeni ve 12.050 sentetik müşteri. [Kullanım ve kapsam](docs/f13-tasarim-ve-anlam-denetcisi.md).
-Sırada **F12 müşteri 360° ve parti/kalite pilotları** var.
+**F12 yerel süreç pilotları hazır:** **`data/F12-Surec-Pilotlari.floem`** içinde
+6 düzenlenebilir sayfa, müşteri → belge gezinmesi, parti bağlantıları, kalite toleransı
+ve telefon düzenleri var. Firma/dönem kapsamı ve çok adımlı geri dönüş korunur.
+Veri sentetiktir; gerçek kaynak kabulü ve F06 mutabakatı açıktır.
+[Deneme, hesap kuralları ve sınırlar](docs/f12-surec-pilotlari.md).
+Sırada **F14 Analytics ölçü/uyarı entegrasyonu** var.
 
 **F08 ekran düzenleri hazır:** **Görselleştirmeler → Ekran düzenleri** ile telefon,
 tablet ve laptop yerleşimleri oluşturun. Veri, ölçü ve eylemler ortak; yerleşimler

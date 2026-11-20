@@ -667,11 +667,30 @@ class SqlGenerator:
         parts = []
         for i, (table, cols) in enumerate(by_table.items()):
             alias = f"t{i}"
-            col_fn = lambda k, a=alias: _col(self._physical(k), a)  # noqa: E731
-            sel = exp.select(*[exp.alias_(self.render(ir.Col(c), col_fn), f"g{gidx[c]}") for c in cols]).distinct()
-            sel = sel.from_(self._source(table, alias))
-            conds = [self.render(p, col_fn) for c, preds in fm.items() if c.table == table for p in preds]
-            conds += [self.render(p, col_fn) for t, p in self.rls if t == table]
+            aliases = {table: alias}
+            # Ölçüsüz alan/anahtar listeleri de ilişkili boyut filtresi ve RLS'yi
+            # uygular. Örneğin Firma rolü Parti ve Bağlantı anahtarlarını sınırlar.
+            predicates = [p for c, preds in fm.items() if self.model.reachable(table, c.table, ctx.rels) for p in preds]
+            predicates += [p for t, p in self.rls if self.model.reachable(table, t, ctx.rels)]
+            needed = {c.table for p in predicates for c in self._cols_in(p)} - {table}
+            sel = exp.Select().from_(self._source(table, alias))
+            for target in sorted(needed, key=lambda t: len(self.model.path(table, t, ctx.rels) or [])):
+                path = self.model.path(table, target, ctx.rels)
+                if path is None:
+                    raise CompileError(f"'{table}' tablosundan '{target}' tablosuna ilişki yolu yok")
+                for edge in path:
+                    to = edge.to_col.table
+                    if to in aliases:
+                        continue
+                    joined_alias = f"{alias}_j{len(aliases)}"
+                    sel = sel.join(self._source(to, joined_alias),
+                        on=exp.EQ(this=_col(self._physical(edge.from_col), aliases[edge.from_col.table]),
+                                  expression=_col(self._physical(edge.to_col), joined_alias)),
+                        join_type="inner" if edge.inner else "left")
+                    aliases[to] = joined_alias
+            col_fn = lambda k: _col(self._physical(k), aliases[k.table])  # noqa: E731
+            sel = sel.select(*[exp.alias_(self.render(ir.Col(c), col_fn), f"g{gidx[c]}") for c in cols]).distinct()
+            conds = [self.render(p, col_fn) for p in predicates]
             where = _and_all(conds)
             if where is not None:
                 sel = sel.where(where)

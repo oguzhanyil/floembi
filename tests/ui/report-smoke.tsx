@@ -14,6 +14,7 @@ import { ResponsiveFixture } from "./ResponsiveFixture";
 import { ServerGridFixture } from "./ServerGridFixture";
 import { RuntimeFixture } from "./RuntimeFixture";
 import { InspectorFixture } from "./InspectorFixture";
+import { ProcessFixture } from "./ProcessFixture";
 
 const result = (value: number | null): VisualResult => ({
   columns: [{ name: "Tutar", kind: "value", type: "double" }], rows: [[value]], truncated: false,
@@ -46,9 +47,9 @@ const runReport = async () => result(42);
 const menuTypes = Object.keys(VISUAL_DEFS) as VisualType[];
 const menuReport: ReportDefinition = { version: 1, pages: [{ id: "objects", name: "Nesneler", width: 1280, height: 2200,
   visuals: menuTypes.map((type, index) => visual(`object-${type}`, { type, x: (index % 3) * 420, y: Math.floor(index / 3) * 240, w: 400, h: 220,
-    group: [ { table: "T", column: "Bölge" }, ...(["matrix", "treegrid"].includes(type) ? [{ table: "T", column: "Şehir" }] : []) ],
-    legend: [ { table: "T", column: "Dönem" } ],
-    values: [{ table: "T", column: "N", agg: "sum" }, ...(type === "scatter" ? [{ table: "T", column: "N", agg: "max" as const }] : [])],
+    group: type === "lineage" ? ["Kaynak", "Hedef", "KaynakAd", "HedefAd", "Birim", "İlişki"].map((column) => ({ table: "T", column })) : [ { table: "T", column: "Bölge" }, ...(["matrix", "treegrid"].includes(type) ? [{ table: "T", column: "Şehir" }] : []) ],
+    legend: [ { table: "T", column: type === "lineage" ? "Kök" : "Dönem" } ],
+    values: [{ table: "T", column: "N", agg: "sum" }, ...(["scatter", "tolerance"].includes(type) ? [{ table: "T", column: "N", agg: "max" as const }] : []), ...(type === "tolerance" ? [{ table: "T", column: "N", agg: "max" as const }] : [])],
     format: { showTitle: false, text: "Nesne metni", action: type === "button" ? { type: "page", pageId: "second" } : undefined },
   })) }, { id: "second", name: "İkinci sayfa", width: 1280, height: 860, visuals: [] }] };
 let holdMenuQueries = false;
@@ -58,6 +59,13 @@ Object.assign(window, { pauseMenuQueries: () => { holdMenuQueries = true; }, res
 } });
 const runMenuReport = async (q: VisualQuery): Promise<VisualResult> => {
   if (holdMenuQueries) await new Promise<void>((done) => heldMenuQueries.push(done));
+  if (q.page) {
+    const root = q.group[0]?.column === "Kök";
+    const show = root || q.filters?.some((f) => f.column === "Kaynak" && f.values.includes("A") || f.column === "Hedef" && f.values.includes("B"));
+    const rows = !show ? [] : root ? [["A"]] : [["A", "B", "Girdi", "Çıktı", "kg", "Üretim", 10]];
+    return { columns: [...q.group.map((f) => ({ name: f.column, kind: "group" as const, type: "string" })), ...q.values.map(() => ({ name: "Miktar", kind: "value" as const, type: "double" }))], rows, truncated: false,
+      page: { offset: 0, size: q.page.size, totalRows: rows.length, hasMore: false, revision: "fixture", snapshot: "fixture", totalScope: "report_filters" } };
+  }
   return ({
   columns: [...q.group.map((g) => ({ name: g.column, kind: "group" as const, type: "string" })),
     ...q.values.map((v, i) => ({ name: v.measure ?? `Değer ${i + 1}`, kind: "value" as const, type: "double" }))],
@@ -94,6 +102,7 @@ function App() {
   if (mode === "server-grid") return <ServerGridFixture />;
   if (mode === "runtime") return <RuntimeFixture />;
   if (mode === "inspector") return <InspectorFixture />;
+  if (mode === "process") return <ProcessFixture />;
   if (mode === "audit") return <div className="studio" style={{ height: "100vh" }}><ReportDesigner host={{ report: auditReport, tables: [], dataRev: "audit", run: runReport, save, onError: console.error }} /></div>;
   if (mode === "theme") return <div className="studio theme-fixture" style={{ height: "100vh" }}><ApplicationThemeControl />
     <ReportDesigner host={{ report: { ...report, theme: createTheme("electric", "light") }, tables: [], dataRev: "theme", run: runReport, save, onError: console.error }} />

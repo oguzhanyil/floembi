@@ -22,6 +22,8 @@ import { PageLayoutControls } from "./PageLayoutControls";
 import { DiagnosticProvider, type VisualDiagnostic } from "../../report/src/diagnostics";
 import { DesignInspector } from "./DesignInspector";
 import type { AuditTarget } from "./designAudit";
+import { journeyFilters, journeySlicers } from "../../report/src/reportJourney";
+import { useReportJourney } from "../../report/src/useReportJourney";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -78,6 +80,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   // Detaya git (drill-through): hedef sayfa, filtreler, geri dönülecek sayfa
   const [drill, setDrill] = useState<{ pageId: string; from: string; filters: FilterRef[]; label: string } | null>(null);
+  const journey = useReportJourney<{ pageId: string; drill: typeof drill; cross: typeof cross; states: typeof previewStates; visibility: typeof previewVisibility }>((s) => {
+    setPageId(s.pageId); setDrill(s.drill); setCross(s.cross); setPreviewStates(s.states); setPreviewVisibility(s.visibility); setSelectedId(null);
+  });
+  const remember = () => journey.push({ pageId, drill, cross, states: previewStates, visibility: previewVisibility });
+  const goBack = () => { if (!journey.back() && drill) { setPageId(drill.from); setDrill(null); setCross(null); } };
 
   // Dışarıdan gelen değişiklik (dosya aç, yeniden adlandırma) yerel taslağı günceller
   useEffect(() => {
@@ -100,6 +107,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       setPreviewVisibility({});
       setPreviewStates({});
       setLayoutChoices({});
+      journey.clear(); setDrill(null); setCross(null);
     }
   }, [host.report]);
 
@@ -441,12 +449,18 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     const action = resolveVisualAction(v, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
-      if (rowFilters.length) action.filters = rowFilters;
+      action.filters = action.keepContext ? journeyFilters(pageFilters, v.filters, slicerFilters(page.visuals, previewStates), crossFiltersFor(v, cross), rowFilters, action.filters)
+        : rowFilters.length ? rowFilters : action.filters;
+      remember();
+      if (action.keepContext) setPreviewStates((old) => journeySlicers(report.pages.find((p) => p.id === action.pageId)!, action.filters ?? [], old));
       setPageId(action.pageId);
       setSelectedId(null);
       setCross(null);
-      setDrill(action.filters?.length ? { pageId: action.pageId, from: page.id, filters: action.filters, label: action.label ?? "Satır değeri" } : null);
+      setDrill({ pageId: action.pageId, from: page.id, filters: action.filters ?? [], label: action.label ?? (action.keepContext ? "Firma, dönem ve seçim kapsamı" : "Sayfa geçişi") });
+    } else if (action.type === "back") {
+      goBack();
     } else if (action.type === "reset") {
+      journey.clear();
       setCross(null);
       setDrill(null);
       setPreviewVisibility({});
@@ -463,7 +477,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         .catch((error) => setActionNotice(`FDX ölçüsü çalıştırılamadı: ${String(error)}`));
     } else if (action.type === "function") {
       if (action.name === "refresh") setActionRev((rev) => rev + 1);
-      else if (action.name === "clearSelection") { setCross(null); setDrill(null); }
+      else if (action.name === "clearSelection") { setCross(null); setDrill(null); journey.clear(); }
       else if (action.name === "filterByValue" && action.source?.table && action.source.column && action.source.value !== null)
         setCross({ visualId: v.id, table: action.source.table, column: action.source.column, value: action.source.value });
     } else {
@@ -499,7 +513,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" disabled={previewActions || !history.current.canUndo} onClick={() => changeHistory("undo")}>↶</button>
           <button type="button" aria-label="Yinele" title="Yinele (Ctrl+Y)" disabled={previewActions || !history.current.canRedo} onClick={() => changeHistory("redo")}>↷</button>
         </div>
-        <button className={`canvas-mode-toggle ${pageFilters.length ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
+        <button className={`canvas-mode-toggle ${drill && (pageFilters.length || journey.count) ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
           title={previewActions ? "Etkileşim açık · tasarıma dön" : "Serbest tasarım açık · etkileşimi dene"} onClick={() => {
             setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
           }}>
@@ -550,20 +564,19 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           pages={report.pages}
           pageFilters={pageFilters}
           onDrillThrough={(t) => {
-            setDrill({ pageId: t.page.id, from: page.id, filters: t.filters, label: t.label });
+            remember();
+            const filters = journeyFilters(pageFilters, slicerFilters(page.visuals, previewStates), t.filters);
+            setPreviewStates((old) => journeySlicers(t.page, filters, old));
+            setDrill({ pageId: t.page.id, from: page.id, filters, label: t.label });
             setPageId(t.page.id);
             setSelectedId(null);
             setCross(null);
           }}
           banner={
-            drill && pageFilters.length > 0 ? (
+            drill && (pageFilters.length > 0 || journey.count > 0) ? (
               <DrillBanner
                 label={drill.label}
-                onBack={() => {
-                  setPageId(drill.from);
-                  setDrill(null);
-                  setCross(null);
-                }}
+                onBack={goBack}
               />
             ) : undefined
           }
@@ -588,6 +601,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
                 key={p.id}
                 className={`page-tab ${p.id === page.id ? "active" : ""}`}
                 onClick={() => {
+                  journey.clear();
                   setPageId(p.id);
                   setSelectedId(null);
                   setCross(null);
@@ -632,12 +646,14 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
           <DesignInspector report={report} tables={tables} pageId={page.id} layoutId={layoutId} scope={diagnosticScope} root={layout.root} resolved={layout}
             queries={diagnostics.scope === diagnosticScope ? diagnostics.items : []} onLocate={(target) => {
+              journey.clear();
               setPageId(target.pageId); setLayoutChoices((old) => ({ ...old, [target.pageId]: target.layoutId }));
               setSelectedId(target.visualId); setDrill(null); setCross(null); setPreviewActions(false);
               setPreviewStates({}); setPreviewVisibility({}); setVisualizationsOpen(true);
               setFormatRequest((n) => n + 1); setAuditTarget(target);
             }} />
           <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
+            journey.clear();
             if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {
               setActionNotice("Bu nesne aktarım sonrasında silinmiş veya değiştirilmiş."); return;
             }

@@ -34,6 +34,13 @@ const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
 const TREND: WellDef = { key: "group", label: "Trend ekseni", max: 1, optional: true, dateOnly: true };
 
 export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
+  lineage: { label: "Parti bağlantıları", icon: "⑂", group: "Veri", size: [800, 460], wells: [
+    { key: "group", label: "Kaynak, hedef, kaynak adı, hedef adı, birim, ilişki", max: 6 },
+    { key: "legend", label: "Kök parti (tek seçim)", max: 1 }, { key: "values", label: "Bağlantı miktarı", max: 1, optional: true },
+  ] },
+  tolerance: { label: "Kalite toleransı", icon: "⊢", group: "Grafik", size: [560, 350], wells: [
+    { key: "group", label: "Ölçüm kimliği, adı ve birimi" }, { key: "values", label: "Ölçüm, alt sınır, üst sınır, hedef", max: 4 },
+  ] },
   table: {
     label: "Tablo", icon: "▦", group: "Veri", size: [480, 320],
     wells: [{ key: "group", label: "Sütunlar" }, { key: "values", label: "Değerler" }],

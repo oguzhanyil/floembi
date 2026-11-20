@@ -17,6 +17,8 @@ import { useVisualExports, useVisualMenuSource } from "./VisualContextMenu";
 import { BoundVisualContext, useRowData } from "./BindingRuntime";
 import { sourceResult } from "./dataBindings";
 import { RepeaterVisual } from "./RepeaterVisual";
+import { LineageVisual } from "./LineageVisual";
+import { ToleranceVisual } from "./ToleranceVisual";
 
 type Scalar = string | number | boolean | null;
 
@@ -252,11 +254,11 @@ function VisualBodyContent({
   const mdata = useMatrixData(vq, extra, revision, run, isMatrix && !serverGrid);
   const tq = useMemo(() => row ? null : trendQuery(vq, extra), [vq, extra, row]);
   const tdata = useQueryData(tq, revision, run);
-  const ownStatus = isMatrix ? mdata.state : ["container", "shape", "image", "button", "icon", "repeater"].includes(v.type) || v.type === "text" && !v.values.length ? "ready" : data.state;
+  const ownStatus = isMatrix ? mdata.state : ["container", "shape", "image", "button", "icon", "repeater", "lineage"].includes(v.type) || v.type === "text" && !v.values.length ? "ready" : data.state;
   const reportStatus = bound?.report;
   const contentStatus = ownStatus === "ready" && !isMatrix && data.state === "ready" && (!data.result.rows.length || ["card", "ticker", "kpi"].includes(v.type) && data.result.rows[0]?.[0] == null) ? "empty" : ownStatus;
   const contentSignature = data.state === "ready" && ["card", "ticker", "kpi"].includes(v.type) ? JSON.stringify(data.result.rows) : "";
-  useEffect(() => { if (!serverGrid && v.type !== "repeater") reportStatus?.(contentStatus, contentSignature); }, [contentStatus, contentSignature, reportStatus, serverGrid, v.type]);
+  useEffect(() => { if (!serverGrid && v.type !== "repeater" && v.type !== "lineage") reportStatus?.(contentStatus, contentSignature); }, [contentStatus, contentSignature, reportStatus, serverGrid, v.type]);
   const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
   const [drillMode, setDrillMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -322,7 +324,7 @@ function VisualBodyContent({
     return { ...data.result, title: v.title || VISUAL_DEFS[v.type].label };
   });
 
-  const hasRuntimeFeedback = bound && (bound.status !== "ready" || contentStatus !== "ready") && (bound.controlled || bound.custom) && (bound.controlled || !serverGrid && v.type !== "repeater");
+  const hasRuntimeFeedback = bound && (bound.status !== "ready" || contentStatus !== "ready") && (bound.controlled || bound.custom) && (bound.controlled || !serverGrid && v.type !== "repeater" && v.type !== "lineage");
   let runtimeFeedback = null;
   if (hasRuntimeFeedback) {
     const status = bound.status !== "ready" ? bound.status : contentStatus;
@@ -339,6 +341,7 @@ function VisualBodyContent({
     </div>}</>;
   }
   if (runtimeFeedback) return runtimeFeedback;
+  if (v.type === "lineage") return <LineageVisual {...{ v, extra, revision, run }} />;
   if (v.type === "repeater") return <RepeaterVisual {...{ v, extra, revision, run, onSelectRow: onCrossRow, onAction }} selectedKey={cross?.visualId === v.id ? cross.key : undefined} />;
   if (v.type === "container") return null;
   if (v.type === "icon") return <span className="v-data-icon" style={{ color: v.format.color }}><ActionGlyph icon={v.format.buttonIcon ?? "arrow"} /></span>;
@@ -456,6 +459,7 @@ function VisualBodyContent({
       {v.type === "ticker" && <TickerVisual result={result} format={v.format} />}
       {v.type === "multicard" && <MultiCard result={result} selected={selected} onSelect={onCross} />}
       {v.type === "kpi" && <KpiVisual result={result} format={v.format} trend={trend} />}
+      {v.type === "tolerance" && <ToleranceVisual result={result} format={v.format} />}
       {v.type === "slicer" && (
         <Slicer result={result} format={v.format} state={st} onState={(s) => onState?.(s)} fieldType={fieldType} />
       )}

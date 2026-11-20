@@ -191,6 +191,7 @@ function ActionOptions({ action, onChange, visual, page, pages, measures, allowM
         <option value="page">Sayfaya git</option>
         <option value="next">Sonraki sayfa</option>
         <option value="previous">Önceki sayfa</option>
+        <option value="back">Geçmişte geri dön</option>
         <option value="reset">Filtreleri sıfırla</option>
         <option value="toggle">Nesneyi göster / gizle</option>
         <option value="url">Web adresini aç</option>
@@ -204,6 +205,7 @@ function ActionOptions({ action, onChange, visual, page, pages, measures, allowM
         {pages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select>
     </label>}
+    {action.type === "page" && <label className="check"><input type="checkbox" checked={!!action.keepContext} onChange={(e) => onChange({ ...action, keepContext: e.target.checked })} />Firma, dönem ve seçim filtrelerini koru</label>}
     {action.type === "toggle" && <label>Hedef nesne
       <select value={action.visualId ?? ""} onChange={(e) => onChange({ ...action, visualId: e.target.value })}>
         <option value="">Nesne seçin</option>
@@ -455,6 +457,15 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
   return (
     <>
       <AppearancePanel visual={visual} onChange={onChange} />
+      {visual.type === "lineage" && <Section title="Parti inceleme kapsamı">
+        <label>Yön<select value={String(f.traceDirection ?? "both")} onChange={(e) => set({ traceDirection: e.target.value })}>
+          <option value="both">İleri ve geri</option><option value="upstream">Girdilere doğru</option><option value="downstream">Çıktılara doğru</option></select></label>
+        <label>Adım sınırı<input type="number" min="1" max="4" value={Number(f.traceDepth ?? 2)} onChange={(e) => set({ traceDepth: Number(e.target.value) })} /></label>
+        <label>Düğüm sınırı<input type="number" min="5" max="100" value={Number(f.traceNodes ?? 40)} onChange={(e) => set({ traceNodes: Number(e.target.value) })} /></label>
+        <label>Bağlantı sınırı<input type="number" min="5" max="200" value={Number(f.traceEdges ?? 80)} onChange={(e) => set({ traceEdges: Number(e.target.value) })} /></label>
+        <p className="hint">Satırlar: kaynak/hedef anahtarı, kaynak/hedef adı, birim, ilişki. Gösterge: tek seçilecek kök parti alanı. Düğüme tıklamak bu nesnedeki komşuluğu değiştirir; diğer görsellerin parti seçimini değiştirmez. Bağlantı miktarı üretim toplamı değildir.</p>
+      </Section>}
+      {visual.type === "tolerance" && <Section title="Kalite yorumu"><p className="hint">Değer sırası: ölçüm, alt kabul sınırı, üst kabul sınırı, isteğe bağlı hedef. Her gruplama satırı tek ölçüm kimliğini ve birimini içermeli. Kabul sınırları dahildir; eksik veya ters sınırlar kararsız gösterilir.</p></Section>}
       <Section title="Başlık">
         <label className="inline">
           <input type="checkbox" checked={f.showTitle !== false} onChange={(e) => set({ showTitle: e.target.checked })} />

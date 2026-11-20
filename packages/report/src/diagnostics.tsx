@@ -3,11 +3,12 @@ import type { VisualResult } from "@floem/client";
 
 /** Yalnız durum/sayı bilgisi. Kayıtlar, filtre değerleri ve hata ayrıntıları taşınmaz. */
 export interface QueryDiagnostic {
-  source: "Görsel sorgusu" | "Matris sorguları" | "Sunucu sayfası" | "Veri bağı";
+  source: "Görsel sorgusu" | "Matris sorguları" | "Sunucu sayfası" | "Veri bağı" | "Süreç altgrafı";
   status: "loading" | "ready" | "empty" | "error";
   rows?: number;
   limit?: number;
   truncated?: boolean;
+  partial?: boolean;
   paged?: boolean;
   totalRows?: number;
   totalScope?: string;

@@ -107,10 +107,11 @@ export function auditDesign(report: ReportDefinition, tables: ModelTable[], runt
       if (sourceIndex != null && (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= visual.group.length + visual.values.length))
         add("ACTION_SOURCE", "error", "Etkileşim", "Satır eyleminin kaynak sütunu bulunamadı.", "Kaynak sütun sırası mevcut satır/değer alanlarının dışında.", "Satır eylemi için mevcut bir kaynak sütun seçin.");
       (page.drillthrough ?? []).forEach((r) => checkRef(r, "Sayfa detay filtresi"));
-      const needsGroup = !!VISUAL_DEFS[visual.type].category || ["pie", "donut", "treemap", "waterfall", "scatter", "heatmap", "slicer", "treegrid", "repeater"].includes(visual.type);
-      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater"].includes(visual.type);
+      const needsGroup = !!VISUAL_DEFS[visual.type].category || ["pie", "donut", "treemap", "waterfall", "scatter", "heatmap", "slicer", "treegrid", "repeater", "lineage"].includes(visual.type);
+      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater", "lineage"].includes(visual.type);
       if (needsGroup && !visual.group.length || needsValues && visual.values.length < (visual.type === "scatter" ? 2 : 1) && !(["card", "ticker"].includes(visual.type) && visual.bindings?.value)
-        || visual.type === "heatmap" && !visual.legend?.length || visual.type === "table" && !visual.group.length && !visual.values.length)
+        || visual.type === "heatmap" && !visual.legend?.length || visual.type === "table" && !visual.group.length && !visual.values.length
+        || visual.type === "lineage" && (visual.group.length < 2 || !visual.legend?.length) || visual.type === "tolerance" && visual.values.length < 3)
         add("EMPTY_WELL", "warning", "Veri bağı", "Görselin zorunlu veri bölmeleri eksik.", `Görsel türü: ${visual.type}.`, "Satır/eksen ve değer bölmelerini tamamlayın. Kart ve sayaçta değer bağı da kullanılabilir.");
       for (const r of [...visual.values, ...(visual.target ?? [])]) if (!("measure" in r)) {
         const c = column(r);
@@ -140,6 +141,8 @@ export function auditDesign(report: ReportDefinition, tables: ModelTable[], runt
         }
       }
       const paged = visual.type === "repeater" || ["table", "treegrid"].includes(visual.type) && visual.format.gridDataMode === "server";
+      if (visual.type === "lineage") add("SUBGRAPH_SCOPE", "info", "Veri kapsamı", "Parti nesnesi yalnız seçili kökün sınırlı komşuluğunu gösterir.", "Kök parti alanındaki tek seçim başlangıçtır; adım/düğüm/bağlantı sınırı ve firma/dönem kapsamı geçerlidir. Düğüm seçimi yalnız bu nesneyi değiştirir.", "Tüm ağ veya fiziksel miktar dağılımı olarak yorumlamayın. Üretim miktarını tekil parti ölçüsünden okuyun.");
+      if (visual.type === "tolerance") add("QUALITY_GRAIN", "info", "Anlam", "Tolerans satırının tek bir ölçümü temsil etmesi gerekir.", "Kabul alt–üst sınırları dahil karşılaştırılır. Ortalama sonuç, tek tek ölçümlerin uygunluğunu kanıtlamaz.", "Gruplamaya ölçüm kimliği ve birimi ekleyin; farklı ölçüm türlerini veya birimleri aynı toplamda birleştirmeyin.");
       if (paged) add("PAGED_SCOPE", "info", "Veri kapsamı", "Nesne sunucudan sayfalar halinde veri alır.",
         "Yüklü satır sayısı sonucun tamamı değildir. Genel toplam rapor filtrelerini kullanır; sonuç içi arama ve sütun filtreleri genel toplamı değiştirmez.",
         "Sonuç sayısı ile genel toplam kapsamını birlikte okuyun. CSV/Excel en fazla 100.000, PDF 2.000 satırdır. Tekrarlayıcı düz veri olarak aktarılır.");
