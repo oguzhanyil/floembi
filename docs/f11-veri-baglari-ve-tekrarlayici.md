@@ -116,6 +116,6 @@ node tests/design/run.mjs
 $env:FLOEM_UI_RUNTIME_ONLY='1'; node tests/ui/run-smoke.mjs
 ```
 
-Sıradaki iş **F13: tasarım ve anlam denetçisi**. Küçük yazı, taşma, eksik bağ,
-birim/toplama ve veri kapsamı uyarıları tasarımı kendiliğinden değiştirmeden gösterilecek.
+[F13: tasarım ve anlam denetçisi](f13-tasarim-ve-anlam-denetcisi.md) de uygulandı.
+Küçük yazı, taşma, eksik bağ, birim/toplama ve kapsam bulguları tasarımı değiştirmeden gösterilir. Sırada F12 var.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; gerçek süreç pilotları F12 kapsamındadır.

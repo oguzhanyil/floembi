@@ -5,6 +5,7 @@ import type { QueryFn } from "./useVisualData";
 import { themedVisual, useReportTheme } from "./theme";
 import { visualStyle } from "./visualStyle";
 import { ActionGlyph } from "./ActionGlyph";
+import { DiagnosticVisual, useQueryDiagnostic } from "./diagnostics";
 
 type Presence = { visible: boolean; opacity: number };
 const PageBindings = createContext<{ visuals: Visual[]; presence: Record<string, Presence>; publish: (id: string, value?: Presence) => void } | null>(null);
@@ -78,6 +79,7 @@ export function RuntimeFrame({ visual, extra, revision, run, design = false, sel
 } & Omit<HTMLAttributes<HTMLDivElement>, "children">) {
   const theme = useReportTheme(), row = useRowData(), page = useContext(PageBindings);
   const binding = useBindings(visual, extra, revision, run, row);
+  useQueryDiagnostic(binding.active ? JSON.stringify([visual.bindings, visual.filters, extra, revision, row?.row]) : "", { source: "Veri bağı", status: binding.status }, visual.id);
   const [contentStatus, setContentStatus] = useState<DataStatus>("ready"), [hover, setHover] = useState(false);
   const [contentSignature, setContentSignature] = useState(""), [previewState, setPreviewState] = useState<DesignState>();
   const report = useCallback((status: DataStatus, signature?: string) => { setContentStatus(status); setContentSignature(signature ?? ""); }, []);
@@ -127,10 +129,10 @@ export function RuntimeFrame({ visual, extra, revision, run, design = false, sel
     custom: visual.states?.[state]?.text ?? (status === "ready" && typeof format.text === "string" ? format.text : undefined), icon: visual.states?.[state]?.icon };
   const style = { ...props.style, ...visualStyle(resolved), opacity: visible ? opacity : design ? .35 : opacity,
     ...(!visible && !design ? { display: "none" } : {}), ...(format.color ? { color: format.color, "--text": format.color } : {}) } as CSSProperties;
-  return <BoundVisualContext.Provider value={ctx}><div {...props} style={style} data-design-state={state} data-rule-hidden={!visible || undefined}
+  return <DiagnosticVisual id={visual.id}><BoundVisualContext.Provider value={ctx}><div {...props} style={style} data-design-state={state} data-rule-hidden={!visible || undefined}
     className={`${props.className ?? ""} ${changing ? "motion-value-change" : ""}`}
     onPointerEnter={(e) => { setHover(true); props.onPointerEnter?.(e); }} onPointerLeave={(e) => { setHover(false); props.onPointerLeave?.(e); }}
     onFocus={(e) => { setHover(true); props.onFocus?.(e); }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHover(false); props.onBlur?.(e); }}>
     {children(resolved)}{!visible && design && <span className="v-binding-hidden">Veri kuralıyla gizli</span>}
-  </div></BoundVisualContext.Provider>;
+  </div></BoundVisualContext.Provider></DiagnosticVisual>;
 }

@@ -26,7 +26,11 @@ politikası ve bu sayfa/tüm eşleşmeler için CSV/Excel/PDF. Verili örnek:
 bileşenleri satırlarda gösteren sanallaştırılmış tekrarlayıcı; sonlu ve azaltılmış
 harekete uyan animasyonlar. **`data/F11-Tasarim-Atolyesi.floem`**: 3 sayfa ve 12.050
 sentetik müşteri. [Kullanım ve sınırlar](docs/f11-veri-baglari-ve-tekrarlayici.md).
-Sırada **F13 tasarım ve anlam denetçisi** var.
+**F13 hazır:** **Görselleştirmeler → Tasarımı denetle**; taşma, küçük yazı, eksik bağ,
+birim/toplama ve veri kapsamı için gerekçeli bulgular, nesneye gitme ve JSON çıktısı.
+Tasarımı kendiliğinden değiştirmez. **`data/F13-Tasarim-Denetimi.floem`**: 4 sayfa,
+telefon düzeni ve 12.050 sentetik müşteri. [Kullanım ve kapsam](docs/f13-tasarim-ve-anlam-denetcisi.md).
+Sırada **F12 müşteri 360° ve parti/kalite pilotları** var.
 
 **F08 ekran düzenleri hazır:** **Görselleştirmeler → Ekran düzenleri** ile telefon,
 tablet ve laptop yerleşimleri oluşturun. Veri, ölçü ve eylemler ortak; yerleşimler

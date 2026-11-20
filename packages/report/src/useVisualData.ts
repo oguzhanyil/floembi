@@ -2,6 +2,7 @@ import type { FieldRef, FilterRef, Visual, VisualQuery, VisualResult, VisualStat
 import { FloemApiError } from "@floem/client";
 import { useEffect, useMemo, useState } from "react";
 import { VISUAL_DEFS } from "./reportUtils";
+import { resultDiagnostic, useQueryDiagnostic } from "./diagnostics";
 
 export const CHART_CATEGORY_LIMIT = 50;
 export const MATRIX_ROW_LIMIT = 5000;
@@ -188,6 +189,7 @@ export function useVisualData(v: Visual, extra: FilterRef[], revision: string, r
 export function useQueryData(query: VisualQuery | null, revision: string, run: QueryFn): VisualData {
   const key = query ? JSON.stringify(query) + "#" + revision : "";
   const [data, setData] = useState<VisualData>({ state: "empty" });
+  useQueryDiagnostic(key, data.state === "ready" ? resultDiagnostic(data.result, "Görsel sorgusu", query?.limit) : { source: "Görsel sorgusu", status: data.state });
 
   useEffect(() => {
     if (!query) {
@@ -225,6 +227,7 @@ export function useMatrixData(v: Visual, extra: FilterRef[], revision: string, r
   const queries = useMemo(() => (enabled ? matrixQueries(v, extra) : null), [v, extra, enabled]);
   const key = queries ? JSON.stringify(queries) + "#" + revision : "";
   const [data, setData] = useState<MatrixData>({ state: "empty" });
+  useQueryDiagnostic(key, data.state === "ready" ? { source: "Matris sorguları", status: data.parts.some((p) => p.result.rows.length) ? "ready" : "empty", rows: Math.max(0, ...data.parts.map((p) => p.result.rows.length)), truncated: data.parts.some((p) => p.result.truncated), limit: MATRIX_ROW_LIMIT } : { source: "Matris sorguları", status: data.state });
 
   useEffect(() => {
     if (!queries) {

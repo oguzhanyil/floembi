@@ -19,6 +19,9 @@ import { LayoutControls } from "./LayoutControls";
 import { ComponentLibraryPane } from "./ComponentLibraryPane";
 import { repairInstances } from "./components";
 import { PageLayoutControls } from "./PageLayoutControls";
+import { DiagnosticProvider, type VisualDiagnostic } from "../../report/src/diagnostics";
+import { DesignInspector } from "./DesignInspector";
+import type { AuditTarget } from "./designAudit";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -145,6 +148,20 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
   const dataRev = `${host.dataRev}:${actionRev}`;
+  const diagnosticRevision = useRef(0);
+  const diagnosticScope = useMemo(() => `${viewKey}:${dataRev}:${++diagnosticRevision.current}`, [report, viewKey, dataRev]);
+  const [diagnostics, setDiagnostics] = useState<{ scope: string; items: VisualDiagnostic[] }>({ scope: "", items: [] });
+  const [auditTarget, setAuditTarget] = useState<AuditTarget | null>(null);
+  useEffect(() => {
+    if (!auditTarget || page.id !== auditTarget.pageId || layoutId !== auditTarget.layoutId) return;
+    const frame = requestAnimationFrame(() => {
+      const node = [...(layout.root.current?.querySelectorAll<HTMLElement>("[data-visual-id]") ?? [])].find((el) => el.dataset.visualId === auditTarget.visualId);
+      node?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      node?.focus({ preventScroll: true });
+      setAuditTarget(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [auditTarget, page.id, layoutId, layout.root]);
 
   const columnOf = useCallback(
     (table: string, column: string): ModelColumn | undefined =>
@@ -460,6 +477,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   return (
+    <DiagnosticProvider scope={diagnosticScope} ids={page.visuals.map((v) => v.id)} onChange={setDiagnostics}>
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`} data-layout-id={layoutId ?? "base"}
       onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
       onBlurCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
@@ -612,6 +630,13 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           {layoutId ? <p className="layout-hint">Ortak bileşen kitaplığını Ana düzende düzenleyin.</p> : <ComponentLibraryPane report={report} page={page} selection={selection} resolved={layout.visuals} tables={tables} store={host.componentLibrary}
           onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />}
           <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
+          <DesignInspector report={report} tables={tables} pageId={page.id} layoutId={layoutId} scope={diagnosticScope} root={layout.root} resolved={layout}
+            queries={diagnostics.scope === diagnosticScope ? diagnostics.items : []} onLocate={(target) => {
+              setPageId(target.pageId); setLayoutChoices((old) => ({ ...old, [target.pageId]: target.layoutId }));
+              setSelectedId(target.visualId); setDrill(null); setCross(null); setPreviewActions(false);
+              setPreviewStates({}); setPreviewVisibility({}); setVisualizationsOpen(true);
+              setFormatRequest((n) => n + 1); setAuditTarget(target);
+            }} />
           <ImportCompatibility audit={report.importAudit} onLocate={(targetPage, visualId) => {
             if (!report.pages.some((p) => p.id === targetPage && p.visuals.some((v) => v.id === visualId))) {
               setActionNotice("Bu nesne aktarım sonrasında silinmiş veya değiştirilmiş."); return;
@@ -639,5 +664,6 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       {actionNotice && <div className="v-action-notice" role="status"><span>{actionNotice}</span>
         <button type="button" aria-label="Mesajı kapat" onClick={() => setActionNotice(null)}>✕</button></div>}
     </div>
+    </DiagnosticProvider>
   );
 }

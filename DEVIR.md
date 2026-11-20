@@ -1,6 +1,6 @@
 # Floem BI: devir notu (20.11.2026)
 
-Güncel geliştirme: F10A, F08, F09 ve F11 uygulandı. Sıradaki aşama F13 tasarım ve anlam denetçisi.
+Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. Sıradaki aşama F12 müşteri 360° ve parti/kalite pilotları.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -142,7 +142,38 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F11 veri bağları, nesne durumları, tekrarlayıcı ve hareket uygulandı; sırada F13
+### 20.11.2026 F13 tasarım ve anlam denetçisi uygulandı; sırada F12
+
+- **Görselleştirmeler → Tasarımı denetle:** hata/uyarı/bilgi, kategori/sayfa/arama;
+  gerekçe/öneri, doğru sayfa ve düzenin nesnesine gitme, tüm bulguları JSON indirme.
+  Denetleme ve yönlendirme kayıt/undo adımı oluşturmaz; otomatik düzeltme/yayın engeli yok.
+- `packages/designer/src/designAudit.ts`: saf denetim; tüm kayıtlı varyantlarda sınır,
+  kapsayıcı, yazı, eksik model/şablon/eylem bağı; açık biçimden birim çıkarımı,
+  anahtar/özet-SUM ve toplanamayan toplam açıklaması. İş kuralı ispatı değildir.
+- `useDesignMeasurements.ts`: açık düzende gerçek taşma/yazı ölçümü; tuval scale ve
+  DPR ayrılır, gizli başlık/yer tutucu/tablo veri kaydırması dışarıda tutulur.
+- `packages/report/src/diagnostics.tsx`: mevcut sorgulardan yalnız durum/sayı metadata;
+  yeni sorgu çalışmaz. Ham kayıt/filtre değeri/URL/hata ayrıntısı aktarılmaz.
+  Sayfa/düzen/veri/rapor sürümüyle eski gözlemler geçersizdir. Normal sunucu sayfası
+  `truncated` bilgisi veri kesilmesi sayılmaz. Şablon alt nesneleri tekrarlayıcıya bağlanır.
+- Yerel `data/F13-Tasarim-Denetimi.floem`: 4 sayfa, telefon varyantı, 12.050 sentetik
+  müşteri. İlk sayfada bilinçli sorunlar; diğerleri çalışan F11 örnekleri. Üretici:
+  `python -m floem_bi.inspector_demo data/F13-Yeni.floem`; var olan hedefi korur.
+- DOM ölçümü yalnız yüklenmiş/görünür metni kapsar. Açılmamış varyantların minimum
+  geometrisi bilinir; sanal listenin gizli satırları ve grafik etiketi piksel analizi yok.
+  Kontrast belgesi/kaynak hesap mutabakatı/otomatik düzeltme yapılmaz. F06-2–5 açık.
+- [Kullanım, kurallar ve sınırlar](docs/f13-tasarim-ve-anlam-denetcisi.md).
+- Doğrulama: 308 Python geçti, 1 atlandı; 72 saf TypeScript testi, tam Chromium
+  arayüz koşusu, typecheck ve Desktop/web üretim derlemeleri geçti. Şablon/sayfa
+  nesne kimliği çakışmasında bulgunun tekrarlayıcıya bağlanması da sınanır.
+  Yerel kanıtlar `data/qa-f13/`; yeni bağımlılık yok, kullanıcı süreçleri durdurulmadı,
+  canlı rapor yayımlanmadı. Kullanıcıya ait package dosyaları commit dışında tutulur.
+
+**Sırada F12:** müşteri 360° ve parti/kalite pilotlarını bu araçlarla oluşturmak;
+seçili kayıt bağlamını ve parti miktarlarının yinelenmeden hesaplanmasını doğrulamak.
+Gerçek kaynak mutabakatı ve F06-2–5 sonuçlandırılmadan tam ölçü geçişi iddia edilmez.
+
+### 20.11.2026 F11 veri bağları, nesne durumları, tekrarlayıcı ve hareket uygulandı; ardından F13
 
 - `Visual.bindings`: alan/FDX ölçüsü veya mevcut satırdan metin, değer, zemin/yazı rengi,
   simge ve görünürlük. Koşullar tipli; tek alanın çoklu değeri hata verir. Filtre/sürüm
@@ -169,8 +200,8 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
   sürecinin güncel şemayla yeniden açılması gerekir; kullanıcı süreçleri durdurulmadı,
   canlı rapor yayımlanmadı. Yeni bağımlılık yok; kullanıcıya ait package dosyalarına dokunulmadı.
 
-**Sıradaki F13:** taşma, küçük yazı, eksik bağ, birim/toplama ve veri kapsamını gerekçeli
-uyarılarla denetle; kullanıcının tasarımını kendiliğinden değiştirme. F06-2–5 açık.
+**F11 sonrasındaki F13 de uygulandı:** taşma, küçük yazı, eksik bağ, birim/toplama ve
+veri kapsamı gerekçeli denetlenir; tasarım kendiliğinden değişmez. Sırada F12; F06-2–5 açık.
 
 ### 20.11.2026 F09 büyük Grid/Tree Grid uygulandı (tamamlanan önceki aşama)
 
@@ -195,7 +226,7 @@ uyarılarla denetle; kullanıcının tasarımını kendiliğinden değiştirme. 
   Desktop ve web Python sunucusunu güncel kodla yeniden açmak gerekir.
 
 **F09 sonrasında F11 de uygulandı:** alan/ölçüye bağlı metin-değer-renk-ikon-görünürlük,
-nesne durumları, sanallaştırılmış satır tekrarlayıcı ve sonlu hareket. Sıradaki F13;
+nesne durumları, sanallaştırılmış satır tekrarlayıcı ve sonlu hareket. F13 de hazır; sırada F12;
 F06-2–5 ölçü/motor/mutabakat işleri açık; kaynak yazma ayrı kapsamdır.
 
 ### 20.11.2026 F08 ekran düzenleri uygulandı (tamamlanan önceki aşama)

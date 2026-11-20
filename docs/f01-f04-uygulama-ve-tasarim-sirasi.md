@@ -80,7 +80,7 @@ Beş palet **aynı veri ve aynı düzen** üzerinde değerlendirilir: dashboard,
 ## Güncel geliştirme sırası
 
 PBIP sayfa görünümü bulguları için [F10A-01–04 alt işleri](pbip-bulgularindan-gelistirme-listesi.md)
-uygulandı. F04/F07A iyileştirmesi F08 öncesinde tamamlandı. F06 ortak temeli, F05, F07B, F08, F09 ve F11 de hazır. Sırada **F13** var. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
+uygulandı. F04/F07A iyileştirmesi F08 öncesinde tamamlandı. F06 ortak temeli, F05, F07B, F08, F09, F11 ve F13 de hazır. Sırada **F12** var. F06-2–5 kaynak ölçü/motor/mutabakat işleri açık.
 
 | Sıra | İş | Bağımlılık / amaç |
 |---|---|---|
@@ -94,7 +94,7 @@ uygulandı. F04/F07A iyileştirmesi F08 öncesinde tamamlandı. F06 ortak temeli
 | 10 | **F08: ekranlara göre düzen varyantları** | Uygulandı; ortak nesneler, ayrı yerleşimler, otomatik/elle web seçimi. [Kullanım ve demo](f08-ekran-duzenleri.md). |
 | 11 | **F09: büyük Grid/Tree Grid** | Uygulandı; sunucu arama/sayfalama, tembel ağaç dalları, toplam ve dışa aktarım kapsamı. [Kullanım ve sınırlar](f09-buyuk-grid-ve-aktarim.md). |
 | 12 | **F11: veri bağları, durumlar, tekrarlayıcı ve hareket** | Uygulandı; kullanıcı tasarımı satır kartları, durumlar, filtreli bağlar ve sonlu hareket. [Kullanım ve sınırlar](f11-veri-baglari-ve-tekrarlayici.md). |
-| 13 | **F13: tasarım ve anlam denetçisi** | Taşma, küçük yazı, eksik bağ, yanlış birim/toplam ve kapsam uyarıları. |
+| 13 | **F13: tasarım ve anlam denetçisi** | Uygulandı; gerekçeli taşma/yazı/bağ/birim/toplama/kapsam bulguları, doğru düzende nesneye gitme ve salt okunur JSON. [Kullanım ve sınırlar](f13-tasarim-ve-anlam-denetcisi.md). |
 | 14 | **F12: müşteri 360° ve parti/kalite pilotları** | Yukarıdaki tasarım araçlarıyla gerçek süreç ekranları. |
 | 15 | **F14: Analytics ölçü/uyarı entegrasyonu** | Ortak hesap, filtre ve veri sürümü. |
 | 16 | **F15: senaryo ve yetkili işlem iş akışları** | Kaynak yazma ayrı kapsam; izin, doğrulama ve işlem geçmişi. |

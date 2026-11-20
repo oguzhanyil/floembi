@@ -1,6 +1,6 @@
 # Floem BI: rapor mantığı, tasarım sorunları ve geliştirme sırası
 
-**İnceleme tarihi:** 19.11.2026. **Güncel durum (20.11.2026):** F01–F04, F07A/B, F05, F08 ve F10/A uygulandı; aşağıdaki ilk incelemenin bulguları uygulama öncesi durumu anlatır. Sonuçlar ve marka belgesiyle güncellenen sıra [uygulama notunda](f01-f04-uygulama-ve-tasarim-sirasi.md). F09'un matris/aktarım ve sunucu sayfalı büyük Grid/Tree Grid işleri de hazır; [kapsam ve sınırlar](f09-buyuk-grid-ve-aktarim.md). [F11 veri bağları, durumlar ve tekrarlayıcı](f11-veri-baglari-ve-tekrarlayici.md) tamamlandı. Sırada F13; F06 tam ölçü geçişi açık.
+**İnceleme tarihi:** 19.11.2026. **Güncel durum (20.11.2026):** F01–F04, F07A/B, F05, F08 ve F10/A uygulandı; aşağıdaki ilk incelemenin bulguları uygulama öncesi durumu anlatır. Sonuçlar ve marka belgesiyle güncellenen sıra [uygulama notunda](f01-f04-uygulama-ve-tasarim-sirasi.md). F09'un matris/aktarım ve sunucu sayfalı büyük Grid/Tree Grid işleri de hazır; [kapsam ve sınırlar](f09-buyuk-grid-ve-aktarim.md). [F11 veri bağları, durumlar ve tekrarlayıcı](f11-veri-baglari-ve-tekrarlayici.md) ile [F13 denetçi](f13-tasarim-ve-anlam-denetcisi.md) tamamlandı. Sırada F12 süreç pilotları; F06 tam ölçü geçişi açık.
 
 ## 1. Sonuç ve ürün yönü
 

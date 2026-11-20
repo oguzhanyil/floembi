@@ -10,6 +10,7 @@ import { ActionGlyph } from "./ActionGlyph";
 import { safeActionIcon } from "./visualActions";
 import type { QueryFn } from "./useVisualData";
 import { useRuntimeFeedback } from "./BindingRuntime";
+import { resultDiagnostic, useQueryDiagnostic } from "./diagnostics";
 
 const errorMessage = (e: unknown) => e instanceof FloemApiError && e.detail ? `${e.message}: ${e.detail}` : e instanceof Error ? e.message : String(e);
 
@@ -40,6 +41,7 @@ export function useServerPage(base: VisualQuery, revision: string, run: QueryFn,
   const current = response.key === key;
   const loading = !current || (searchEnabled && search !== debounced);
   const result = response.result;
+  useQueryDiagnostic(key, current && !loading && result ? resultDiagnostic(result, "Sunucu sayfası", size) : { source: "Sunucu sayfası", status: current && response.error ? "error" : "loading" });
   const next = (offset: number) => setPosition({ scope, offset, revision: result?.page?.revision });
   const reset = () => { setResponse({ key: "" }); setPosition({ scope: "", offset: 0 }); setAttempt((v) => v + 1); };
   return { query, scope, result, loading, error: current ? response.error : undefined, next, reset,

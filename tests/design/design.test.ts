@@ -4,6 +4,7 @@ import "./appearance.test";
 import "./pageLayouts.test";
 import "./gridPaging.test";
 import "./runtime.test";
+import "./designAudit.test";
 import type { ReportPage, Visual } from "../../packages/client/src/index";
 import { resolvePageLayout, visibleInLayout, inheritedLayoutStyle, lockedInLayout } from "../../packages/report/src/layout";
 import { alignSelection, groupSelection, ungroup, transformSelection, duplicateSelection, deleteSelection, reparent, reorderSibling, selectionTarget } from "../../packages/designer/src/layoutEditing";
