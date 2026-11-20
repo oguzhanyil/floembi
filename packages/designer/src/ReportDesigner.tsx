@@ -325,6 +325,8 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       updateVisual({
         ...selected,
         type: t,
+        repeater: t === "repeater" ? selected.repeater : undefined,
+        bindings: { ...selected.bindings, ...(!["card", "ticker", "text"].includes(t) ? { value: undefined } : {}) },
         group: fit(selected.group.length ? selected.group : legend, "group"),
         legend: fit(legend, "legend"),
         values: fit(selected.values, "values"),
@@ -418,10 +420,11 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   if (!page) return null;
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
-  function runAction(v: Visual, chosen?: VisualAction, source?: ActionValue) {
+  function runAction(v: Visual, chosen?: VisualAction, source?: ActionValue, rowFilters: FilterRef[] = []) {
     const action = resolveVisualAction(v, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
+      if (rowFilters.length) action.filters = rowFilters;
       setPageId(action.pageId);
       setSelectedId(null);
       setCross(null);
@@ -437,7 +440,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       const sourceFilter: FilterRef[] = action.source?.table && action.source.column && action.source.value !== null
         ? [{ table: action.source.table, column: action.source.column, op: "in", values: [action.source.value] }] : [];
       const filters = [...v.filters, ...pageFilters, ...crossFiltersFor(v, cross),
-        ...slicerFilters(page.visuals, previewStates), ...sourceFilter];
+        ...slicerFilters(page.visuals, previewStates), ...rowFilters, ...sourceFilter];
       setActionNotice("FDX ölçüsü hesaplanıyor…");
       void runMeasureAction(host.run, action.measure, filters).then(setActionNotice)
         .catch((error) => setActionNotice(`FDX ölçüsü çalıştırılamadı: ${String(error)}`));
@@ -485,6 +488,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           <svg viewBox="1 1 23 23" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
         </button>
         <PageCanvas
+          components={report.components}
           theme={report.theme}
           page={page}
           viewKey={viewKey}
@@ -598,6 +602,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         </nav>
       </div>
       <DesignerPanels visualizationsOpen={visualizationsOpen} dataOpen={dataOpen} panelId={panelId}><VisualizationsPane
+        components={report.components}
         layoutControls={!previewActions && <LayoutControls page={page} allowStructure={!layoutId} resolved={layout.visuals} selection={selection} onSelect={setSelection}
           onChange={(next) => updatePage(() => next)} onVisual={updateVisual} onGroup={groupChosen}
           onUngroup={(id) => { updatePage((p) => ungroup(p, id, layout.visuals)); setSelectedId(null); }} />}

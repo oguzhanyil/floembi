@@ -338,12 +338,29 @@ export type VisualType =
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "button" | "ticker" | "container";
+  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
   table: string;
   column: string;
+}
+
+export type DataScalar = string | number | boolean | null;
+export type BindingTarget = "text" | "value" | "backgroundColor" | "color" | "icon" | "visible";
+export type BindingSource = { kind: "value"; value: ValueRef; field?: never } | { kind: "field"; field: FieldRef; value?: never }
+  | { kind: "row"; field?: FieldRef; value?: ValueRef };
+export interface DataBinding {
+  source: BindingSource;
+  template?: string;
+  fallback?: DataScalar;
+  rules?: { op: "eq" | "ne" | "gt" | "ge" | "lt" | "le" | "blank" | "notBlank"; value?: DataScalar; output: DataScalar }[];
+}
+export type DesignState = "normal" | "hover" | "selected" | "loading" | "empty" | "error";
+export interface StateAppearance { text?: string; color?: string; backgroundColor?: string; borderColor?: string; opacity?: number; icon?: ActionIcon }
+export interface RepeaterDefinition {
+  definitionId: string; version: number; bindings: Record<string, ComponentBinding>;
+  itemHeight: number; actionSourceIndex?: number;
 }
 
 /** Değer alanı: modeldeki ölçü ya da sütunun örtük toplaması */
@@ -357,6 +374,9 @@ export interface FilterRef {
 }
 
 export interface Visual {
+  bindings?: Partial<Record<BindingTarget, DataBinding>>;
+  states?: Partial<Record<DesignState, StateAppearance>>;
+  repeater?: RepeaterDefinition;
   id: string;
   type: VisualType;
   x: number;
@@ -403,6 +423,7 @@ export interface ContainerLayout {
 }
 
 export interface VisualFormat {
+  color?: string;
   /** Metin davranışı; kaydırma yalnız kullanıcı seçerse açılır. */
   textOverflow?: "wrap" | "ellipsis" | "scroll" | "grow";
   lineHeight?: number;
@@ -473,7 +494,7 @@ export interface VisualFormat {
   [k: string]: unknown;
 }
 
-export type ActionIcon = "none" | "arrow" | "back" | "refresh" | "eye" | "link" | "play" | "file" | "menu";
+export type ActionIcon = "none" | "arrow" | "back" | "refresh" | "eye" | "link" | "play" | "file" | "menu" | "check" | "warning" | "trendUp" | "trendDown" | "clock" | "user" | "box";
 
 export interface VisualAction {
   type: "none" | "page" | "next" | "previous" | "reset" | "toggle" | "url" | "function" | "menu";

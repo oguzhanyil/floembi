@@ -21,6 +21,32 @@ function useSize<T extends HTMLElement>() {
 
 const fmt = (v: Raw | undefined, c: VisualResultColumn) => formatValue(v ?? null, c.type, c.format);
 
+function useAnimatedScalar(target: Raw, format: VisualFormat, defaultCount = false): Raw {
+  const [shown, setShown] = useState<Raw>(target);
+  const last = useRef<Raw>(target);
+  useEffect(() => {
+    let frame = 0;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const finish = () => { cancelAnimationFrame(frame); last.current = target; setShown(target); };
+    const stop = () => { if (document.hidden || media.matches) finish(); };
+    document.addEventListener("visibilitychange", stop); media.addEventListener("change", stop);
+    const enabled = format.animation === "count" || defaultCount && format.animation == null;
+    if (!enabled || typeof target !== "number" || typeof last.current !== "number" || media.matches || document.hidden) finish();
+    else {
+      const from = last.current, start = performance.now();
+      const duration = Math.max(150, Math.min(3000, Number(format.animationDuration) || 800));
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now-start)/duration), value = from+(target-from)*(1-(1-progress)**3);
+        last.current = progress === 1 ? target : value; setShown(last.current);
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    }
+    return () => { cancelAnimationFrame(frame); document.removeEventListener("visibilitychange", stop); media.removeEventListener("change", stop); };
+  }, [target, format.animation, format.animationDuration, defaultCount]);
+  return shown;
+}
+
 // ------------------------------------------------------------------ Kartlar
 function bigNumber(v: Raw, c: VisualResultColumn): string {
   if (v === null) return "(Boş)";
@@ -30,17 +56,18 @@ function bigNumber(v: Raw, c: VisualResultColumn): string {
 export function CardVisual({ result, format, trend }: { result: VisualResult; format: VisualFormat; trend?: VisualResult }) {
   const c = result.columns[0];
   const v = result.rows[0]?.[0] ?? null;
+  const shown = useAnimatedScalar(v, format);
   const [ref, size] = useSize<HTMLDivElement>();
-  const text = bigNumber(v, c);
+  const text = bigNumber(shown, c);
   // Trend şeridi (~42 px) ve etiket için yer bırak
   const avail = size.h - (trend ? 26 : 0) - (format.categoryLabel !== false ? 18 : 0);
   const font = Math.max(16, Math.min(avail * 0.7, size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
   return (
     <div className="v-card" ref={ref}>
-      <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)}>
+      <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)} aria-label={fmt(v, c)}>
         {text}
       </div>
-      {format.categoryLabel !== false && <div className="v-card-label">{c.name}</div>}
+      {format.categoryLabel !== false && <div className="v-card-label">{typeof format.text === "string" ? format.text : c.name}</div>}
       {trend && <TrendStrip result={trend} higherIsBetter={format.higherIsBetter !== false} />}
     </div>
   );
@@ -50,33 +77,11 @@ export function CardVisual({ result, format, trend }: { result: VisualResult; fo
 export function TickerVisual({ result, format }: { result: VisualResult; format: VisualFormat }) {
   const column = result.columns[0];
   const target = result.rows[0]?.[0] ?? null;
-  const [shown, setShown] = useState<Raw>(typeof target === "number" ? 0 : target);
-  const last = useRef<Raw>(typeof target === "number" ? 0 : target);
-  useEffect(() => {
-    if (typeof target !== "number" || format.animation === "none" ||
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      last.current = target;
-      setShown(target);
-      return;
-    }
-    const from = typeof last.current === "number" ? last.current : 0;
-    const duration = Math.max(150, Math.min(3000, format.animationDuration ?? 800));
-    const start = performance.now();
-    let frame = 0;
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - (1 - progress) ** 3;
-      setShown(from + (target - from) * eased);
-      if (progress < 1) frame = requestAnimationFrame(tick);
-      else last.current = target;
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [target, format.animation, format.animationDuration]);
+  const shown = useAnimatedScalar(target, format, true);
   return (
     <div className="v-ticker" aria-label={`${column?.name ?? "Değer"}: ${column ? bigNumber(target, column) : ""}`}>
       <span className="v-ticker-value">{column ? bigNumber(shown, column) : ""}</span>
-      {format.categoryLabel !== false && <span className="v-card-label">{column?.name}</span>}
+      {format.categoryLabel !== false && <span className="v-card-label">{typeof format.text === "string" ? format.text : column?.name}</span>}
     </div>
   );
 }

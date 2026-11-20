@@ -10,6 +10,7 @@ import {
 } from "@floem/report";
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { canGroup, selectionTarget, transformSelection, reparent, reorderSibling } from "./layoutEditing";
+import { BindingProvider, RuntimeFrame } from "../../report/src/BindingRuntime";
 
 import { FIELD_MIME, readPayload, type FieldPayload } from "./fields";
 
@@ -100,9 +101,10 @@ function alignRect(r: Rect, mode: Drag["mode"], others: Rect[], page: { width: n
 export function PageCanvas({
   page, onSelect, onChange, onDelete, onDropField, onDropOnVisual, dataRev, cross, setCross, columnOf, run,
   pages, pageFilters, onDrillThrough, banner, previewActions, visibleOverrides, previewStates, onPreviewState, onAction,
-  onDuplicate, onShiftLayer, onFormat, theme, selection, onSelection, onPageChange, onGestureStart, onGestureEnd, onGroup, onUngroup, layout, viewKey, allowStructure = true,
+  onDuplicate, onShiftLayer, onFormat, theme, selection, onSelection, onPageChange, onGestureStart, onGestureEnd, onGroup, onUngroup, layout, viewKey, allowStructure = true, components,
 }: {
   page: ReportPage;
+  components?: import("@floem/client").ComponentDefinition[];
   viewKey?: string;
   allowStructure?: boolean;
   layout: ReturnType<typeof usePageLayout>;
@@ -111,7 +113,7 @@ export function PageCanvas({
   visibleOverrides: Record<string, boolean>;
   previewStates: Record<string, VisualState>;
   onPreviewState: (id: string, state: VisualState) => void;
-  onAction: (visual: Visual, action?: VisualAction, source?: ActionValue) => void;
+  onAction: (visual: Visual, action?: VisualAction, source?: ActionValue, filters?: FilterRef[]) => void;
   /** Detaya git hedeflerini bulmak için tüm sayfalar */
   pages: ReportPage[];
   /** Detay sayfasına gelinmişse, gelinen değerin filtreleri */
@@ -293,6 +295,7 @@ export function PageCanvas({
             }
           />
         ))}
+        <BindingProvider key={page.id} visuals={page.visuals} definitions={components}>
         {layout.visuals.filter((v) => !previewActions || visibleInLayout(page, v, visibleOverrides)).map((v) => {
           const raw = page.visuals.find((node) => node.id === v.id)!;
           const selected = selection.includes(v.id);
@@ -310,7 +313,8 @@ export function PageCanvas({
                 { label: "Bir katman geriye", disabled: locked || page.visuals[0]?.id === v.id, action: () => onShiftLayer(v.id, -1) },
                 { label: "Sil", disabled: locked, action: () => onDelete(v.id) },
               ]}>
-            <div
+            <RuntimeFrame visual={v.type === "text" ? { ...v, h: raw.h } : v} run={run} revision={dataRev} design={!previewActions} selected={previewActions ? cross?.visualId === v.id : selected}
+              extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, previewActions ? previewStates : {}, v.id)]}
               key={v.id}
               data-visual-id={v.id}
               className={`visual ${selected ? "selected" : ""} ${previewActions ? "preview" : ""} ${previewActions && v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${!previewActions && v.format.initiallyHidden ? "initially-hidden" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${locked ? "locked" : ""} ${v.type === "container" ? "container-frame" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${dropHover === v.id ? "drop" : ""} ${visualMotion(v)}`}
@@ -341,7 +345,7 @@ export function PageCanvas({
                 e.stopPropagation();
                 onDropOnVisual(v.id, f);
               }}
-            >
+            >{(boundV) => <>
               <div
                 className="visual-head"
                 onPointerDown={(e) => start(e, v, "move")}
@@ -361,13 +365,13 @@ export function PageCanvas({
               </div>
               <div className="visual-content">
                 <VisualBody
-                  v={v}
+                  v={boundV}
                   extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, previewActions ? previewStates : {}, v.id)]}
                   detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
                   onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
                   onRowAction={previewActions && v.format.rowAction ? (value) => onAction(v, v.format.rowAction!.action,
                     rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
-                  onAction={previewActions ? (action) => onAction(v, action) : undefined}
+                  onAction={previewActions ? (action, source, filters) => onAction(v, action, source, filters) : undefined}
                   pageWidth={page.width} pageHeight={layout.height}
                   dataRev={dataRev}
                   cross={cross}
@@ -389,10 +393,10 @@ export function PageCanvas({
               v.group.some((g) => !columnOf(g.table, g.column)) ? (
                 <div className="visual-broken">Bu görseldeki bir alan modelde artık yok</div>
               ) : null}
-            </div>
+            </>}</RuntimeFrame>
             </VisualContextMenu>
           );
-        })}
+        })}</BindingProvider>
         {selection.length > 1 && selectedBox && !previewActions && <div className="multi-selection" style={{ left: selectedBox.x * scale, top: selectedBox.y * scale, width: selectedBox.w * scale, height: selectedBox.h * scale }}>
           <button type="button" className="multi-selection-move" aria-label="Seçili nesneleri taşı" onPointerDown={(e) => start(e, null, "move")}>{selection.length} nesne</button>
           <div className="visual-resize" role="button" aria-label="Seçili nesneleri boyutlandır" onPointerDown={(e) => start(e, null, "resize")} />

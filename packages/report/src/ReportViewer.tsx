@@ -15,6 +15,7 @@ import { resolveVisualAction, rowActionValue, runMeasureAction, visualIsVisible,
 import { usePageLayout } from "./usePageLayout";
 import { visibleInLayout, inheritedLayoutStyle } from "./layout";
 import { choosePageLayout, resolvePageVariant } from "./pageLayouts";
+import { BindingProvider, RuntimeFrame } from "./BindingRuntime";
 
 const emptyPage: ReportPage = { id: "empty", name: "", width: 1280, height: 720, visuals: [] };
 
@@ -61,10 +62,11 @@ export function ReportViewer({
   // Power BI "Sayfaya sığdır" görünümü
   const pageFilters = drill && drill.pageId === page.id ? drill.filters : [];
 
-  function runAction(visual: Visual, chosen?: VisualAction, source?: ActionValue) {
+  function runAction(visual: Visual, chosen?: VisualAction, source?: ActionValue, rowFilters: FilterRef[] = []) {
     const action = resolveVisualAction(visual, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
+      if (rowFilters.length) action.filters = rowFilters;
       setPageId(action.pageId);
       setCross(null);
       setDrill(action.filters?.length ? { pageId: action.pageId, from: page.id, filters: action.filters, label: action.label ?? "Satır değeri" } : null);
@@ -79,7 +81,7 @@ export function ReportViewer({
       const sourceFilter: FilterRef[] = action.source?.table && action.source.column && action.source.value !== null
         ? [{ table: action.source.table, column: action.source.column, op: "in", values: [action.source.value] }] : [];
       const filters = [...visual.filters, ...pageFilters, ...crossFiltersFor(visual, cross),
-        ...slicerFilters(page.visuals, states), ...sourceFilter];
+        ...slicerFilters(page.visuals, states), ...rowFilters, ...sourceFilter];
       setActionNotice("FDX ölçüsü hesaplanıyor…");
       void runMeasureAction(run, action.measure, filters).then(setActionNotice)
         .catch((error) => setActionNotice(`FDX ölçüsü çalıştırılamadı: ${String(error)}`));
@@ -118,12 +120,15 @@ export function ReportViewer({
         {(scale) => (
         <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, report.theme) }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
+          <BindingProvider key={page.id} visuals={page.visuals} definitions={report.components}>
           {layout.visuals.filter((v) => visibleInLayout(page, v, visibility[page.id] ?? {})).map((v) => {
             const raw = page.visuals.find((node) => node.id === v.id)!;
             const title = visualTitle(v);
             return (
               <VisualContextMenu key={`${page.id}:${v.id}`} visual={v}>
-              <div
+              <RuntimeFrame visual={v.type === "text" ? { ...v, h: raw.h } : v} run={run} revision={`${dataRev}:${actionRev}`}
+                extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
+                selected={cross?.visualId === v.id}
                 key={v.id}
                 data-visual-id={v.id}
                 className={`visual readonly ${v.format.action && v.format.action.type !== "none" ? "actionable" : ""} ${v.format.showTitle === false ? "no-title" : ""} ${v.type === "container" ? "container-frame" : ""} ${v.type === "shape" || v.type === "image" ? "shape-frame" : ""} ${visualMotion(v)}`}
@@ -132,7 +137,7 @@ export function ReportViewer({
                 tabIndex={0}
                 onKeyDown={(e) => { if (v.format.action && v.type !== "button" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); runAction(v); } }}
                 onClick={(e) => { e.stopPropagation(); if (v.type !== "button" && v.format.action) runAction(v); }}
-              >
+              >{(boundV) => <>
                 <div className="visual-head">
                   <span className="visual-title" title={title}>{title}</span>
                   <DrillThroughButton
@@ -146,13 +151,13 @@ export function ReportViewer({
                 </div>
                 <div className="visual-content">
                   <VisualBody
-                    v={v}
+                    v={boundV}
                     extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
                     detailReady={pageFilters.length > 0 || (!!cross && cross.visualId !== v.id)}
                     onCrossRow={(row) => setCross(toggleCrossRow(v, cross, row))}
                     onRowAction={v.format.rowAction ? (value) => runAction(v, v.format.rowAction!.action,
                       rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
-                    onAction={(chosen) => runAction(v, chosen)}
+                    onAction={(chosen, source, filters) => runAction(v, chosen, source, filters)}
                     pageWidth={page.width} pageHeight={layout.height}
                     dataRev={`${dataRev}:${actionRev}`}
                     cross={cross}
@@ -162,10 +167,10 @@ export function ReportViewer({
                     onState={(s) => setStates((x) => ({ ...x, [v.id]: s }))}
                   />
                 </div>
-              </div>
+              </>}</RuntimeFrame>
               </VisualContextMenu>
             );
-          })}
+          })}</BindingProvider>
         </ReportThemeScope>)}
       </ReportViewport>
       {report.pages.length > 1 && (

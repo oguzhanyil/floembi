@@ -20,7 +20,13 @@ Power BI dallarının iş mantığı, güncel demoların farkları, metin/çöz�
 sayfalama** seçin. 10.000 ötesinde arama/sayfa, tembel ağaç dalları, açık toplam
 politikası ve bu sayfa/tüm eşleşmeler için CSV/Excel/PDF. Verili örnek:
 **`data/F09-Buyuk-Grid.floem`** (12.150 sentetik kayıt, 12.050 kimlik, 2 sayfa).
-[Kullanım ve aktarım sınırları](docs/f09-buyuk-grid-ve-aktarim.md). Sırada **F11** var.
+[Kullanım ve aktarım sınırları](docs/f09-buyuk-grid-ve-aktarim.md).
+
+**F11 hazır:** Biçim panelinde veri bağları ve nesne durumları; kullanıcının çizdiği
+bileşenleri satırlarda gösteren sanallaştırılmış tekrarlayıcı; sonlu ve azaltılmış
+harekete uyan animasyonlar. **`data/F11-Tasarim-Atolyesi.floem`**: 3 sayfa ve 12.050
+sentetik müşteri. [Kullanım ve sınırlar](docs/f11-veri-baglari-ve-tekrarlayici.md).
+Sırada **F13 tasarım ve anlam denetçisi** var.
 
 **F08 ekran düzenleri hazır:** **Görselleştirmeler → Ekran düzenleri** ile telefon,
 tablet ve laptop yerleşimleri oluşturun. Veri, ölçü ve eylemler ortak; yerleşimler

@@ -1,6 +1,6 @@
 import { themedVisual, useReportTheme } from "./theme";
-import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualResult, VisualState } from "@floem/client";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ActionGlyph } from "./ActionGlyph";
 import { AgDataGrid } from "./AgDataGrid";
 import { ServerTable, ServerTree } from "./ServerGrid";
@@ -14,8 +14,11 @@ import {
 import { CardVisual, ImageVisual, KpiVisual, MultiCard, ShapeVisual, Slicer, TextVisual, TickerVisual } from "./visuals";
 import { VisualErrorBoundary } from "./VisualErrorBoundary";
 import { useVisualExports, useVisualMenuSource } from "./VisualContextMenu";
+import { BoundVisualContext, useRowData } from "./BindingRuntime";
+import { sourceResult } from "./dataBindings";
+import { RepeaterVisual } from "./RepeaterVisual";
 
-type Scalar = string | number | boolean;
+type Scalar = string | number | boolean | null;
 
 export interface CrossFilter {
   visualId: string;
@@ -59,7 +62,7 @@ export function toggleCrossRow(v: Visual, cross: CrossFilter | null, row: unknow
   const pairs = v.group
     .map((g, i) => ({ table: g.table, column: g.column, value: row[i] }))
     .filter((x): x is { table: string; column: string; value: Scalar } =>
-      x.value !== null && x.value !== undefined && typeof x.value !== "object");
+      v.type === "repeater" && x.value === null || x.value !== null && x.value !== undefined && typeof x.value !== "object");
   if (!pairs.length) return cross;
   return { visualId: v.id, ...pairs[0], and: pairs.slice(1), key };
 }
@@ -216,7 +219,7 @@ function VisualBodyContent({
   /** Tablo satırı seçimi (verilirse satırın tüm alanlarıyla filtreler) */
   onCrossRow?: (row: unknown[]) => void;
   onRowAction?: (value: string | number | boolean | null) => void;
-  onAction?: (action: VisualAction) => void;
+  onAction?: (action: VisualAction, source?: import("./visualActions").ActionValue, filters?: FilterRef[]) => void;
   pageWidth?: number;
   pageHeight?: number;
   /** Ana-ayrıntı: dışarıdan bir seçim (başka görsel ya da detaya git) var mı */
@@ -235,10 +238,25 @@ function VisualBodyContent({
   const vq = st !== v.state ? { ...v, state: st } : v;
   const isMatrix = v.type === "matrix" || v.type === "treegrid";
   const serverGrid = v.format.gridDataMode === "server" && (v.type === "table" || v.type === "treegrid");
-  const data = useVisualData(vq, extra, revision, run, !isMatrix && !serverGrid);
+  const bound = useContext(BoundVisualContext), row = useRowData();
+  const rowResult = useMemo(() => {
+    if (!row || !v.values.length) return undefined;
+    const parts = v.values.map((value) => sourceResult({ kind: "row", value }, undefined, row));
+    return { columns: parts.map((r) => r.columns[0]), rows: [parts.map((r) => r.rows[0]?.[0] ?? null)], total: null, truncated: false };
+  }, [row, v.values]);
+  const override = bound?.value ?? rowResult;
+  const previousBoundValue = useRef<VisualResult | undefined>(undefined);
+  if (bound?.value) previousBoundValue.current = bound.value;
+  const queried = useVisualData(vq, extra, revision, run, !isMatrix && !serverGrid && !override && !row && !v.bindings?.value);
+  const data = override ? { state: "ready" as const, result: override } : queried;
   const mdata = useMatrixData(vq, extra, revision, run, isMatrix && !serverGrid);
-  const tq = useMemo(() => trendQuery(vq, extra), [vq, extra]);
+  const tq = useMemo(() => row ? null : trendQuery(vq, extra), [vq, extra, row]);
   const tdata = useQueryData(tq, revision, run);
+  const ownStatus = isMatrix ? mdata.state : ["container", "shape", "image", "button", "icon", "repeater"].includes(v.type) || v.type === "text" && !v.values.length ? "ready" : data.state;
+  const reportStatus = bound?.report;
+  const contentStatus = ownStatus === "ready" && !isMatrix && data.state === "ready" && (!data.result.rows.length || ["card", "ticker", "kpi"].includes(v.type) && data.result.rows[0]?.[0] == null) ? "empty" : ownStatus;
+  const contentSignature = data.state === "ready" && ["card", "ticker", "kpi"].includes(v.type) ? JSON.stringify(data.result.rows) : "";
+  useEffect(() => { if (!serverGrid && v.type !== "repeater") reportStatus?.(contentStatus, contentSignature); }, [contentStatus, contentSignature, reportStatus, serverGrid, v.type]);
   const trend = tdata.state === "ready" ? tdata.result : tdata.state === "loading" ? tdata.previous : undefined;
   const [drillMode, setDrillMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -304,17 +322,37 @@ function VisualBodyContent({
     return { ...data.result, title: v.title || VISUAL_DEFS[v.type].label };
   });
 
+  const hasRuntimeFeedback = bound && (bound.status !== "ready" || contentStatus !== "ready") && (bound.controlled || bound.custom) && (bound.controlled || !serverGrid && v.type !== "repeater");
+  let runtimeFeedback = null;
+  if (hasRuntimeFeedback) {
+    const status = bound.status !== "ready" ? bound.status : contentStatus;
+    runtimeFeedback = <div className={`v-runtime-state v-runtime-${status}`} role={status === "error" ? "alert" : "status"} aria-busy={status === "loading"}>
+      <span title={bound.message}>{bound.icon && <ActionGlyph icon={bound.icon} />}{bound.custom ?? (status === "loading" ? "Yükleniyor…" : status === "error" ? "Veri bağı çalıştırılamadı" : "Bu seçim için veri yok")}</span>
+      {status === "error" && <><span className="v-runtime-detail" title={bound.message ?? (data.state === "error" ? data.error.detail : undefined)}>{bound.message ?? (data.state === "error" ? data.error.detail : undefined)}</span><button type="button" onClick={(e) => { e.stopPropagation(); bound.retry(); retry(); }}>Tekrar dene</button></>}
+    </div>;
+  }
+  // Yüklenirken görünümü sakla, sayaç bileşenini kaldırma: yeni değer aynı hareketi sürdürür.
+  if ((v.type === "card" || v.type === "ticker") && v.bindings?.value) {
+    const result = bound?.value ?? previousBoundValue.current;
+    return <>{runtimeFeedback}{result && <div style={{ height: "100%", display: runtimeFeedback ? "none" : undefined }}>
+      {v.type === "card" ? <CardVisual result={result} format={v.format} trend={trend} /> : <TickerVisual result={result} format={v.format} />}
+    </div>}</>;
+  }
+  if (runtimeFeedback) return runtimeFeedback;
+  if (v.type === "repeater") return <RepeaterVisual {...{ v, extra, revision, run, onSelectRow: onCrossRow, onAction }} selectedKey={cross?.visualId === v.id ? cross.key : undefined} />;
   if (v.type === "container") return null;
+  if (v.type === "icon") return <span className="v-data-icon" style={{ color: v.format.color }}><ActionGlyph icon={v.format.buttonIcon ?? "arrow"} /></span>;
   if (v.type === "shape") return <ShapeVisual format={v.format} />;
   if (v.type === "image") return <ImageVisual format={v.format} />;
   if (v.type === "button") {
     const label = typeof v.format.text === "string" ? v.format.text : "Düğme";
     const action = v.format.action;
+    const buttonStyle = v.format.buttonStyle ?? "solid";
     return <div className={`v-button-wrap ${pageHeight && v.y + v.h > pageHeight - 280 ? "menu-up" : ""} ${pageWidth && v.x + v.w > pageWidth - 180 ? "menu-left" : ""}`} ref={menuRef}>
       <button type="button" aria-label={label} aria-expanded={action?.type === "menu" ? menuOpen : undefined}
         className={`v-action-button ${v.format.buttonInvisible ? "hotspot" : v.format.buttonStyle ?? "solid"}`}
-        style={{ backgroundColor: v.format.buttonStyle === "solid" && !v.format.buttonInvisible ? v.format.buttonColor || "#2563eb" : undefined,
-          color: v.format.buttonTextColor || (v.format.buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"),
+        style={{ backgroundColor: buttonStyle === "solid" && !v.format.buttonInvisible ? v.format.buttonColor || "#2563eb" : undefined,
+          color: v.format.buttonTextColor || (buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"), fontSize: v.format.fontSize,
           borderColor: v.format.buttonColor || "#2563eb" }}
         onClick={(e) => { e.stopPropagation(); if (!onAction || !action) return;
           if (action.type === "menu") setMenuOpen((open) => !open); else onAction(action); }}>

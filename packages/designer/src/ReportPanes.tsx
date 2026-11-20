@@ -7,6 +7,7 @@ import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from
 import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 import { VisualTypeIcon } from "./VisualTypeIcon";
 import { WELL_MIME, readWellDrag, setWell, wellItems, type WellDrag } from "./wells";
+import { RuntimePanel } from "./RuntimePanel";
 
 const readField = readPayload;
 
@@ -152,12 +153,12 @@ function AppearancePanel({ visual, onChange }: { visual: Visual; onChange: (v: V
             <option value="none">Kapalı</option>
             <option value="fade">Yumuşak görün</option>
             <option value="rise">Yukarıdan gel</option>
-            <option value="pulse">Hafif vurgu</option>
-            {visual.type === "ticker" && <option value="count">Sayıyı canlandır</option>}
+            <option value="pulse">Değer değişince vurgu</option>
+            {["card", "ticker"].includes(visual.type) && <option value="count">Sayıyı canlandır</option>}
           </select>
         </label>
         <label>Süre (ms)<input type="number" min="150" max="3000" step="50" value={f.animationDuration ?? (visual.type === "ticker" ? 800 : 500)} onChange={(e) => set({ animationDuration: Number(e.target.value) })} /></label>
-        <p className="hint">Sistem hareket azaltmayı seçtiyse animasyon gösterilmez.</p>
+        <p className="hint">Hareketler süreyle sınırlıdır. Sistem/tema hareket azaltmayı seçtiyse veya sekme arka plandaysa sayı doğrudan son değere geçer.</p>
       </Section>
     </>
   );
@@ -167,6 +168,7 @@ const ACTION_ICONS: { value: ActionIcon; label: string }[] = [
   { value: "none", label: "Yok" }, { value: "arrow", label: "İleri" }, { value: "back", label: "Geri" },
   { value: "refresh", label: "Yenile" }, { value: "eye", label: "Göz" }, { value: "link", label: "Bağlantı" },
   { value: "play", label: "Çalıştır" }, { value: "file", label: "Dosya" }, { value: "menu", label: "Menü" },
+  { value: "check", label: "Onay" }, { value: "warning", label: "Uyarı" }, { value: "trendUp", label: "Yükseliş" }, { value: "trendDown", label: "Düşüş" }, { value: "clock", label: "Saat" }, { value: "user", label: "Kişi" }, { value: "box", label: "Kutu" },
 ];
 
 function ActionOptions({ action, onChange, visual, page, pages, measures, allowMenu = false, row = false }: {
@@ -639,7 +641,7 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
           </label>
         </Section>
       )}
-      {(visual.type === "card" || visual.type === "multicard" || visual.type === "kpi") &&
+      {(["card", "multicard", "kpi", "icon"].includes(visual.type)) &&
         <ActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} />}
     </>
   );
@@ -709,9 +711,10 @@ function PageSettings({ page, onChange }: { page: ReportPage; onChange: (p: Repo
 
 /** Power BI "Görselleştirmeler" bölmesi: görsel türleri + seçili görselin alanları ve biçimi. */
 export function VisualizationsPane({
-  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0, themeControls, layoutControls,
+  page, pages, tables, onPageChange, visual, onDuplicate, onShiftLayer, onPickType, onChange, onDropToWell, onMoveWell, formatRequest = 0, themeControls, layoutControls, components,
 }: {
   themeControls?: ReactNode;
+  components?: import("@floem/client").ComponentDefinition[];
   layoutControls?: ReactNode;
   page: ReportPage;
   pages: ReportPage[];
@@ -795,6 +798,7 @@ export function VisualizationsPane({
                   <p className="hint">İndirme, nesnenin gösterdiği veriyi aktarır. PDF bir veri dökümüdür.</p>
                 </>}
               </Section>
+              <RuntimePanel key={visual.id} visual={visual} tables={tables} components={components} page={page} pages={pages} onChange={onChange} />
               <FormatPanel visual={visual} page={page} pages={pages} tables={tables} onChange={onChange} />
             </>
           )}

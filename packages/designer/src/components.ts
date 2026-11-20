@@ -57,7 +57,22 @@ function canonicalDefinition(def: ComponentDefinition): ComponentDefinition {
 function canonicalVisual(v: Visual): Visual {
   v = clone(v);
   const node = Object.assign({ x: 0, y: 0, w: 420, h: 280, group: [], legend: [], values: [], target: [], filters: [], format: {}, state: {} }, v) as Visual;
-  for (const key of ["title", "parentId", "container", "layoutItem", "component"] as const) if (node[key] == null) delete node[key];
+  for (const key of ["title", "parentId", "container", "layoutItem", "component", "repeater"] as const) if (node[key] == null) delete node[key];
+  for (const key of ["bindings", "states"] as const) if (!node[key] || !Object.keys(node[key]!).length) delete node[key];
+  for (const binding of Object.values(node.bindings ?? {})) if (binding) {
+    binding.fallback ??= null; binding.rules ??= [];
+    if (binding.template == null) delete binding.template;
+    const source = binding.source as unknown as Obj;
+    for (const key of ["field", "value"]) if (source[key] == null) delete source[key];
+    if (source.value) {
+      const ref = source.value as ComponentBinding;
+      for (const key of ["table", "column", "measure", "agg"] as const) if (ref[key] == null) delete ref[key];
+      if (ref.table) ref.agg ??= "sum";
+    }
+    for (const rule of binding.rules) rule.value ??= null;
+  }
+  for (const state of Object.values(node.states ?? {})) if (state) for (const key of Object.keys(state)) if ((state as Obj)[key] == null) delete (state as Obj)[key];
+  if (node.repeater) { node.repeater.itemHeight ??= 180; node.repeater.actionSourceIndex ??= 0; }
   if (node.container) node.container = { kind: "frame", mode: "free", gap: 12, padding: 16, columns: 2, align: "stretch", justify: "start", wrap: true, autoHeight: false, overflow: "visible", ...node.container };
   if (node.layoutItem) node.layoutItem = { grow: 0, minWidth: 40, maxWidth: 20000, minHeight: 28, maxHeight: 20000, ...node.layoutItem };
   for (const refs of [node.values, node.target!]) for (const value of refs) {
@@ -110,6 +125,10 @@ export function discoverSlots(visuals: Visual[], previous: ComponentSlot[] = [],
       for (let i = 0; i < (v[key]?.length ?? 0); i++) add(v, [key, String(i)], key === "values" || key === "target" ? "value" : "field");
     }
     actions(v, ["format", "action"]); actions(v, ["format", "rowAction", "action"]);
+    for (const [target, binding] of Object.entries(v.bindings ?? {})) {
+      if (binding?.source.field) add(v, ["bindings", target, "source", "field"], "field");
+      if (binding?.source.value) add(v, ["bindings", target, "source", "value"], "value");
+    }
   }
   return slots;
 }

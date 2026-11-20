@@ -115,4 +115,5 @@ Bu varyantlar kitaplıkta seçilebilir; mevcut paketlenmiş uygulama simgesi oto
 
 Sonraki iş **F10A-01–04 sayfa görünümü**: `displayOption`, tuval saydamlığı ve tuval dışı
 alan rengi/saydamlığı. Ardından **F08 ekran düzeni varyantları** gelir.
-F06-2–5 kaynak ölçü/motor/mutabakat ve F11 veri durumları/tekrarlayıcı işleri açıktır.
+Güncelleme: F10A, F08, F09 ve [F11 veri durumları/tekrarlayıcı](f11-veri-baglari-ve-tekrarlayici.md)
+tamamlandı. Sırada F13; F06-2–5 kaynak ölçü/motor/mutabakat işleri açıktır.

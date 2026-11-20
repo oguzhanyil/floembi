@@ -9,10 +9,11 @@ import { useVisualMenuSource } from "./VisualContextMenu";
 import { ActionGlyph } from "./ActionGlyph";
 import { safeActionIcon } from "./visualActions";
 import type { QueryFn } from "./useVisualData";
+import { useRuntimeFeedback } from "./BindingRuntime";
 
 const errorMessage = (e: unknown) => e instanceof FloemApiError && e.detail ? `${e.message}: ${e.detail}` : e instanceof Error ? e.message : String(e);
 
-function useServerPage(base: VisualQuery, revision: string, run: QueryFn, searchEnabled: boolean, filtersEnabled: boolean, size: number, snapshot?: string) {
+export function useServerPage(base: VisualQuery, revision: string, run: QueryFn, searchEnabled: boolean, filtersEnabled: boolean, size: number, snapshot?: string) {
   const [search, setSearch] = useState(""), [debounced, setDebounced] = useState("");
   const [filters, setFilters] = useState<GridColumnFilter[]>([]);
   useEffect(() => { if (!searchEnabled) { setSearch(""); setDebounced(""); } }, [searchEnabled]);
@@ -45,7 +46,7 @@ function useServerPage(base: VisualQuery, revision: string, run: QueryFn, search
     search, setSearch, setFilters, offset: pos.offset };
 }
 
-function useGridExport(run: QueryFn, query: VisualQuery, scope: string, title: string) {
+export function useGridExport(run: QueryFn, query: VisualQuery, scope: string, title: string) {
   const active = useRef<AbortController | null>(null);
   const [progress, setProgress] = useState("");
   useEffect(() => () => active.current?.abort(), [scope]);
@@ -66,7 +67,7 @@ function useGridExport(run: QueryFn, query: VisualQuery, scope: string, title: s
   return { load, feedback: progress ? <div className="v-table-feedback" role="status">{progress} <button type="button" onClick={() => active.current?.abort()}>İndirmeyi iptal et</button></div> : null };
 }
 
-function PageNavigation({ page, next, loading }: { page: NonNullable<VisualResult["page"]>; next: (offset: number) => void; loading: boolean }) {
+export function PageNavigation({ page, next, loading }: { page: NonNullable<VisualResult["page"]>; next: (offset: number) => void; loading: boolean }) {
   return <div className="v-server-pages" onPointerDown={(e) => e.stopPropagation()}>
     <button type="button" aria-label="İlk veri sayfası" disabled={loading || page.offset === 0} onClick={() => next(0)}>«</button>
     <button type="button" aria-label="Önceki veri sayfası" disabled={loading || page.offset === 0} onClick={() => next(Math.max(0, page.offset - page.size))}>‹</button>
@@ -82,8 +83,10 @@ export function ServerTable({ v, query, revision, run, state, onState, onSelect,
   onSelect: (value: TableValue) => void; onSelectRow?: (row: TableValue[]) => void; onRowAction?: (value: TableValue) => void; selected?: unknown; selectedKey?: string;
 }) {
   const data = useServerPage(query, revision, run, v.format.gridSearch !== false, v.format.gridFilters !== false, gridPageSize(v.format.gridPageSize));
+  const feedback = useRuntimeFeedback(data.error ? "error" : data.loading ? "loading" : !data.result?.rows.length ? "empty" : "ready", data.error, data.reset);
   const download = useGridExport(run, { ...data.query, page: { ...data.query.page!, snapshot: data.result?.page?.snapshot } }, data.scope, v.title ?? "Tablo");
   return <div className="v-server-grid" aria-busy={data.loading}>
+    {feedback}
     {data.error && <div className="v-error" role="alert">{data.error}<button type="button" onClick={data.reset}>İlk sayfadan yeniden yükle</button></div>}
     {!data.result ? !data.error && <div role="status">Yükleniyor…</div> : <>
       <AgDataGrid result={data.result} format={v.format} loading={data.loading || !!data.error}
@@ -127,6 +130,7 @@ function TreeBranch({ v, extra, revision, run, expanded, toggle, path, onSelectR
   const query: VisualQuery = { group: v.group.slice(0, level), values: v.values, filters: [...v.filters, ...extra,
     ...path.map((value, i) => ({ ...v.group[i], op: "eq" as const, values: [value] }))], totals: v.format.showTotals !== false };
   const data = useServerPage(query, revision, run, v.format.gridSearch !== false, false, gridPageSize(v.format.gridPageSize), snapshot);
+  const feedback = useRuntimeFeedback(data.error ? "error" : data.loading ? "loading" : !data.result?.rows.length ? "empty" : "ready", data.error, data.reset, !path.length);
   const download = useGridExport(run, { ...data.query, page: { ...data.query.page!, snapshot: data.result?.page?.snapshot } }, data.scope, `${v.title ?? "Ağaç tablo"} · Düzey ${level}`);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -143,6 +147,7 @@ function TreeBranch({ v, extra, revision, run, expanded, toggle, path, onSelectR
   ]));
   const cols = result?.columns ?? [];
   return <section className="v-server-branch" aria-label={`Düzey ${level}${path.length ? ` · ${path.map(String).join(" / ")}` : ""}`} aria-busy={data.loading}>
+    {feedback}
     <div className="v-server-pages" onPointerDown={(e) => e.stopPropagation()}>
       <strong>{v.group[level - 1]?.column}</strong>
       <button type="button" disabled={data.loading} onClick={data.reset}>Düzeyi yenile</button>

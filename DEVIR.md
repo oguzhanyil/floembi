@@ -1,6 +1,6 @@
 # Floem BI: devir notu (20.11.2026)
 
-Güncel geliştirme: F10A, F08 ve F09 uygulandı. Sıradaki aşama F11 veri bağları/durumlar/tekrarlayıcı/hareket.
+Güncel geliştirme: F10A, F08, F09 ve F11 uygulandı. Sıradaki aşama F13 tasarım ve anlam denetçisi.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -142,7 +142,37 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 
 ## 6. Sırada: plana göre yapılacaklar
 
-### 20.11.2026 F09 büyük Grid/Tree Grid uygulandı; sırada F11
+### 20.11.2026 F11 veri bağları, nesne durumları, tekrarlayıcı ve hareket uygulandı; sırada F13
+
+- `Visual.bindings`: alan/FDX ölçüsü veya mevcut satırdan metin, değer, zemin/yazı rengi,
+  simge ve görünürlük. Koşullar tipli; tek alanın çoklu değeri hata verir. Filtre/sürüm
+  değişiminden sonra eski yanıt uygulanmaz; aynı nesnedeki aynı sorgu paylaşılır.
+- `Visual.states`: normal/hover-odak/seçili/yükleniyor/boş/hata görünümü. Biçim paneli ve
+  kaydedilmeyen durum önizlemesi. Gizli kapsayıcının çocukları web'de gizlenir, tasarımda
+  soluk kalır; akış boşluğu korunur. Gizleme erişim kontrolü değildir.
+- Yeni `icon` ve `repeater` nesneleri. Tekrarlayıcı gömülü F07B bileşeninin değişmez
+  sürümünü, eşlenmiş yuvalarını ve mevcut satır bağlarını kullanır. Şablon içinde sorgu
+  veya grafik/tablo çalışmaz. 25–500 grupluk sunucu sayfasında yalnız görünür kartlar +
+  tampon çizilir; kimlik bütün gruplama değerlerinin JSON'udur. Kart yüksekliği sabittir.
+- Satır seçimi tam gruplama kapsamıyla çapraz filtre yapar; düğme URL/detay/FDX eylemine
+  satırı taşır. Şablon içi göster/gizle o satıra özeldir. Sağ tıkta düz satır verisi
+  PDF/Excel/CSV olarak indirilir; F09 kapsam/sürüm/iptal/sınırları kullanılır.
+- Sonlu değer değişimi vurgusu ve kart/sayaç sayma hareketi. Hızlı değişimde son hedef,
+  tema/OS azaltılmış hareket ve arka plan sekmesi gözetilir; sonsuz pulse kaldırıldı.
+- `python -m floem_bi.runtime_demo data/F11-Yeni.floem`: önceki dosyayı değiştirmeyen
+  üretici. Yerel `data/F11-Tasarim-Atolyesi.floem`: 3 sayfa, 12.050 sentetik müşteri,
+  gömülü müşteri kartı; harici veri bağlantısı yok. Gerçek süreç pilotu F12'de kalır.
+- 307 Python geçti / 1 atlandı; 59 saf TS; tam Chromium (29 nesne, önceki aşamalar ve
+  yeni F11), typecheck ve iki üretim derlemesi geçti. Şema/dosya/yayın/RLS kontrolleri
+  dahil. Ekranlar/günlükler `data/qa-f11/` içinde, git dışında.
+- [Kullanım ve sınırlar](docs/f11-veri-baglari-ve-tekrarlayici.md). Desktop/web Python
+  sürecinin güncel şemayla yeniden açılması gerekir; kullanıcı süreçleri durdurulmadı,
+  canlı rapor yayımlanmadı. Yeni bağımlılık yok; kullanıcıya ait package dosyalarına dokunulmadı.
+
+**Sıradaki F13:** taşma, küçük yazı, eksik bağ, birim/toplama ve veri kapsamını gerekçeli
+uyarılarla denetle; kullanıcının tasarımını kendiliğinden değiştirme. F06-2–5 açık.
+
+### 20.11.2026 F09 büyük Grid/Tree Grid uygulandı (tamamlanan önceki aşama)
 
 - Tablo/Tree Grid için `format.gridDataMode: "server"` opt-in; varsayılan eski mod.
   Tablo arama/sütun filtreleri bütün gruplarda; sayfalar 25–500 grup, API en fazla 1.000.
@@ -164,9 +194,9 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 - Kullanıcı sunucuları durdurulmadı, canlıya yayımlanmadı. Güncel sorgu şeması için
   Desktop ve web Python sunucusunu güncel kodla yeniden açmak gerekir.
 
-**Sıradaki F11:** alan/ölçüye bağlı metin-değer-renk-ikon-görünürlük; boş/yükleniyor/
-hata/seçili durumları, sanallaştırılmış satır tekrarlayıcı ve azaltılmış harekete uyan
-animasyonlar. F06-2–5 ölçü/motor/mutabakat işleri açık; kaynak yazma ayrı kapsamdır.
+**F09 sonrasında F11 de uygulandı:** alan/ölçüye bağlı metin-değer-renk-ikon-görünürlük,
+nesne durumları, sanallaştırılmış satır tekrarlayıcı ve sonlu hareket. Sıradaki F13;
+F06-2–5 ölçü/motor/mutabakat işleri açık; kaynak yazma ayrı kapsamdır.
 
 ### 20.11.2026 F08 ekran düzenleri uygulandı (tamamlanan önceki aşama)
 

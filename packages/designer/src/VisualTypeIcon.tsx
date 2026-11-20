@@ -7,6 +7,8 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     <rect key={`${x}-${y}`} x={x} y={y} width="4" height={h} rx=".7" fill="currentColor" opacity={light ? ".48" : "1"} />;
   let content;
   switch (type) {
+    case "icon": content = <><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m10 16 4 4 8-9" fill="none" stroke="currentColor" strokeWidth="2.5" /></>; break;
+    case "repeater": content = <>{[5,13,21].map(y=><g key={y}><rect x="5" y={y} width="22" height="6" rx="1.5" fill="none" stroke="currentColor"/><circle cx="9" cy={y+3} r="1.4" fill="currentColor"/><path d={`M13 ${y+3}h10`} stroke="currentColor"/></g>)}</>; break;
     case "column":
     case "stackedcolumn":
       content = <>{[5, 11, 17, 23].map((x, i) => <g key={x}>{bar(x, [15, 9, 13, 6][i], [11, 17, 13, 20][i])}{type === "stackedcolumn" && <rect x={x} y={[10, 5, 8, 3][i]} width="4" height="4" fill="currentColor" opacity=".45" />}</g>)}</>;

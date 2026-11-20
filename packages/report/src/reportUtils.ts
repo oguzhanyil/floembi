@@ -159,6 +159,9 @@ export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
     label: "Animasyonlu sayı", icon: "↗", group: "Kart", size: [280, 160],
     wells: [{ key: "values", label: "Değer", max: 1 }],
   },
+  icon: { label: "Simge", icon: "◇", group: "Ekle", size: [64, 64], wells: [] },
+  repeater: { label: "Satır tekrarlayıcı", icon: "▤", group: "Veri", size: [620, 480],
+    wells: [{ key: "group", label: "Satır kimliği ve alanlar" }, { key: "values", label: "Satır ölçüleri" }] },
 };
 
 export const VISUAL_GROUPS: VisualDef["group"][] = ["Grafik", "Kart", "Veri", "Etkileşim", "Ekle"];

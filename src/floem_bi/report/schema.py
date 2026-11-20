@@ -20,7 +20,7 @@ VisualType = Literal[
     "treegrid",                                 # hiyerarşik ağaç tablo
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
-    "text", "shape", "image", "button", "ticker", "container", # tasarım nesneleri
+    "text", "shape", "image", "button", "ticker", "container", "icon", "repeater", # tasarım nesneleri
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
@@ -116,7 +116,69 @@ class ComponentInstance(_B):
     bindings: dict[str, ComponentBinding] = Field(default_factory=dict, max_length=200)
 
 
+DataScalar = str | FiniteFloat | bool | None
+BindingTarget = Literal["text", "value", "backgroundColor", "color", "icon", "visible"]
+DesignState = Literal["normal", "hover", "selected", "loading", "empty", "error"]
+DATA_ICONS = {"none", "arrow", "back", "refresh", "eye", "link", "play", "file", "menu", "check", "warning", "trendUp", "trendDown", "clock", "user", "box"}
+
+
+class BindingSource(_B):
+    kind: Literal["value", "field", "row"]
+    value: ValueRef | None = None
+    field: FieldRef | None = None
+
+    @model_validator(mode="after")
+    def _source(self):
+        if bool(self.value) == bool(self.field) or self.kind == "value" and not self.value or self.kind == "field" and not self.field:
+            raise ValueError("Veri bağı tek bir geçerli alan veya ölçü ister")
+        return self
+
+
+class BindingRule(_B):
+    op: Literal["eq", "ne", "gt", "ge", "lt", "le", "blank", "notBlank"]
+    value: DataScalar = None
+    output: DataScalar
+
+
+class DataBinding(_B):
+    source: BindingSource
+    template: str | None = Field(default=None, max_length=4000)
+    fallback: DataScalar = None
+    rules: list[BindingRule] = Field(default_factory=list, max_length=32)
+
+
+def _data_color(value):
+    import re
+    return value is None or isinstance(value, str) and (value == "transparent" or re.fullmatch(r"#[0-9a-fA-F]{6}", value))
+
+
+class StateAppearance(_B):
+    text: str | None = Field(default=None, max_length=4000)
+    color: str | None = None
+    backgroundColor: str | None = None
+    borderColor: str | None = None
+    opacity: FiniteFloat | None = Field(default=None, ge=0, le=1)
+    icon: str | None = None
+
+    @model_validator(mode="after")
+    def _appearance(self):
+        if any(not _data_color(c) for c in [self.color, self.backgroundColor, self.borderColor]) or self.icon is not None and self.icon not in DATA_ICONS:
+            raise ValueError("Durum rengi veya simgesi geçersiz")
+        return self
+
+
+class RepeaterDefinition(_B):
+    definitionId: str = Field(min_length=1, max_length=80)
+    version: int = Field(ge=1)
+    bindings: dict[str, ComponentBinding] = Field(default_factory=dict, max_length=200)
+    itemHeight: FiniteFloat = Field(default=180, ge=64, le=1200)
+    actionSourceIndex: int = Field(default=0, ge=0, le=1000)
+
+
 class Visual(_B):
+    bindings: dict[BindingTarget, DataBinding] = Field(default_factory=dict)
+    states: dict[DesignState, StateAppearance] = Field(default_factory=dict)
+    repeater: RepeaterDefinition | None = None
     id: str = Field(min_length=1, max_length=64)
     type: VisualType
     x: FiniteFloat = 0
@@ -135,6 +197,22 @@ class Visual(_B):
     filters: list[FilterRef] = Field(default_factory=list)  # görsel düzeyi filtreler
     format: dict[str, Any] = Field(default_factory=dict)     # Biçim bölmesi: başlık, renkler, etiketler, eksenler
     state: dict[str, Any] = Field(default_factory=dict)      # dilimleyici seçimi, sıralama gibi etkileşim durumu
+
+    @model_validator(mode="after")
+    def _runtime(self):
+        if self.repeater and self.type != "repeater":
+            raise ValueError("Tekrarlayıcı ayarı yalnız tekrarlayıcıya uygulanabilir")
+        if "value" in self.bindings and self.type not in ("card", "ticker", "text"):
+            raise ValueError("Değer bağı kart, sayaç veya metin nesnesi ister")
+        for target, binding in self.bindings.items():
+            outputs = [r.output for r in binding.rules] + [binding.fallback]
+            if target in ("backgroundColor", "color") and any(not _data_color(v) for v in outputs):
+                raise ValueError("Bağ rengi #RRGGBB veya transparent olmalı")
+            if target == "visible" and any(v is not None and not isinstance(v, bool) for v in outputs):
+                raise ValueError("Görünürlük kuralı doğru/yanlış döndürmeli")
+            if target == "icon" and any(v is not None and v not in DATA_ICONS for v in outputs):
+                raise ValueError("Bağ simgesi geçersiz")
+        return self
 
 
 class LayoutFormat(_B):
@@ -262,8 +340,9 @@ class ComponentDefinition(_B):
             for site in slot.sites:
                 path = ".".join(site.path)
                 ref_path = re.fullmatch(r"(group|legend|values|target|filters)\.[0-9]{1,3}", path)
+                binding_path = re.fullmatch(r"bindings\.(text|value|backgroundColor|color|icon|visible)\.source\.(field|value)", path)
                 action_path = re.fullmatch(r"format\.(rowAction\.)?action(\.items\.[0-9]{1,3}\.action)*", path)
-                if not (ref_path or action_path) or (site.visualId, path) in used:
+                if not (ref_path or action_path or binding_path) or (site.visualId, path) in used:
                     raise ValueError("Bileşen yuvasının hedef yolu geçersiz veya yineleniyor")
                 used.add((site.visualId, path))
                 try:
@@ -273,6 +352,8 @@ class ComponentDefinition(_B):
                 except (KeyError, IndexError, ValueError, TypeError) as e:
                     raise ValueError("Bileşen yuvasının hedefi bulunamadı") from e
                 expected = "field" if ref_path and site.path[0] in ("group", "legend", "filters") else "value" if ref_path else None
+                if binding_path:
+                    expected = site.path[-1]
                 if action_path and isinstance(node, dict):
                     expected = "page" if node.get("type") == "page" else "visual" if node.get("type") == "toggle" else "measure" if node.get("type") == "function" and node.get("functionName") == "measure" else None
                 if not isinstance(node, dict) or expected is None or slot.kind != expected:
@@ -327,6 +408,19 @@ class Report(_B):
             validate_tree(p.visuals)
             by_id = {v.id: v for v in p.visuals}
             for v in p.visuals:
+                if v.repeater:
+                    definition = definitions.get((v.repeater.definitionId, v.repeater.version))
+                    if not definition:
+                        raise ValueError("Tekrarlayıcı bileşeni raporda bulunamadı")
+                    slots = {s.id: s for s in definition.slots}
+                    if set(v.repeater.bindings) != set(slots):
+                        raise ValueError("Tekrarlayıcı bileşen alan eşlemeleri eksik")
+                    for key, binding in v.repeater.bindings.items():
+                        check_binding(slots[key].kind, binding)
+                    if any(n.type not in ("container", "text", "card", "ticker", "shape", "image", "button", "icon") for n in definition.visuals):
+                        raise ValueError("Satır şablonu yalnız tasarım nesneleri, kart ve sayaç içerebilir")
+                    if any(b.source.kind != "row" for n in definition.visuals for b in n.bindings.values()):
+                        raise ValueError("Satır şablonundaki veri bağları satır kaynağını kullanmalı")
                 if not v.component:
                     continue
                 link = v.component
@@ -361,6 +455,12 @@ def _refs(report: dict):
         for v in page.get("visuals", []):
             # Tanımlar değişmez sürümlerdir; model adları kullanım eşlemesinde güncellenir.
             yield from (v.get("component") or {}).get("bindings", {}).values()
+            yield from (v.get("repeater") or {}).get("bindings", {}).values()
+            for binding in (v.get("bindings") or {}).values():
+                source = binding.get("source") or {}
+                for key in ("value", "field"):
+                    if source.get(key):
+                        yield source[key]
             for key in ("group", "legend", "values", "target", "filters"):
                 for ref in v.get(key, []):
                     yield ref

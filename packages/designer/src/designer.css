@@ -197,3 +197,10 @@
 .brand-sizes img { max-width: none; }
 .brand-sizes figcaption { font-size: 11px; display: grid; justify-items: center; gap: 8px; }
 @media (max-width: 600px) { .component-bindings > div { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+.runtime-panel { padding: 10px; border-top: 1px solid var(--border); font-size: 12px; }
+.runtime-panel > summary { cursor: pointer; font-weight: 600; padding: 5px 0; }
+.runtime-panel label { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.runtime-panel input, .runtime-panel select { width: 100%; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 5px; }
+.runtime-panel input[type=checkbox] { width: auto; }
+.runtime-panel button { font: inherit; padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); margin: 3px 0; }
+.runtime-binding, .runtime-rule { border: 1px solid var(--border); border-radius: 5px; padding: 7px; margin: 8px 0; }

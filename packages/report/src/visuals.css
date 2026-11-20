@@ -18,6 +18,7 @@
 .v-image-empty { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
 .v-action-button { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; border: 2px solid transparent; border-radius: inherit; font-size: 18px; font-weight: 650; cursor: pointer; transition: filter .16s ease, background-color .16s ease, transform .16s ease; }
 .v-action-button:hover { filter: brightness(1.08); }
+.v-action-button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v-action-button:active { transform: scale(.98); }
 .v-action-button.outline { background: transparent; }
 .v-action-button.ghost { background: transparent; border-color: transparent !important; }
@@ -57,12 +58,12 @@
 .v-ticker-value { font-size: clamp(24px, 3vw, 54px); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
 .visual.motion-fade { animation: visual-fade var(--motion-duration, 500ms) ease-out both; }
 .visual.motion-rise { animation: visual-rise var(--motion-duration, 500ms) ease-out both; }
-.visual.motion-pulse { animation: visual-pulse var(--motion-duration, 500ms) ease-in-out infinite alternate; }
+.visual.motion-value-change { animation: visual-pulse var(--motion-duration, 500ms) ease-in-out 2 alternate; }
 @keyframes visual-fade { from { opacity: 0; } to { opacity: var(--visual-opacity, 1); } }
 @keyframes visual-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes visual-pulse { from { filter: brightness(1); } to { filter: brightness(1.14); } }
 @media (prefers-reduced-motion: reduce) {
-  .visual.motion-fade, .visual.motion-rise, .visual.motion-pulse { animation: none; }
+  .visual.motion-fade, .visual.motion-rise, .visual.motion-value-change { animation: none; }
 }
 .visual .error-box { margin: 4px 0; font-size: 12px; }
 .v-body { height: 100%; transition: opacity 0.15s; }
@@ -151,6 +152,24 @@
 .viewer-layout-choice { margin-right: auto; display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .viewer-layout-choice select { max-width: min(220px, 65vw); }
 .v-server-grid { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.v-runtime-state { display: flex; height: 100%; min-height: 0; overflow: hidden; flex-direction: column; gap: 4px; justify-content: center; align-items: center; text-align: center; overflow-wrap: anywhere; padding: 4px; }
+.v-runtime-state > span { max-width: 100%; min-height: 0; overflow: hidden; text-overflow: ellipsis; }
+.v-runtime-state > span:first-child { flex-shrink: 0; white-space: nowrap; }
+.v-runtime-state .v-action-icon { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
+.v-runtime-state > button { flex-shrink: 0; }
+.v-runtime-detail { font-size: 11px; max-width: 100%; overflow-wrap: anywhere; }
+.v-binding-hidden { position: absolute; bottom: 2px; left: 4px; font-size: 10px; background: var(--surface); color: var(--text); padding: 2px; }
+.v-data-icon { height: 100%; width: 100%; display: grid; place-items: center; }
+.v-data-icon .action-glyph { width: min(100%, 120px); height: min(100%, 120px); }
+.v-repeater { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 5px; }
+.v-repeater > input { font: inherit; padding: 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--text); background: var(--surface); }
+.v-repeater-viewport { flex: 1; min-height: 0; overflow: auto; contain: layout paint; }
+.v-repeater .v-note { position: static; font-size: 11px; margin: 2px 0; }
+.v-server-grid > .v-runtime-state ~ :not(.v-table-feedback) { display: none; }
+.v-server-branch > .v-runtime-state ~ :not(.v-server-pages):not(.v-table-feedback) { display: none; }
+.v-repeater-item.is-selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.v-row-template { position: relative; width: 100%; height: 100%; cursor: pointer; }
+.v-row-template:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .v-server-grid > .v-ag-wrap { flex: 1; min-height: 0; height: auto; }
 .v-server-grid .v-note, .v-server-tree .v-note { position: static; flex: none; margin: 4px 0; padding: 4px 6px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .v-server-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; padding: 5px; font-size: 11px; }

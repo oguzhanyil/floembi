@@ -30,5 +30,5 @@ export function visualStyle(visual: Visual): CSSProperties {
 
 export function visualMotion(visual: Visual): string {
   const motion = visual.format.animation;
-  return motion === "fade" || motion === "rise" || motion === "pulse" ? `motion-${motion}` : "";
+  return motion === "fade" || motion === "rise" ? `motion-${motion}` : "";
 }

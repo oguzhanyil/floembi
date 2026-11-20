@@ -124,5 +124,6 @@ Başka makinede yeni dosya oluşturma (mevcut dosyanın üzerine yazmaz):
 
 AG Grid'in tek koşul yapılandırması için birincil kaynak:
 [Filter Conditions](https://www.ag-grid.com/react-data-grid/filter-conditions/).
-Yeni bağımlılık eklenmedi. Sonraki aşama **F11: veri bağları, durumlar, tekrarlayıcı ve hareket**;
+Yeni bağımlılık eklenmedi. Sonraki F11 veri bağları/durumlar/tekrarlayıcı/hareket aşaması da
+[uygulandı](f11-veri-baglari-ve-tekrarlayici.md); sırada **F13 tasarım ve anlam denetçisi** var.
 F06-2–5 ölçü/motor/mutabakat işleri açık kalır.
