@@ -131,3 +131,14 @@ def test_mixed_plans_keep_group_order_and_nulls(data):
         extra=[("dated", "YEAR(DATE(2025,1,1))"), ("sales", "[Revenue]")],
     )
     assert rows == [("A", 40, 2025, 45), ("B", 1, 2025, -1)]
+
+
+def test_cumulative_score_table_keeps_external_filters_and_ties(data):
+    run, _ = data
+    expr = (
+        'VAR cur=[Revenue] VAR T=FILTER(ADDCOLUMNS(ALLSELECTED(Sales[Customer]),"@v",[Revenue]),[@v]>0) '
+        "RETURN DIVIDE(SUMX(FILTER(T,[@v]>=cur),[@v]),SUMX(T,[@v]))"
+    )
+    result = dict(run(expr, ["Sales[Customer]"], roles=["A"]))
+    assert result == {"x": pytest.approx(40 / 45), "y": pytest.approx(40 / 45), "z": 1}
+    assert dict(run(expr, ["Sales[Customer]"], [("Sales[Customer]", "z")])) == {"z": 1}

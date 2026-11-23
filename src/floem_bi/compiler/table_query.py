@@ -298,7 +298,68 @@ class TablePlan:
             and node.name in TABLE_CALLS
         )
 
+    def shared_axis_table(self, node, scope):
+        """Seçili üyelerin ölçü tablosunu görselin her satırında tekrar oluşturma."""
+        scored = node.args[0] if node.name == "FILTER" and len(node.args) == 2 else node
+        if not (
+            isinstance(scored, ast.Call)
+            and scored.name == "ADDCOLUMNS"
+            and len(scored.args) >= 3
+            and len(scored.args) % 2 == 1
+        ):
+            return None
+        members = scored.args[0]
+        if not (
+            len(self.group) == 1
+            and isinstance(members, ast.Call)
+            and members.name == "ALLSELECTED"
+            and len(members.args) == 1
+            and isinstance(members.args[0], ast.ColumnRef)
+            and self.key(members.args[0]) == self.group[0]
+        ):
+            return None
+        if not all(
+            isinstance(label, ast.String)
+            and isinstance(score, ast.BracketRef)
+            and self.model.measure(score.name)
+            for label, score in zip(scored.args[1::2], scored.args[2::2])
+        ):
+            return None
+        labels = {label.value.lower() for label in scored.args[1::2]}
+
+        def row_only(expr):
+            if isinstance(expr, ast.BracketRef):
+                return expr.name.lower() in labels
+            if isinstance(expr, (ast.Number, ast.String, ast.Boolean)):
+                return True
+            return isinstance(expr, (ast.Binary, ast.Unary)) and all(
+                row_only(c) for c in _children(expr)
+            )
+
+        if node.name == "FILTER" and not row_only(node.args[1]):
+            return None
+        unit = self.alias("s")
+        shared_scope = Scope(
+            self.cte(f"SELECT 1 AS {unit}"),
+            unit,
+            tuple(f for f in scope.filters if not f.axis),
+        )
+        rows = self.table(node, shared_scope, {})
+        columns = ", ".join("t." + c.alias for c in rows.columns)
+        name = self.cte(
+            f"SELECT e.*, {columns} FROM {scope.name} e CROSS JOIN {rows.name} t"
+        )
+        return Rows(name, scope.key, rows.columns)
+
     def table(self, node, scope, env):
+        if (
+            scope == self.root_scope
+            and isinstance(node, ast.Call)
+            and node.name in {"ADDCOLUMNS", "FILTER"}
+        ):
+            shared = self.shared_axis_table(node, scope)
+            if shared is not None:
+                return shared
         if isinstance(node, ast.Name):
             bound = env.get(node.name.lower()) if not node.quoted else None
             if isinstance(bound, Rows):
@@ -469,6 +530,72 @@ class TablePlan:
                 self.stack.pop()
         return self.measures[key]
 
+    def axis_rank(self, args, scope, env):
+        """ALLSELECTED ekseni zaten sorgunun satır kümesiyse her üyeyi bir kez puanla."""
+        table = args[0]
+        if (
+            scope != self.root_scope
+            or len(self.group) != 1
+            or not isinstance(table, ast.Call)
+            or table.name != "ALLSELECTED"
+            or len(table.args) != 1
+            or not isinstance(table.args[0], ast.ColumnRef)
+            or self.key(table.args[0]) != self.group[0]
+            or not isinstance(args[1], ast.BracketRef)
+            or len(args) > 2
+            and not isinstance(args[2], ast.Omitted)
+        ):
+            return None
+        # İç içe ALLSELECTED/ISINSCOPE gölge filtre veya satır geçişini gözleyebilir.
+        visited = set()
+
+        def context_sensitive(node):
+            if isinstance(node, ast.Call) and node.name in {
+                "ALLSELECTED",
+                "ISINSCOPE",
+                "RANKX",
+            }:
+                return True
+            name = (
+                node.name
+                if isinstance(node, ast.BracketRef)
+                else node.column
+                if isinstance(node, ast.ColumnRef)
+                else None
+            )
+            if name and name not in visited:
+                found = self.model.measure(name)
+                if found and (
+                    not isinstance(node, ast.ColumnRef)
+                    or found[0].ad.lower() == node.table.lower()
+                ):
+                    visited.add(name)
+                    if context_sensitive(parse(found[1].ifade)):
+                        return True
+            return any(context_sensitive(child) for child in _children(node))
+
+        if context_sensitive(args[1]):
+            return None
+        value = self.scalar(args[1], scope, env)
+        direction, tie = self.rank_options(args)
+        zero = "''" if value.kind == "string" else "0"
+        function = "dense_rank" if tie == "DENSE" else "rank"
+        ranked = self.cte(
+            f"SELECT e.{scope.key}, {function}() OVER (ORDER BY coalesce({value.sql},{zero}) {direction}) AS v FROM {scope.name} e"
+        )
+        return self.ref(ranked, scope.key, "number")
+
+    def rank_options(self, args):
+        require(len(args) <= 5, "RANKX en çok beş argüman alır")
+        direction = self.order(args[3] if len(args) > 3 else None)
+        tie = (
+            args[4].name.upper()
+            if len(args) > 4 and isinstance(args[4], ast.Name)
+            else "SKIP"
+        )
+        require(tie in ("SKIP", "DENSE"), "RANKX eşitlik kuralı SKIP/DENSE olmalı")
+        return direction, tie
+
     def scalar(self, node, scope, env):
         if isinstance(node, (ast.Number, ast.Boolean, ast.String)):
             return Value(
@@ -624,6 +751,10 @@ class TablePlan:
             "ISEMPTY",
         }:
             require(args, f"{n} tablo alır")
+            if n == "RANKX" and len(args) >= 2:
+                ranked = self.axis_rank(args, scope, env)
+                if ranked is not None:
+                    return ranked
             if (
                 n in {"COUNTROWS", "ISEMPTY"}
                 and isinstance(args[0], ast.Name)
@@ -642,20 +773,11 @@ class TablePlan:
             frame = self.frame(rows, scope)
             v = self.scalar(args[1], frame, env)
             if n == "RANKX":
-                require(len(args) <= 5, "RANKX en çok beş argüman alır")
+                direction, tie = self.rank_options(args)
                 target = (
                     sub(args[2])
                     if len(args) > 2 and not isinstance(args[2], ast.Omitted)
                     else sub(args[1])
-                )
-                direction = self.order(args[3] if len(args) > 3 else None)
-                tie = (
-                    args[4].name.upper()
-                    if len(args) > 4 and isinstance(args[4], ast.Name)
-                    else "SKIP"
-                )
-                require(
-                    tie in ("SKIP", "DENSE"), "RANKX eşitlik kuralı SKIP/DENSE olmalı"
                 )
                 zero = "''" if v.kind == "string" else "0"
                 score = f"coalesce({v.sql},{zero})"
@@ -762,6 +884,7 @@ class TablePlan:
             for i, g in enumerate(group)
         )
         scope = Scope(start, "s0", selections)
+        self.root_scope = scope
         values = [(n, self.measure(n, scope)) for n in req.measures] + [
             (n, self.scalar(parse(s), scope, {})) for n, s in req.expressions
         ]

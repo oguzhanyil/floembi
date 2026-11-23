@@ -23,6 +23,7 @@ Dört dalda 260 farklı kaynak DAX ifadesi derlendi. Ana dalın yedi modelinde 3
 |---|---|---|
 | 449 ölçü sonucu | İki kaynak projenin kendi veri kopyaları | SAPB1Demo'da 135 ölçü × 3 filtre durumu. DinamikFinans'ta 22 ölçü × 2 durum. Genel, 2025 ve firma, ayrıca SAP'de 2025, muhatap ve USD. |
 | 12 müşteri satırı sonucu | SAPB1Demo kaynak kopyası | Aynı üç müşteriyle gruplanmış net satış, ABC sınıfı, kümülatif satış payı ve ilk 10 müşteri payı. |
+| 10 müşteri ve tutar | SAPB1Demo kaynak kopyası | Satış Analizi sayfasındaki ilk 10 sıralamasında hem müşteri kümesi hem her müşterinin net satışı Power BI ile eşleşti. Tek müşteri ekseninde sıra ve birikimli pay hesapları seçili müşteri puanlarını paylaşır. |
 | 181 ölçü sonucu | İki motora aynı sentetik satırlar verilerek | Ana daldaki önbelleksiz beş modelin özgün ölçüleri. |
 | 9 eski sürüm sonucu | Eski model ve ilişkilerle aynı sentetik satırlar | Önceki dallara özgü dokuz ifade. Üçü bu örnek seçimde iki motorda da boş döner. |
 

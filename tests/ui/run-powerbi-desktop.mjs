@@ -17,6 +17,8 @@ const browser = process.env.FLOEM_TEST_BROWSER || ["C:/Program Files (x86)/Micro
 assert(browser, "Chromium bulunamadı");
 const delay = (ms) => new Promise(done => setTimeout(done, ms));
 let service, child, server, ws;
+let activeApi = 0;
+const transportErrors = [];
 try {
   service = spawn(join(root, ".venv/Scripts/python.exe"), [join(root, "tests/ui/powerbi-desktop-service.py"), dir], { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
   let lines = "", errors = "";
@@ -28,9 +30,17 @@ try {
   await writeFile(join(dir, "index.html"), '<!doctype html><html lang="tr"><meta charset="utf-8"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script></html>');
   server = createServer(async (req, res) => {
     if (req.url.startsWith("/api/") || req.headers["x-floem-token"]) {
-      const chunks = []; for await (const chunk of req) chunks.push(chunk);
-      const response = await fetch(`http://127.0.0.1:${port}${req.url.startsWith("/api/") ? req.url.slice(4) : req.url}`, { method: req.method, headers: { "X-Floem-Token": req.headers["x-floem-token"] || "", "Content-Type": "application/json" }, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks) });
-      res.writeHead(response.status, { "Content-Type": response.headers.get("Content-Type") || "application/json" }); res.end(Buffer.from(await response.arrayBuffer())); return;
+      activeApi++;
+      try {
+        const chunks = []; for await (const chunk of req) chunks.push(chunk);
+        const response = await fetch(`http://127.0.0.1:${port}${req.url.startsWith("/api/") ? req.url.slice(4) : req.url}`, { method: req.method, headers: { "X-Floem-Token": req.headers["x-floem-token"] || "", "Content-Type": "application/json" }, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks) });
+        res.writeHead(response.status, { "Content-Type": response.headers.get("Content-Type") || "application/json" }); res.end(Buffer.from(await response.arrayBuffer()));
+      } catch (error) {
+        transportErrors.push(`${req.url}: ${error.cause?.code ?? error.message}`);
+        if (!res.headersSent) res.writeHead(502);
+        res.end();
+      } finally { activeApi--; }
+      return;
     }
     const name = req.url === "/" ? "index.html" : req.url.slice(1);
     if (!/^[\w.-]+\.(html|m?js|css|ttf|woff2?)$/.test(name) || !existsSync(join(dir, name))) { res.writeHead(404).end(); return; }
@@ -88,6 +98,10 @@ try {
     }
     await waitFor(`[...document.querySelectorAll(".v-card-value")].some(e => /[0-9]/.test(e.textContent))`);
     assert.equal(await evaluate('document.querySelector(".import-audit-control")?.textContent.includes("Gömülü veri")'), true);
+    for (let attempt = 0; attempt < 600 && activeApi; attempt++) await delay(200);
+    assert.equal(activeApi, 0, "Görsel sorguları tamamlanmadı");
+    assert.deepEqual(transportErrors, [], `Test servisi çıkış kodu ${service.exitCode}. ${errors.slice(-1500)}`);
+    assert.deepEqual(await evaluate('[...document.querySelectorAll(".page .v-error")].map(e => e.textContent)'), []);
     console.log("PASS: Yerel kabul dosyası Desktop Aç yolundan açıldı, kaynak satır sayısı ve hesaplanan kart ekranda.");
   }
   assert.deepEqual(browserErrors, []);

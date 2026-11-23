@@ -4,7 +4,10 @@ Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pi
 Power BI dosyaları Desktop Aç/Ctrl+O ile açılır. Dört kaynak dalındaki 260 ayrı
 formül FDX'te derlendi. Yedi ana raporun alan eşlemeleri ve ölçü kabulü
 `data/FDX-Test` altında. İki dosyanın kayıtlı verisi, diğer projelerin ayrıca
-etiketlenmiş sentetik örnekleri kullanıldı. Sadeleştirilmiş ortak ERP modeli için
+etiketlenmiş sentetik örnekleri kullanıldı. Power BI ile 471 kaynak satırı/ölçü
+sonucu ve 190 sentetik sonuç eşleşti. İlk 10 müşteri sorgusu ve ABC tablosu,
+seçili üyelerin puanlarını tek müşteri ekseninde bir kez hesaplar.
+Sadeleştirilmiş ortak ERP modeli için
 canlı kaynak kabulü ve nihai tema seçimi açık.
 [Kaynak raporlar, sayısal kabul ve test adımları](docs/f06-kaynak-rapor-kabulu.md).
 Desktop izleyici modu ve geri al/ileri al araçları ribbon **Rapor** grubundadır.

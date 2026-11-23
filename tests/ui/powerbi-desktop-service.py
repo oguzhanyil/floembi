@@ -106,6 +106,9 @@ with tempfile.TemporaryDirectory(prefix="floem-powerbi-ui-", dir=sys.argv[1] if 
                 response = client.request(self.command, self.path, content=self.rfile.read(int(self.headers.get("Content-Length", 0))), headers={"X-Floem-Token": self.headers.get("X-Floem-Token", ""), "Content-Type": "application/json"})
                 self.send_response(response.status_code); self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
                 self.end_headers(); self.wfile.write(response.content)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        class FixtureServer(ThreadingHTTPServer):
+            # Tam bir Power BI sayfası görsellerini aynı anda ister.
+            request_queue_size = 128
+        server = FixtureServer(("127.0.0.1", 0), Handler)
         print(json.dumps({"port": server.server_port}), flush=True)
         server.serve_forever()
