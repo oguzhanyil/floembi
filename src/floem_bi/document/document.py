@@ -350,16 +350,18 @@ class Document:
         """view_as: Power BI "Farklı görüntüle"; verilen rollerin RLS filtreleriyle sorgular."""
         with self.lock:
             model, engine = self._semantic_engine()
-            analytics = Report.model_validate(self.content.report).analytics if q.analytics else None
+            definition = Report.model_validate(self.content.report) if q.analytics or q.scenario else None
+            analytics = definition.analytics if definition else None
+            scenarios = definition.scenarios if definition else None
             if not view_as:
-                return run_visual_query(model, engine, q, revision=f"{self.id}:{self.revision}", analytics=analytics)
+                return run_visual_query(model, engine, q, revision=f"{self.id}:{self.revision}", analytics=analytics, scenarios=scenarios)
             from ..compiler import UserInfo
 
             known = {r.ad.lower() for r in self.tanim.roller}
             missing = [r for r in view_as if r.lower() not in known]
             if missing:
                 raise ModelError(f"Rol bulunamadı: {', '.join(missing)}")
-            return run_visual_query(model, engine, q, user=UserInfo(upn=upn or ""), roles=view_as, revision=f"{self.id}:{self.revision}", analytics=analytics)
+            return run_visual_query(model, engine, q, user=UserInfo(upn=upn or ""), roles=view_as, revision=f"{self.id}:{self.revision}", analytics=analytics, scenarios=scenarios)
 
     # ---------------------------------------------------------------- veri
     def preview(self, table: str, limit: int = 100) -> dict:

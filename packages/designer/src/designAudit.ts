@@ -117,7 +117,17 @@ export function auditDesign(report: ReportDefinition, tables: ModelTable[], runt
           if (!report.analytics?.dataTime) add("ANALYTICS_DATA_TIME", "info", "Veri kapsamı", "Kaynak veri zamanı bildirilmemiş.", "Değerlendirme zamanı kaynak veri zamanı olarak kullanılamaz.", "Kaynağın veri zamanını biliyorsanız Analytics ve uyarılar bölümünde belirtin; bilinmiyorsa karşılaştırma doğrulanmamış kalır.");
         }
       }
-      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater", "lineage", "signal"].includes(visual.type);
+      if (visual.type === "scenario") {
+        const scenario = report.scenarios?.find((s) => s.id === visual.format.scenarioId);
+        if (!scenario) add("SCENARIO_DEFINITION", "error", "Veri bağı", "Nesnenin senaryo tanımı bulunamadı.", "Senaryo bağlanmamış veya kaldırılmış.", "Senaryolar bölümünden bir tanım seçin.");
+        else {
+          checkRef(scenario.company, "Senaryo firma alanı");
+          scenario.parameters.forEach((p) => checkRef({ measure: p.measure }, `Parametre: ${p.label}`));
+          scenario.outputs.forEach((o) => checkRef({ measure: o.measure }, `Senaryo çıktısı: ${o.label}`));
+          scenario.filters?.forEach((f) => checkRef(f, "Senaryo sabit filtresi"));
+        }
+      }
+      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater", "lineage", "signal", "scenario"].includes(visual.type);
       if (needsGroup && !visual.group.length || needsValues && visual.values.length < (visual.type === "scatter" ? 2 : 1) && !(["card", "ticker"].includes(visual.type) && visual.bindings?.value)
         || visual.type === "heatmap" && !visual.legend?.length || visual.type === "table" && !visual.group.length && !visual.values.length
         || visual.type === "lineage" && (visual.group.length < 2 || !visual.legend?.length) || visual.type === "tolerance" && visual.values.length < 3)

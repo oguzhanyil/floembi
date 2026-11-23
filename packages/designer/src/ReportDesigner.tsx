@@ -25,6 +25,8 @@ import type { AuditTarget } from "./designAudit";
 import { journeyFilters, journeySlicers } from "../../report/src/reportJourney";
 import { useReportJourney } from "../../report/src/useReportJourney";
 import { AnalyticsPane } from "./AnalyticsPane";
+import { ScenarioPane } from "./ScenarioPane";
+import { ScenarioProvider } from "@floem/report";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -156,7 +158,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const layout = usePageLayout(page, JSON.stringify(previewVisibility[page?.id] ?? {}), viewKey);
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
-  const dataRev = `${host.dataRev}:${actionRev}:${JSON.stringify(host.report.analytics ?? null)}`;
+  const dataRev = `${host.dataRev}:${actionRev}:${JSON.stringify([host.report.analytics ?? null, host.report.scenarios ?? []])}`;
   const diagnosticRevision = useRef(0);
   const diagnosticScope = useMemo(() => `${viewKey}:${dataRev}:${++diagnosticRevision.current}`, [report, viewKey, dataRev]);
   const [diagnostics, setDiagnostics] = useState<{ scope: string; items: VisualDiagnostic[] }>({ scope: "", items: [] });
@@ -492,6 +494,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   }
 
   return (
+    <ScenarioProvider definitions={host.report.scenarios}>
     <DiagnosticProvider scope={diagnosticScope} ids={page.visuals.map((v) => v.id)} onChange={setDiagnostics}>
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`} data-layout-id={layoutId ?? "base"}
       onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
@@ -646,6 +649,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />}
           <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
           <AnalyticsPane report={report} tables={tables} selected={selected} onChange={(next) => update(() => next)} onVisual={updateVisual} />
+          <ScenarioPane report={report} tables={tables} selected={selected} onChange={(next) => update(() => next)} onVisual={updateVisual} />
           <DesignInspector report={report} tables={tables} pageId={page.id} layoutId={layoutId} scope={diagnosticScope} root={layout.root} resolved={layout}
             queries={diagnostics.scope === diagnosticScope ? diagnostics.items : []} onLocate={(target) => {
               journey.clear();
@@ -683,5 +687,6 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
         <button type="button" aria-label="Mesajı kapat" onClick={() => setActionNotice(null)}>✕</button></div>}
     </div>
     </DiagnosticProvider>
+    </ScenarioProvider>
   );
 }

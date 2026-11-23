@@ -21,7 +21,7 @@ VisualType = Literal[
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
     "text", "shape", "image", "button", "ticker", "container", "icon", "repeater", # tasarım nesneleri
-    "lineage", "tolerance", "signal",           # süreç, tolerans ve ortak ölçü/uyarı
+    "lineage", "tolerance", "signal", "scenario", # süreç, ölçü/uyarı ve senaryo
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
@@ -439,16 +439,65 @@ class AnalyticsConfig(_B):
         return self
 
 
+class ScenarioParameter(_B):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    label: str = Field(min_length=1, max_length=160)
+    measure: str = Field(min_length=1, max_length=160)
+    unit: str = Field(default="", max_length=40)
+    minimum: FiniteFloat = Field(ge=-1e12, le=1e12)
+    maximum: FiniteFloat = Field(ge=-1e12, le=1e12)
+    step: FiniteFloat = Field(default=1, ge=0.000001, le=1e12)
+    defaultValue: FiniteFloat = Field(ge=-1e12, le=1e12)
+
+    @model_validator(mode="after")
+    def _range(self):
+        from decimal import Decimal
+        if self.minimum > self.maximum or not self.minimum <= self.defaultValue <= self.maximum:
+            raise ValueError("Parametre sınırları ve başlangıç değeri uyumlu olmalı")
+        if (Decimal(str(self.defaultValue)) - Decimal(str(self.minimum))) % Decimal(str(self.step)) != 0:
+            raise ValueError("Başlangıç değeri minimumdan başlayan adımlara uymalı")
+        return self
+
+
+class ScenarioOutput(_B):
+    measure: str = Field(min_length=1, max_length=160)
+    label: str = Field(min_length=1, max_length=160)
+    unit: str = Field(default="", max_length=40)
+
+
+class ScenarioDefinition(_B):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    label: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    company: FieldRef
+    filters: list[FilterRef] = Field(default_factory=list, max_length=100)
+    parameters: list[ScenarioParameter] = Field(min_length=1, max_length=12)
+    outputs: list[ScenarioOutput] = Field(min_length=1, max_length=12)
+    proposalEnabled: bool = False
+    submitRoles: list[Literal["admin", "member", "contributor", "viewer"]] = Field(default_factory=lambda: ["admin", "member", "contributor"], max_length=4)
+
+    @model_validator(mode="after")
+    def _unique_scenario(self):
+        if len({p.id for p in self.parameters}) != len(self.parameters) or len({p.measure.lower() for p in self.parameters}) != len(self.parameters):
+            raise ValueError("Senaryoda parametre kimliği ve ölçü bağı benzersiz olmalı")
+        if len({o.measure.lower() for o in self.outputs}) != len(self.outputs):
+            raise ValueError("Senaryo çıktı ölçüleri benzersiz olmalı")
+        return self
+
+
 class Report(_B):
     version: int = 1
     theme: ThemeSnapshot | None = None
     analytics: AnalyticsConfig | None = None
+    scenarios: list[ScenarioDefinition] = Field(default_factory=list, max_length=30)
     importAudit: dict[str, Any] | None = None
     components: list[ComponentDefinition] = Field(default_factory=list, max_length=500)
     pages: list[Page] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique(self) -> "Report":
+        if len({s.id for s in self.scenarios}) != len(self.scenarios):
+            raise ValueError("Senaryo kimlikleri benzersiz olmalı")
         if len({p.id for p in self.pages}) != len(self.pages):
             raise ValueError("Sayfa kimlikleri benzersiz olmalı")
         definitions = {(c.id, c.version): c for c in self.components}
@@ -500,6 +549,11 @@ def empty_report() -> dict:
 
 # ------------------------------------------------- yeniden adlandırmada referanslar
 def _refs(report: dict):
+    for scenario in report.get("scenarios", []):
+        yield scenario.get("company") or {}
+        yield from scenario.get("parameters", [])
+        yield from scenario.get("outputs", [])
+        yield from scenario.get("filters", [])
     for metric in (report.get("analytics") or {}).get("metrics", []):
         yield metric
         yield metric.get("company") or {}

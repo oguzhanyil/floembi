@@ -34,6 +34,7 @@ const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
 const TREND: WellDef = { key: "group", label: "Trend ekseni", max: 1, optional: true, dateOnly: true };
 
 export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
+  scenario: { label: "Senaryo", icon: "⇄", group: "Etkileşim", size: [900, 720], wells: [] },
   signal: { label: "Ölçü ve uyarı", icon: "♧", group: "Kart", size: [560, 500], wells: [] },
   lineage: { label: "Parti bağlantıları", icon: "⑂", group: "Veri", size: [800, 460], wells: [
     { key: "group", label: "Kaynak, hedef, kaynak adı, hedef adı, birim, ilişki", max: 6 },

@@ -1238,11 +1238,13 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             roles = rls_roles(c, user, ds, role, [r.ad for r in model.tanim.roller])
         try:
             with lock:
-                analytics = Report.model_validate(json.loads(definition)).analytics if q.analytics and definition else None
+                config = Report.model_validate(json.loads(definition)) if (q.analytics or q.scenario) and definition else None
+                analytics = config.analytics if config else None
+                scenarios = config.scenarios if config else None
                 if roles is None:
-                    return run_visual_query(model, eng, q, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics)
+                    return run_visual_query(model, eng, q, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics, scenarios=scenarios, data_revision=f"{ds.id}:{ds.version}")
                 # RLS: rol filtreleri her sorguya eklenir; USERPRINCIPALNAME() oturumdaki e-posta
-                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics)
+                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics, scenarios=scenarios, data_revision=f"{ds.id}:{ds.version}")
         except QueryError as e:
             raise ApiError(400, "query_error", "Görsel sorgusu çalıştırılamadı", str(e)) from e
 
@@ -2092,6 +2094,16 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     @app.get("/api/health")
     def health():
         return {"ok": True}
+
+    from .scenario_workflow import install_scenario_workflow
+    def scenario_target(c, user, rid, aid, iid):
+        if rid is not None:
+            report, role = load_report(c, rid, user)
+            return {"report_id": report.id, "dataset_id": report.dataset_id, "definition": report.definition, "role": role}
+        _, role, item, dataset_id = load_item(c, aid, iid, user)
+        return {"report_id": item.report_id, "dataset_id": dataset_id, "definition": item.definition, "role": role}
+    install_scenario_workflow(app, engine, current_user, scenario_target,
+        lambda user, target, q: dataset_query(user, target["dataset_id"], target["role"], q, target["definition"]), ApiError)
 
     # -------------------------------------------------------------- web arayüzü
     web = settings.web_dist

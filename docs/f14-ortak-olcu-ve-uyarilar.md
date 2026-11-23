@@ -2,8 +2,8 @@
 
 **23.11.2026:** BI kataloğu, ortak hesap API'si, eşik nesnesi ve verili yerel pilot
 hazır. Kullanıcı Analytics'in çalışmadığını bildirdi; canlı Analytics adaptörü ve
-gerçek kaynakla uçtan uca kabul açık. Sonraki ürün aşaması F15 senaryo ve yetkili
-işlem iş akışlarıdır.
+gerçek kaynakla uçtan uca kabul açık. [F15 senaryo ve uygulama içi öneri akışı](f15-senaryo-ve-oneriler.md)
+da uygulandı; sırada gerçek süreç/kullanıcı kabulü var.
 
 ## Deneme
 

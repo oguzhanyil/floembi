@@ -242,6 +242,35 @@ pending_grants = Table(
 )
 
 
+scenario_proposals = Table(
+    "scenario_proposals", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("report_id", Integer, ForeignKey("reports.id", ondelete="CASCADE"), nullable=False),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
+    Column("request_key", String(80), nullable=False),
+    Column("request_hash", String(64), nullable=False),
+    Column("scenario_id", String(80), nullable=False),
+    Column("company_key", String(500), nullable=False),
+    Column("security_version", String(64), nullable=False),
+    Column("query_json", Text, nullable=False),
+    Column("receipt_json", Text, nullable=False),
+    Column("note", Text, nullable=False),
+    Column("status", String(16), nullable=False, default="pending"),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+    UniqueConstraint("report_id", "user_id", "request_key"),
+)
+
+scenario_events = Table(
+    "scenario_events", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("proposal_id", Integer, ForeignKey("scenario_proposals.id", ondelete="CASCADE"), nullable=False),
+    Column("user_id", Integer, ForeignKey("users.id"), nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("note", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, default=now),
+)
+
+
 def _migrate(engine: Engine) -> None:
     """Eski metadata veritabanlarına yeni sütunları ekler (create_all var olan tabloyu değiştirmez)."""
     cols = {c["name"] for c in inspect(engine).get_columns("users")}

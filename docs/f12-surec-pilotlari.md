@@ -130,7 +130,8 @@ arayüz turu, typecheck ve Desktop/web üretim derlemeleri geçti. Yeni nesneler
 31 nesnenin ortak sağ tık menüsü ve veri aktarım seçenekleri de kontrol edildi.
 
 F12 teslimini izleyen **F14'ün BI tarafı ve yerel pilotu hazır**; [kapsam ve canlı
-Analytics kabulünde kalanlar](f14-ortak-olcu-ve-uyarilar.md). Sırada **F15** var. F12'nin gerçek kaynak
+Analytics kabulünde kalanlar](f14-ortak-olcu-ve-uyarilar.md). [F15 senaryo ve öneri akışı](f15-senaryo-ve-oneriler.md)
+da hazır; sırada gerçek süreç/kullanıcı kabulü var. F12'nin gerçek kaynak
 bağlantısı ve kullanıcı kabulü, F06 ölçü mutabakatına bağlı açık kabul maddeleridir.
 Bu pilotlar sipariş/fırsat hunisi, stok yaşlandırma veya yetkili ERP işlem iş akışının
 tam uygulaması değildir; F15 kaynak yazma işlerini ayrıca ele alır.

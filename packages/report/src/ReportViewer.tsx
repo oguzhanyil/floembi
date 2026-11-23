@@ -18,6 +18,8 @@ import { usePageLayout } from "./usePageLayout";
 import { visibleInLayout, inheritedLayoutStyle } from "./layout";
 import { choosePageLayout, resolvePageVariant } from "./pageLayouts";
 import { BindingProvider, RuntimeFrame } from "./BindingRuntime";
+import { ScenarioProvider } from "./ScenarioContext";
+import type { ScenarioWorkflow } from "@floem/client";
 
 const emptyPage: ReportPage = { id: "empty", name: "", width: 1280, height: 720, visuals: [] };
 
@@ -27,13 +29,14 @@ const emptyPage: ReportPage = { id: "empty", name: "", width: 1280, height: 720,
  * görseller kullanılacak.
  */
 export function ReportViewer({
-  report, run, dataRev = "", initialPage,
+  report, run, dataRev = "", initialPage, workflow,
 }: {
   report: ReportDefinition;
   run: QueryFn;
   /** Değişince tüm görseller yeniden sorgulanır (yeni yayımlama, yenileme) */
   dataRev?: string;
   initialPage?: string;
+  workflow?: ScenarioWorkflow;
 }) {
   const [pageId, setPageId] = useState(initialPage ?? report.pages[0]?.id);
   const [cross, setCross] = useState<CrossFilter | null>(null);
@@ -43,7 +46,7 @@ export function ReportViewer({
   const [states, setStates] = useState<Record<string, VisualState>>({});
   const [visibility, setVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [actionRev, setActionRev] = useState(0);
-  const queryRevision = `${dataRev}:${actionRev}:${JSON.stringify(report.analytics ?? null)}`;
+  const queryRevision = `${dataRev}:${actionRev}:${JSON.stringify([report.analytics ?? null, report.scenarios ?? []])}`;
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const journey = useReportJourney<{ pageId: typeof pageId; drill: typeof drill; cross: typeof cross; states: typeof states; visibility: typeof visibility }>((s) => {
     setPageId(s.pageId); setDrill(s.drill); setCross(s.cross); setStates(s.states); setVisibility(s.visibility);
@@ -116,7 +119,7 @@ export function ReportViewer({
   }
 
   return (
-    <div className="viewer" ref={root} data-layout-id={variantId ?? "base"}>
+    <ScenarioProvider definitions={report.scenarios} workflow={workflow}><div className="viewer" ref={root} data-layout-id={variantId ?? "base"}>
       <ImportCompatibility audit={report.importAudit} />
       <ReportViewport page={page} theme={report.theme} viewKey={viewKey} width={page.width} height={layout.height} onBackground={() => setCross(null)}
         tools={base.layouts?.length ? <label className="viewer-layout-choice">Düzen <select aria-label="Görüntüleme düzeni" value={choice} onChange={(e) => setChoices((old) => ({ ...old, [page.id]: e.target.value }))}>
@@ -208,6 +211,6 @@ export function ReportViewer({
       )}
       {actionNotice && <div className="v-action-notice" role="status"><span>{actionNotice}</span>
         <button type="button" aria-label="Mesajı kapat" onClick={() => setActionNotice(null)}>✕</button></div>}
-    </div>
+    </div></ScenarioProvider>
   );
 }

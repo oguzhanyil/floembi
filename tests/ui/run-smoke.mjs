@@ -22,6 +22,7 @@ import { testRuntime } from "./runtime-smoke.mjs";
 import { testInspector } from "./inspector-smoke.mjs";
 import { testProcess } from "./process-smoke.mjs";
 import { testAnalytics } from "./analytics-smoke.mjs";
+import { testScenario } from "./scenario-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -79,7 +80,10 @@ try {
   };
   await call('Runtime.enable');
   await call("Page.navigate", { url: `http://127.0.0.1:${server.address().port}` });
-  if (process.env.FLOEM_UI_ANALYTICS_ONLY) {
+  if (process.env.FLOEM_UI_SCENARIO_ONLY) {
+    await waitFor('window.setTestMode');
+    await testScenario({ call, evaluate, waitFor });
+  } else if (process.env.FLOEM_UI_ANALYTICS_ONLY) {
     await waitFor('window.setTestMode');
     await testAnalytics({ call, evaluate, waitFor });
   } else if (process.env.FLOEM_UI_PROCESS_ONLY) {
@@ -285,6 +289,7 @@ try {
     await waitFor('!document.querySelector(".v-context-menu")');
   };
   for (const type of types) {
+    if (type === 'scenario') await waitFor('document.querySelector("[data-visual-id=object-scenario] .v-scenario-results")');
     const selector = `[data-visual-id="object-${type}"] .visual-content ${type === 'table' ? '.ag-cell' : type === 'container' ? '' : '*'} `;
     await openMenu(selector);
     const text = await evaluate('document.querySelector(".v-context-menu").textContent');
@@ -385,6 +390,7 @@ try {
   await testInspector({ call, evaluate, waitFor, input });
   await testProcess({ call, evaluate, waitFor });
   await testAnalytics({ call, evaluate, waitFor });
+  await testScenario({ call, evaluate, waitFor });
   if (process.env.FLOEM_UI_LAYOUT_REPORT) {
     const definition = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_LAYOUT_REPORT), 'utf8'));
     await evaluate(`window.setAllReport(${JSON.stringify(definition)});window.setTestMode('all-viewer')`);

@@ -7,6 +7,7 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     <rect key={`${x}-${y}`} x={x} y={y} width="4" height={h} rx=".7" fill="currentColor" opacity={light ? ".48" : "1"} />;
   let content;
   switch (type) {
+    case "scenario": content = <><path d="M5 9h22M5 16h22M5 23h22" stroke="currentColor" strokeWidth="2" />{[[11,9],[22,16],[15,23]].map(([x,y])=><circle key={y} cx={x} cy={y} r="3" fill="var(--surface,#fff)" stroke="currentColor" strokeWidth="2" />)}</>; break;
     case "signal": content = <><path d="M8 22h16l-3-5v-6a5 5 0 0 0-10 0v6zM13 26h6" fill="none" stroke="currentColor" strokeWidth="2" /><circle cx="24" cy="8" r="4" fill="currentColor" /></>; break;
     case "lineage": content = <><path d="M8 16h8m0 0 8-8m-8 8 8 8" fill="none" stroke="currentColor" strokeWidth="2" />{[[6,16],[17,16],[25,7],[25,25]].map(([cx,cy]) => <circle key={cx+cy} cx={cx} cy={cy} r="3" fill="currentColor" />)}</>; break;
     case "tolerance": content = <><path d="M4 16h24" stroke="currentColor" strokeWidth="2" opacity=".4" /><rect x="10" y="11" width="12" height="10" fill="currentColor" opacity=".25" /><path d="M17 7v18" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" /><circle cx="13" cy="16" r="3" fill="currentColor" /></>; break;

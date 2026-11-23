@@ -28,9 +28,9 @@ export async function testServerGrid({ call, evaluate, waitFor, input }) {
   assert.equal(await evaluate('window.serverGridQueries.at(-1).page.column_filters[0].index'), 0);
   await input('.ag-floating-filter input', ''); await waitFor(`${ready} && ${pages}?.includes("12.050")`);
   await evaluate('document.querySelector(".ag-header-cell[col-id=c0] .ag-header-cell-label").click()');
-  await waitFor(`${ready} && window.serverGridQueries.at(-1).order_by?.[0]?.index === 0`);
+  await waitFor(`${ready} && window.serverGridQueries.at(-1).order_by?.[0]?.index === 0 && document.querySelector('.ag-header-cell[col-id=c0]')?.getAttribute('aria-sort')==='ascending'`);
   await evaluate('document.querySelector(".ag-header-cell[col-id=c0] .ag-header-cell-label").click()');
-  await waitFor(`${ready} && window.serverGridQueries.at(-1).order_by?.[0]?.desc === true`);
+  await waitFor(`${ready} && window.serverGridQueries.at(-1).order_by?.[0]?.desc === true && document.querySelector('.ag-header-cell[col-id=c0]')?.getAttribute('aria-sort')==='descending'`);
   await waitFor('document.querySelector(".ag-row[row-index=\\"0\\"] .ag-cell[col-id=c0]")?.textContent === "12.049"');
   await evaluate('document.querySelector(".ag-header-cell[col-id=c0] .ag-header-cell-label").click()');
   await waitFor(`${ready} && window.serverGridQueries.at(-1).order_by?.length === 0`);

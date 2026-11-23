@@ -1,4 +1,6 @@
 import type { AnalyticsConfig, MetricEvidence, MetricReceipt } from "./analytics";
+import type { ScenarioDefinition, ScenarioQuery, ScenarioReceipt, ScenarioWorkflow } from "./scenarios";
+export type { ScenarioDefinition, ScenarioParameter, ScenarioOutput, ScenarioQuery, ScenarioReceipt, ScenarioProposal, ScenarioScope, ScenarioProposalInput, ScenarioHistory, ScenarioWorkflow } from "./scenarios";
 export type { AnalyticsConfig, AnalyticsMetric, AnalyticsRule, MetricEvidence, MetricReceipt } from "./analytics";
 /**
  * Floem istemci sözleşmesi.
@@ -340,7 +342,7 @@ export type VisualType =
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater" | "lineage" | "tolerance" | "signal";
+  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater" | "lineage" | "tolerance" | "signal" | "scenario";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -583,6 +585,7 @@ export interface ImportAudit {
   pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];
 }
 export interface ReportDefinition {
+  scenarios?: ScenarioDefinition[];
   analytics?: AnalyticsConfig | null;
   version: number;
   theme?: ThemeSnapshot | null;
@@ -611,6 +614,7 @@ export interface ComponentLibraryStore {
 }
 
 export interface VisualQuery {
+  scenario?: ScenarioQuery;
   analytics?: { metricId: string; evidence?: MetricEvidence; snapshot?: string };
   group: FieldRef[];
   values: ValueRef[];
@@ -638,6 +642,7 @@ export interface VisualResultColumn {
 }
 
 export interface VisualResult {
+  scenario?: ScenarioReceipt;
   analytics?: MetricReceipt;
   columns: VisualResultColumn[];
   rows: (string | number | boolean | null)[][];
@@ -1264,6 +1269,14 @@ export class WebClient {
   }
   reportQuery(id: number, q: VisualQuery) {
     return this.http.request<VisualResult>("POST", `/api/reports/${id}/query`, q);
+  }
+  scenarioWorkflow(reportId: number, appId?: number, itemId?: number): ScenarioWorkflow {
+    const base = appId != null && itemId != null ? `/api/apps/${appId}/items/${itemId}` : `/api/reports/${reportId}`;
+    return { scope: base,
+      history: (input) => this.http.request("POST", `${base}/scenario-proposals/history`, input),
+      create: (input) => this.http.request("POST", `${base}/scenario-proposals`, input),
+      decide: (id, status, note) => this.http.request("POST", `${base}/scenario-proposals/${id}/decision`, { status, note }),
+    };
   }
   /** Anlık güncelleme bağlantısı için tek kullanımlık bilet (EventSource başlık gönderemez) */
   eventsTicket() {

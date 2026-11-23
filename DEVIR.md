@@ -1,6 +1,6 @@
 # Floem BI: devir notu (23.11.2026)
 
-Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları ve F14 BI ölçü/uyarı altyapısı ile yerel pilot hazır; gerçek kaynak kabulü açık. Kullanıcı Analytics'in çalışmadığını bildirdi; F14 canlı adaptör/kabul açık. Sıradaki ürün aşaması F15 senaryo ve yetkili işlem iş akışları.
+Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. Gerçek kaynak/kullanıcı kabulü ve F14 canlı Analytics adaptörü açık. Sırada gerçek süreç üzerinde kabul; ERP'ye işlem yazma ayrı tasarım/yetkilendirme kapsamında.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -141,6 +141,37 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 23.11.2026 F15 senaryo, yetkili öneri ve işlem geçmişi uygulandı
+
+- `data/F15-Senaryo-Atolyesi.floem`: iki firma, iskonto/hacim/maliyet varsayımları,
+  dört FDX çıktısı ve telefon düzeni. F12 sentetik verisine `Maliyet=Tutar*0.6`
+  eklenir; gerçek muhasebe maliyeti değildir. Üretici `python -m
+  floem_bi.scenario_demo data/F15-Yeni.floem` mevcut dosyaya yazmaz.
+- `Report.scenarios`: 30 tanım, tanım başına 12 parametre/12 çıktı. Parametreler
+  modeldeki sayısal sabit ölçülere bağlanır; başlangıç değeri aynı olmalı. Aralık,
+  adım, benzersizlik ve sonlu sayı sunucuda doğrulanır. Yeniden adlandırma izlenir.
+- `VisualQuery.scenario`: orijinal ve istek için kopyalanmış modelin FDX çıktıları
+  aynı veri/yetki anlık görüntüsünde hesaplanır; asıl model ve diğer oturumlar
+  etkilenmez. Tek firma/RLS, kapsam kesişimi, boş/sıfır ayrımı, sürüm ve delta oranı.
+- Ortak native **Senaryo** nesnesi: sayı/kaydırıcı, gecikmeli canlı hesap,
+  mevcut/senaryo/fark/değişim, sıfırlama, hata/tekrar ve PDF/Excel/CSV. Tanım ve
+  parametre bağları Designer **Senaryolar** panelinde düzenlenir; F13 bağları denetler.
+- Web raporu/App: öneri oluşturma tanımdaki rol politikasıyla; onay/ret yalnız
+  çalışma alanı Yönetici/Üyesiyle sunucuda denetlenir. `scenario_proposals` ve
+  `scenario_events` metadata tabloları; aynı anahtarla tekrar tek öneri/olay üretir.
+  Onayda sürüm, kapsam ve sonuç yeniden kontrol edilir; değişmiş veri onaylanmaz.
+  App kendi dondurulmuş tanımını kullanır. Kaynak ERP/SQL işlemi yürütülmez.
+- İzleyici/katkıda bulunan geçmişi yalnız kendi güncel veri/model/yetki sürümü ve
+  seçili firmasıyla sınırlıdır; Yönetici/Üye eski firma kayıtlarını da görür.
+  Son 100 kayıt gösterilir; not, varsayım, sonuç, filtre, aktör ve zaman tutulur.
+- Kullanım/API/sınırlar: [F15](docs/f15-senaryo-ve-oneriler.md). Sırada gerçek
+  süreç/kullanıcı kabulü; F06-2–5, F12 gerçek kaynak kabulü, F14 canlı adaptör ve
+  nihai tema açık. ERP'ye yazma ayrıca tasarlanıp yetkilendirilmelidir.
+- Doğrulama: 354 Python geçti / 1 atlandı; 84 saf TS kontrolü, 33 nesneli tam
+  Chromium turu, typecheck ve Desktop/web derlemeleri geçti. Gerçek `.floem` ve
+  geçici kimlik doğrulamalı sunucuda izleyici önerisi, yönetici sürüm engeli,
+  ret/geçmiş, 180→162 satış / 72→54 kâr ve üç viewport/DPR doğrulandı.
 
 ### 23.11.2026 F14 BI tarafı ve yerel pilot uygulandı; canlı Analytics kabulü açık
 

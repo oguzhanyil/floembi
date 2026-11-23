@@ -108,6 +108,7 @@ export function AppViewerPage({ id, itemId }: { id: number; itemId: number | nul
     (q: VisualQuery) => guard(client.appItemQuery(id, current!.id, q)),
     [client, guard, id, current],
   );
+  const workflow = useMemo(() => current ? client.scenarioWorkflow(0, id, current.id) : undefined, [client, id, current?.id]);
 
   // Anlık güncelleme: App güncellenince menü ve rapor, veri yenilenince görseller yeniden yüklenir
   useLive((e) => {
@@ -191,7 +192,7 @@ export function AppViewerPage({ id, itemId }: { id: number; itemId: number | nul
               <button onClick={load} title="Veriyi yeniden yükle">⟳ Yenile</button>
             </div>
             <div className="report-body">
-              <ReportViewer report={item.definition} run={run} dataRev={`${current.id}:${item.dataset.version}:${rev}`} />
+              <ReportViewer report={item.definition} run={run} workflow={workflow} dataRev={`${current.id}:${item.dataset.version}:${rev}`} />
             </div>
           </div>
         )}

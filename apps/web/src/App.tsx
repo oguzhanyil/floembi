@@ -9,7 +9,7 @@ import { SecurityPage } from "./security";
 import { AppSetupPage, AppTiles, AppViewerPage, AppsPage } from "./apps";
 import type { AppListItem } from "@floem/client";
 import { ReportViewer } from "@floem/report";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, SessionProvider, navigate, useLive, usePath, useSession } from "./session";
 
 export function App() {
@@ -500,6 +500,7 @@ function ReportPage({ id }: { id: number }) {
   useEffect(load, [load]);
 
   const run = useCallback((q: VisualQuery) => guard(client.reportQuery(id, q)), [client, guard, id]);
+  const workflow = useMemo(() => client.scenarioWorkflow(id), [client, id]);
 
   // Anlık güncelleme: rapor yeniden yayımlanınca açık ekran kendiliğinden yenilenir
   const [notice, setNotice] = useState<string | null>(null);
@@ -553,7 +554,7 @@ function ReportPage({ id }: { id: number }) {
       </div>
       {sharing && <ShareDialog report={report} onClose={() => setSharing(false)} />}
       <div className="report-body">
-        <ReportViewer report={report.definition} run={run} dataRev={`${report.dataset.version}:${rev}`} />
+        <ReportViewer report={report.definition} run={run} workflow={workflow} dataRev={`${report.dataset.version}:${rev}`} />
       </div>
     </div>
   );

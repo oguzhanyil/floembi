@@ -19,6 +19,7 @@ from ..engine.duckdb_engine import DuckDBEngine
 from ..model import ModelError, SemanticModel
 from .schema import FieldRef, FilterRef, ValueRef
 from .analytics import AnalyticsQuery
+from .scenarios import ScenarioQuery
 
 # Power BI Türkçe arayüzündeki örtük ölçü adları
 AGG = {
@@ -74,6 +75,7 @@ class GridPage(BaseModel):
 class VisualQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     analytics: AnalyticsQuery | None = None
+    scenario: ScenarioQuery | None = None
     group: list[FieldRef] = Field(default_factory=list)
     values: list[ValueRef] = Field(default_factory=list)
     filters: list[FilterRef] = Field(default_factory=list)
@@ -132,9 +134,14 @@ def _value_meta(model: SemanticModel, v: ValueRef) -> dict:
 
 def run_visual_query(
     model: SemanticModel, engine: DuckDBEngine, q: VisualQuery, user=None, roles: list[str] | None = None,
-    revision: str = "", analytics=None,
+    revision: str = "", analytics=None, scenarios=None, data_revision: str | None = None,
 ) -> dict:
     """Görselin verisini döndürür: sütun bilgisi, satırlar, kesildi mi, toplam satırı."""
+    if q.scenario:
+        if q.analytics or q.group or q.values or q.page or q.order_by or q.totals:
+            raise QueryError("Senaryo sorgusunda yalnız senaryo kimliği, parametreler ve filtreler kullanılır")
+        from .scenarios import evaluate_scenario
+        return evaluate_scenario(model, engine, scenarios or [], q.scenario, q.filters, revision=revision, data_revision=data_revision, user=user, roles=roles)
     if q.analytics:
         if q.group or q.values or q.page or q.order_by or q.totals:
             raise QueryError("Ortak ölçü sorgusunda yalnız katalog kimliği ve filtreler kullanılır")
