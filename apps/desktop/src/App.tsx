@@ -40,6 +40,7 @@ function Shell() {
   const client = useClient();
   const { doc, save, open, opening, newDocument, error, setError, job, trackJob } = useDocument();
   const [view, setView] = useState<View>("rapor");
+  const [reportToolbar, setReportToolbar] = useState<HTMLDivElement | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [getData, setGetData] = useState(false);
   const [navigator, setNavigator] = useState<ConnectResult | null>(null);
@@ -138,6 +139,10 @@ function Shell() {
           </button>
           <span className="ribbon-label">Dosya</span>
         </div>
+        {view === "rapor" && (tableCount > 0 || doc?.report.pages.some((p) => p.visuals.length > 0)) && <div className="ribbon-group">
+          <div ref={setReportToolbar} />
+          <span className="ribbon-label">Rapor</span>
+        </div>}
         <div className="ribbon-group">
           <button className="ribbon-btn" onClick={() => setGetData(true)}>
             <span className="ribbon-ico">⛃</span>Veri al
@@ -254,6 +259,7 @@ function Shell() {
             <ReportView
               key={doc?.id}
               viewAs={activeViewAs}
+              toolbarTarget={reportToolbar}
               onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })}
             />
           )}

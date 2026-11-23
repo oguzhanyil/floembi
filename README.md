@@ -224,7 +224,9 @@ bakın. Bu rapor anlık görüntüdür; yenilemek için komutu yeniden çalışt
   Hazır simge veya en fazla 256 KB PNG/JPG/WebP ikon seçilebilir. Satır alanı bir hedef sayfaya
   filtre değeri olarak taşınabilir; web adresinde `{value}` yer tutucusuyla kullanılabilir veya
   satır filtresiyle FDX ölçüsü hesaplanabilir. Web bağlantıları yalnızca HTTP(S) adreslerini açar.
-- Desktop'ta tuvalin sol üstündeki imleç simgesine basarak etkileşim önizlemesini açıp kapatın.
+- Desktop'ta ribbon **Rapor → İzleyici modu** ile etkileşim önizlemesini açıp kapatın.
+  Aynı gruptaki **Geri al / İleri al** tasarım geçmişini yönetir; izleyici modunda
+  pasiftir. **Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z** kısayolları rapor ve bu araçlarda çalışır.
   Tuval rengi ve seçili nesnenin katman, kilit ve opaklık ayarları Görselleştirmeler panelindedir.
   Kaydedilip yayımlanan raporda eylemler web görüntüleyicisinde de çalışır. Görünürlük ve filtre
   değişiklikleri yalnızca izleyicinin oturumundadır; rapor tasarımını değiştirmez.

@@ -8,6 +8,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import assert from "node:assert/strict";
+import { testRibbon } from "./ribbon-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-powerbi-test-"));
@@ -71,6 +72,7 @@ try {
   await evaluate('document.querySelector(".import-audit-dialog header button").click()');
   await open("text"); await waitFor('document.querySelector(".v-text")?.textContent.includes("Verisiz rapor da açılır")');
   assert.equal(await evaluate('(async()=> (await (await fetch("/api/verify")).json()).sourceUnchanged)()'), true);
+  await testRibbon({ call, evaluate, waitFor, open });
   assert.deepEqual(browserErrors, []);
   console.log("PASS: Hatalı dosyada eski rapor korundu; PBIP özgün model/boş veri bildirimi; tablosuz metin raporu; kaynaklar değişmedi, tarayıcı çökmedi.");
   await call("Browser.close");

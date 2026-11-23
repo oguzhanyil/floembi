@@ -48,6 +48,10 @@ button:disabled { cursor: default; opacity: 0.55; }
 .ribbon-btn:hover { background: var(--surface-2); border-color: var(--border); }
 .ribbon-btn.small { min-width: 0; font-size: 12px; align-items: flex-start; }
 .ribbon-ico { font-size: 22px; line-height: 1; }
+.ribbon-report-tools { display: flex; gap: 4px; }
+.ribbon-report-tools .ribbon-btn { white-space: nowrap; }
+.ribbon-report-tools svg.ribbon-ico { width: 22px; height: 22px; }
+.ribbon-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 
 .workspace { display: grid; grid-template-columns: 48px 1fr; min-height: 0; }
 .view-rail { display: flex; flex-direction: column; gap: 4px; padding: 8px 4px; background: var(--surface); border-right: 1px solid var(--border); }

@@ -8,6 +8,7 @@ import {
   resolvePageVariant, editPageVariant, pruneReportLayouts,
 } from "@floem/report";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { isMeasure, usesField, type FieldPayload } from "./fields";
 import { PageCanvas } from "./PageCanvas";
 import { FieldsPane, VisualizationsPane } from "./ReportPanes";
@@ -50,6 +51,8 @@ export interface DesignerHost {
   /** Veri bölmesinde ölçünün düzenle düğmesi (Desktop'ta formül çubuğunu açar) */
   onEditMeasure?(name: string): void;
   componentLibrary?: ComponentLibraryStore;
+  /** Desktop ribbon alanı; verilmezse araçlar tuval üzerinde gösterilir. */
+  toolbarTarget?: HTMLElement | null;
 }
 
 /** Power BI rapor görünümü: sayfa tuvali, Görselleştirmeler ve Veri bölmeleri, sayfa sekmeleri. */
@@ -406,7 +409,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   // Delete: seçili görseli sil (bir giriş kutusunda değilken)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (previewActions || !(e.target instanceof HTMLElement) || !e.target.closest(".report-view")) return;
+      if (previewActions || !(e.target instanceof HTMLElement) || !(e.target.closest(".report-view") || host.toolbarTarget?.contains(e.target))) return;
       if (e.target.closest("input,select,textarea,[contenteditable=true],.monaco-editor,[role=dialog]")) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); changeHistory(e.shiftKey ? "redo" : "undo"); }
@@ -493,12 +496,31 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     }
   }
 
+  const historyButton = (direction: "undo" | "redo", ribbon = false) => {
+    const label = direction === "undo" ? "Geri al" : ribbon ? "İleri al" : "Yinele";
+    return <button className={ribbon ? "ribbon-btn" : undefined} type="button" aria-label={label}
+      title={`${label} (${direction === "undo" ? "Ctrl+Z" : "Ctrl+Y"})`}
+      disabled={previewActions || !(direction === "undo" ? history.current.canUndo : history.current.canRedo)} onClick={() => changeHistory(direction)}>
+      <span className={ribbon ? "ribbon-ico" : undefined} aria-hidden="true">{direction === "undo" ? "↶" : "↷"}</span>{ribbon && <span>{label}</span>}
+    </button>;
+  };
+  const modeButton = (ribbon = false) => <button className={ribbon ? "ribbon-btn" : `canvas-mode-toggle ${drill && (pageFilters.length || journey.count) ? "with-drill" : ""}`}
+    type="button" aria-label={ribbon ? "İzleyici modu" : "Etkileşim önizlemesi"} aria-pressed={previewActions}
+    title={previewActions ? "İzleyici modu açık · tasarıma dön" : "İzleyici modunda etkileşimleri dene"} onClick={() => {
+      setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
+    }}>
+    {ribbon ? <svg className="ribbon-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+      : <svg viewBox="1 1 23 23" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>}
+    {ribbon && <span>İzleyici modu</span>}
+  </button>;
+
   return (
     <ScenarioProvider definitions={host.report.scenarios}>
     <DiagnosticProvider scope={diagnosticScope} ids={page.visuals.map((v) => v.id)} onChange={setDiagnostics}>
     <div className={`report-view ${canvasFocus ? "canvas-focus" : ""}`} data-layout-id={layoutId ?? "base"}
       onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) beginGesture(); }}
       onBlurCapture={(e) => { if (!(e.target as HTMLElement).closest("dialog") && (e.target as HTMLElement).matches("input,textarea,select")) endGesture(); }}>
+      {host.toolbarTarget && createPortal(<div className="ribbon-report-tools" role="group" aria-label="Rapor tasarımı">{modeButton(true)}{historyButton("undo", true)}{historyButton("redo", true)}</div>, host.toolbarTarget)}
       <div className="panel-toggles" role="group" aria-label="Sağ paneller">
         <button className="panel-toggle" type="button" aria-controls={`${panelId}-visualizations`}
           aria-label={`Görselleştirmeler panelini ${visualizationsOpen ? "gizle" : "göster"}`}
@@ -513,16 +535,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
       </div>
       <div className="report-main">
         <div className="canvas-shell">
-        <div className="design-history" role="group" aria-label="Tasarım geçmişi">
-          <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" disabled={previewActions || !history.current.canUndo} onClick={() => changeHistory("undo")}>↶</button>
-          <button type="button" aria-label="Yinele" title="Yinele (Ctrl+Y)" disabled={previewActions || !history.current.canRedo} onClick={() => changeHistory("redo")}>↷</button>
-        </div>
-        <button className={`canvas-mode-toggle ${drill && (pageFilters.length || journey.count) ? "with-drill" : ""}`} type="button" aria-label="Etkileşim önizlemesi" aria-pressed={previewActions}
-          title={previewActions ? "Etkileşim açık · tasarıma dön" : "Serbest tasarım açık · etkileşimi dene"} onClick={() => {
-            setPreviewActions((current) => !current); setSelectedId(null); setPreviewVisibility({}); setPreviewStates({});
-          }}>
-          <svg viewBox="1 1 23 23" aria-hidden="true"><path d="M5 3v18l5-5 3 6 3-1.5-3-6 7-1.5L5 3Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-        </button>
+        {host.toolbarTarget === undefined && <><div className="design-history" role="group" aria-label="Tasarım geçmişi">{historyButton("undo")}{historyButton("redo")}</div>{modeButton()}</>}
         <PageCanvas
           components={report.components}
           theme={report.theme}

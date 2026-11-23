@@ -4,6 +4,7 @@ Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pi
 Power BI dosyalarını Desktop Aç/Ctrl+O ile alma eklendi; ayrıntılar
 [Power BI dosya açma](docs/powerbi-dosya-acma.md). Bu, F06 ölçü mutabakatını kapatmaz.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
+Desktop izleyici modu ve geri al/ileri al araçları ribbon **Rapor** grubundadır.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
@@ -20,7 +21,8 @@ Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. 
 (sayfaya git, sonraki/önceki, filtreleri sıfırla, nesne göster/gizle, URL aç, fonksiyon, menü),
 başlangıçta gizlenen nesneler ve ikonlu etkileşim önizleme anahtarı eklendi. Sağ üstteki Veri ve
 Görselleştirmeler düğmeleri panellerini bağımsız açar/kapatır; tek panel açıkken yalnız onun genişliği ayrılır.
-Serbest tasarım/etkileşim düğmesi 32 px, ortalanmış simgesi 16 px'dir.
+Ribbon alanı verilmemiş ortak tasarımcıda serbest tasarım/etkileşim düğmesi 32 px,
+ortalanmış simgesi 16 px'dir. Desktop'ta bu araç ribbon'a taşındı.
 Sayfa rengi ve nesne düzeni araçları Biçim panelindedir.
 Tablo ve matriste satır eylem hücresi hazır veya yüklenen ikonla URL'ye kodlanmış `{value}` değeri
 aktarır, hedef sayfayı aynı değerle filtreler ya da satır filtresiyle kayıtlı FDX ölçüsünü hesaplar.
@@ -148,6 +150,24 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 23.11.2026 Desktop rapor araçları ribbon'a taşındı
+
+- **Rapor → İzleyici modu / Geri al / İleri al**. İzleyici anahtarı basılı
+  durumunu gösterir; geçmiş boşsa veya önizleme açıksa ilgili düğmeler pasiftir.
+- Ortak tasarımcı `DesignerHost.toolbarTarget` ile kendi gerçek komutlarını
+  ribbon'a portal olarak yerleştirir; ayrı geçmiş/durum kopyası tutulmaz.
+  Desktop'ta tuval üzerinde aynı düğmeler tekrarlanmaz. Alan verilmemiş
+  tasarımcı kullanımları önceki tuval araçlarını gösterir.
+- Ctrl+Z, Ctrl+Y ve Ctrl+Shift+Z ribbon odaktayken de çalışır; metin/formül
+  kutularının kendi düzenleme kısayolları korunur. Dosya/yeni belge değişiminde
+  eski komutlar kaldırılır. İzleyici modu etkileşim önizlemesidir; RLS için
+  mevcut **Farklı görüntüle** kullanılır.
+- Doğrulama: üretim Desktop App + gerçek geçici servisle sayfa ekleme/geri alma/
+  yineleme, önizleme, üç klavye kısayolu ve yeni belge/dosya değişimi geçti.
+  84 saf TS kontrolü, 33 nesneli tam Chromium turu, typecheck ve Desktop/web
+  derlemeleri geçti. Python kaynağı değişmedi; önceki genel sonuç 371 geçti/1 atlandı.
+  QA: `data/qa-ribbon/`; ekran 1440×960'da incelendi.
 
 ### 23.11.2026 F15 senaryo, yetkili öneri ve işlem geçmişi uygulandı
 
