@@ -118,6 +118,11 @@ def legacy_layout(layout: dict, target: Path):
             position = desktop.get("position") or {k: raw.get(k, 0) for k in ["x", "y", "z", "width", "height"]}
             item = {"name": _id(config.get("name"), f"visual{n}"), "position": position,
                     "visual": {"visualType": visual.get("visualType", "unknown"), "objects": objects, "display": visual.get("display", {}), "visualContainerObjects": containers, "query": {"queryState": state}}}
+            if config.get("singleVisualGroup") is not None:
+                item["visualGroup"] = config["singleVisualGroup"]
+                item.pop("visual")
+            if config.get("parentGroupName"):
+                item["parentGroupName"] = _id(config["parentGroupName"], "group")
             if raw.get("filters"): item["filters"] = raw["filters"]
             _write(page / f"visuals/v{n}/visual.json", item)
     _write(target / "definition/pages/pages.json", {"pageOrder": list(ids.values())})

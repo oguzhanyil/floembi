@@ -80,7 +80,7 @@ def _number(value: Any, fallback: float = 0) -> float:
         return fallback
 
 
-def _page_appearance(info: dict) -> tuple[dict, set[tuple[str, int, str]]]:
+def _page_appearance(info: dict, report_dir: Path | None = None) -> tuple[dict, set[tuple[str, int, str]]]:
     """Yalnız desteklenen sabit/default sayfa özellikleri başarılı sayılır."""
     result, handled = {}, set()
     # Microsoft page/2.1.0: eski dinamik ve sol-üst seçenekleri farklı semantiktedir.
@@ -99,6 +99,17 @@ def _page_appearance(info: dict) -> tuple[dict, set[tuple[str, int, str]]]:
                 if valid:
                     result[prefix + ("Color" if prop == "color" else "Transparency")] = value
                     handled.add((category, index, prop))
+                break
+    if report_dir is not None:
+        for index, item in enumerate((info.get("objects") or {}).get("background", [])):
+            if item.get("selector") not in (None, {}, {"id": "default"}): continue
+            image = _literal(item.get("properties", {}).get("image"))
+            image = (image.get("image") or image) if isinstance(image, dict) else {}
+            data = _image(report_dir, {"general": [{"properties": {"imageUrl": image.get("url")}}]})
+            if data:
+                result["backgroundImageData"] = data
+                result["backgroundImageFit"] = "cover" if _literal(image.get("scaling")) == "Fill" else "contain"
+                handled.add(("background", index, "image"))
                 break
     return result, handled
 
@@ -281,6 +292,18 @@ def _import_appearance(report_dir: Path, visual: dict, kind: str, fmt: dict) -> 
 
 
 def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | None:
+    if raw.get("visualGroup") is not None:
+        group = raw["visualGroup"]
+        pos = raw.get("position") or {}
+        hidden = group.get("isHidden") is True or (group.get("display") or {}).get("mode") == "hidden"
+        return {"id": str(raw.get("name") or "grup")[:64], "type": "container", "title": str(group.get("displayName") or "Grup")[:200],
+                **({"parentId": raw["parentGroupName"]} if raw.get("parentGroupName") else {}),
+                "x": round(float(pos.get("x", 0)), 2), "y": round(float(pos.get("y", 0)), 2),
+                "w": max(1, round(float(pos.get("width", 320)), 2)), "h": max(1, round(float(pos.get("height", 200)), 2)),
+                "group": [], "values": [], "filters": [],
+                "container": {"kind": "group", "mode": "free", "padding": 0, "gap": 0, "autoHeight": False, "overflow": "visible"},
+                "format": {"showTitle": False, "padding": 0, "borderWidth": 0, "radius": 0, "backgroundColor": "transparent",
+                           **({"initiallyHidden": True, "hideInDesign": True} if hidden else {})}}
     visual = raw.get("visual") or {}
     original_type = visual.get("visualType", "unknown")
     kind = TYPE_MAP.get(original_type, "text")
@@ -405,6 +428,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     if isinstance(source_title_size, (int, float)): fmt["titleSize"] = min(28, max(10, source_title_size * 4 / 3))
     return {
         "id": name,
+        **({"parentId": raw["parentGroupName"]} if raw.get("parentGroupName") else {}),
         "type": kind,
         "x": round(float(pos.get("x", 0)), 2), "y": round(float(pos.get("y", 0)), 2),
         "w": max(1, round(float(pos.get("width", 320)), 2)),
@@ -471,7 +495,7 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
                 buttons.append((z, raw, action))
         for z, button, action in buttons:
             underneath = [item for item_z, raw, item in converted_items
-                          if item_z < z and _inside(raw, button)]
+                          if item_z < z and raw.get("parentGroupName") == button.get("parentGroupName") and _inside(raw, button)]
             if underneath:
                 mapped_targets[id(button)] = underneath
                 for item in underneath:
@@ -480,6 +504,7 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
                 pos = button.get("position") or {}
                 converted_items.append((z, button, {
                     "id": str(button.get("name") or "dugme")[:64], "type": "button",
+                    **({"parentId": button["parentGroupName"]} if button.get("parentGroupName") else {}),
                     "x": float(pos.get("x", 0)), "y": float(pos.get("y", 0)),
                     "w": max(1, float(pos.get("width", 180))), "h": max(1, float(pos.get("height", 52))),
                     "group": [], "values": [], "filters": [],
@@ -497,7 +522,7 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
                 visual["id"] = f"{base[:58]}_{index}"
                 index += 1
             ids.add(visual["id"])
-        appearance, handled = _page_appearance(info)
+        appearance, handled = _page_appearance(info, report_dir)
         pages.append({"id": str(page_id)[:64], "name": str(info.get("displayName") or page_id)[:120],
                       "width": int(info.get("width") or 1280), "height": int(info.get("height") or 720),
                       **appearance,

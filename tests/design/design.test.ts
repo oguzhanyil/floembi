@@ -9,7 +9,7 @@ import "./process.test";
 import "./analytics.test";
 import "./scenarios.test";
 import type { ReportPage, Visual } from "../../packages/client/src/index";
-import { resolvePageLayout, visibleInLayout, inheritedLayoutStyle, lockedInLayout } from "../../packages/report/src/layout";
+import { resolvePageLayout, visibleInLayout, visibleInDesigner, inheritedLayoutStyle, lockedInLayout } from "../../packages/report/src/layout";
 import { alignSelection, groupSelection, ungroup, transformSelection, duplicateSelection, deleteSelection, reparent, reorderSibling, selectionTarget } from "../../packages/designer/src/layoutEditing";
 import { DesignHistory } from "../../packages/designer/src/history";
 
@@ -128,5 +128,20 @@ test("İptal ve dal değiştirme, yeni belge ve geçmiş sınırı", () => {
   const h = new DesignHistory(0, 3); h.update(1); h.update(2); h.undo(); h.begin(); h.update(9); assert.equal(h.cancel(), 1); assert(h.canRedo); assert.equal(h.redo(), 2);
   h.undo(); h.update(8); assert(!h.canRedo); h.update(9); h.update(10); h.update(11); for (let i = 0; i < 10; i++) h.undo(); assert.equal(h.present, 8);
   h.reset(20); assert(!h.canUndo && !h.canRedo); assert.equal(h.present, 20);
+});
+test("Kaynak grupların iç içe koordinatı ve katman sırası korunur", () => {
+  const p = page(visual("leaf", { parentId: "inner", x: 5, y: 7 }), visual("backdrop"), visual("inner", { type: "container", parentId: "outer", x: 30, y: 20, container: { kind: "group", mode: "free" } }), visual("outer", { type: "container", x: 200, y: 100, container: { kind: "group", mode: "free" } }));
+  const resolved = resolvePageLayout(p).visuals;
+  assert.deepEqual(resolved.map(v => v.id), ["backdrop", "outer", "inner", "leaf"]);
+  const leaf = resolved.find(v => v.id === "leaf")!;
+  assert.equal(leaf.x, 235); assert.equal(leaf.y, 127);
+});
+test("Kaynakta gizli grup tasarım ve izleyicide alt nesnelerini de gizler", () => {
+  const parent = visual("parent", { type: "container", format: { initiallyHidden: true, hideInDesign: true } });
+  const leaf = visual("leaf", { parentId: "parent" }), p = page(parent, leaf);
+  assert(!visibleInDesigner(p, leaf)); assert(!visibleInLayout(p, leaf));
+  assert(visibleInDesigner(p, parent, ["leaf"]) && visibleInDesigner(p, leaf, ["leaf"]));
+  assert(visibleInDesigner(p, leaf, ["parent"])); assert(visibleInLayout(p, leaf, { parent: true }));
+  assert(visibleInDesigner(page({ ...parent, format: { initiallyHidden: true } }, leaf), leaf));
 });
 console.log(`${count} tasarım/yerleşim testi geçti.`);

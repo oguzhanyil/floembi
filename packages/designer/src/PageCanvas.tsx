@@ -3,8 +3,8 @@ import type { ThemeSnapshot } from "@floem/client";
 import type { FilterRef, ModelColumn, ReportPage, Visual, VisualAction, VisualState } from "@floem/client";
 import {
   DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, slicerFilters, snap, toggleCross, toggleCrossRow, visualTitle,
-  visualMotion, visualStyle, pageBackground,
-  rowActionValue, ReportViewport, VisualContextMenu, usePageLayout, inheritedLayoutStyle, visibleInLayout,
+  visualMotion, visualStyle, pageBackground, pageImageStyle,
+  rowActionValue, ReportViewport, VisualContextMenu, usePageLayout, inheritedLayoutStyle, visibleInLayout, visibleInDesigner,
   lockedInLayout, selectionRoots, descendants, rectUnion, containerOptions,
   type ActionValue, type CrossFilter, type DrillTarget, type QueryFn,
 } from "@floem/report";
@@ -259,7 +259,7 @@ export function PageCanvas({
       <ReportThemeScope theme={theme}
         rootRef={layout.root}
         className="page"
-        style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, theme) }}
+        style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, theme), ...pageImageStyle(page) }}
         onPointerMove={(e) => move(e, scale)}
         onPointerUp={(e) => end(e)}
         onPointerCancel={(e) => end(e, true)}
@@ -296,7 +296,7 @@ export function PageCanvas({
           />
         ))}
         <BindingProvider key={page.id} visuals={page.visuals} definitions={components}>
-        {layout.visuals.filter((v) => previewActions ? visibleInLayout(page, v, visibleOverrides) : !(v.format.initiallyHidden && v.format.hideInDesign) || selection.includes(v.id)).map((v) => {
+        {layout.visuals.filter((v) => previewActions ? visibleInLayout(page, v, visibleOverrides) : visibleInDesigner(page, v, selection)).map((v) => {
           const raw = page.visuals.find((node) => node.id === v.id)!;
           const selected = selection.includes(v.id);
           const locked = lockedInLayout(page, v.id);

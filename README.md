@@ -104,6 +104,9 @@ PBIP dosyasını yanındaki Report/SemanticModel klasörleriyle birlikte taşıy
 PBIX'te başlangıçta gizli katmanlar tasarımda ve izleyicide gizli kalır;
 **Biçim → Katmanlar** listesinden seçilerek düzenlenebilir. Gömülü palet renkleri,
 saydam zeminler, ikonlu düğmeler ve yeni Power BI kartlarının alanları aktarılır.
+İç içe Power BI grupları yerel serbest kapsayıcıya çevrilir; alt nesnelerin grup
+koordinatları ve üst gruptan gelen gizlilik korunur. Gömülü sayfa arka plan resmi
+(SVG dahil) kendi saydamlığıyla Desktop/web'de gösterilir.
 [Kullanım, kapsam, sınırlar ve lisans kaydı](docs/powerbi-dosya-acma.md).
 
 ## Kurulum ve çalıştırma

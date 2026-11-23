@@ -71,13 +71,16 @@ def _dynamic(value) -> bool:
 def audit_visual(raw: dict, targets: list[dict]) -> dict:
     from .pbip_import import TYPE_MAP, _field, _property, _button_action
     visual = raw.get("visual") or {}
-    source_type = visual.get("visualType", "group" if raw.get("visualGroup") else "unknown")
+    source_type = "group" if raw.get("visualGroup") is not None else visual.get("visualType", "unknown")
     issues = []
-    placeholder = source_type not in TYPE_MAP or source_type in APPROXIMATE_TYPES
+    group_mapped = source_type == "group" and any(t.get("type") == "container" for t in targets)
+    placeholder = not group_mapped and (source_type not in TYPE_MAP or source_type in APPROXIMATE_TYPES)
     if placeholder:
         issues.append(finding("GROUP_NOT_IMPORTED" if raw.get("visualGroup") else "TYPE_UNSUPPORTED", severity="error"))
-    if raw.get("parentGroupName"):
+    if raw.get("parentGroupName") and (not targets or any(t.get("parentId") != raw["parentGroupName"] for t in targets)):
         issues.append(finding("GROUP_NOT_IMPORTED"))
+    if group_mapped and raw["visualGroup"].get("groupMode") not in (None, 0):
+        issues.append(finding("GROUP_NOT_IMPORTED", "Kaynak grup modu doğrulanamadı; serbest kapsayıcı olarak alındı."))
     if not targets and not placeholder:
         issues.append(finding("BUTTON_SKIPPED", severity="info"))
     if _has_filter(raw):

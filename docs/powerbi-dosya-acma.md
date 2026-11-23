@@ -63,6 +63,25 @@ iddiası değildir. Bookmark seçimi, hover durumları, kartların bütün iç y
 ve her Power BI grafik türü birebir taşınmaz. Bulgular aktarım raporunda kalır.
 Yeni dönüşüm için güncel Desktop'ı açıp orijinal PBIX'i tekrar seçin.
 
+İç içe gruplar da yerel serbest grup kapsayıcıları olarak alınır. Alt nesnenin
+koordinatı kendi grubuna aittir; ortak motor üst grupları ekleyerek sayfa konumunu
+hesaplar. Üst grup gizliyse alt nesneler tasarım ve izleyicide gizli kalır;
+Katmanlar'dan seçilerek düzenlenebilir. Grup modu `0` dışındaki kaynak modlar
+eşdeğer kabul edilmez; bulgu kaydı bırakılır. Eksik/döngülü üst grup reddedilir.
+
+Gömülü sayfa arka plan resmi PNG/JPEG/WebP/SVG veri URI'si olarak korunur;
+resim 2 MB, kodlanmış sayfa alanı 2,8 milyon karakterle sınırlıdır. Resmin
+saydamlığı ayrı bir alt katmandadır; rapor nesneleri saydamlaşmaz. İçerik ayrı
+nesnelere bölünmez. Kaynak Fit/Fill gösterimi contain/cover olarak alınır;
+Normal için contain kullanılır (incelenen HITInsights SVG'si sayfayla aynı
+1280×720 boyutunda olduğundan ölçek farkı yoktur). Uzak URL kabul edilmez.
+
+HITInsights kabulü: 9 sayfa, 39 grup, 113 üst grup bağlantısı; 145 görünür ve
+17 etkin gizli hedef nesne. Kaynak göreli/mutlak geometri ve gerçek Desktop DOM'u
+karşılaştırıldı. Ayrı okuyucu gerçek dosyadan 734.680 satır aldı. Yeni verili
+dosya `data/HITInsights-B1-NMT-Floem.floem`; 48 ölçünün 29'u uyarlama istiyor.
+Bu sonuç tam hesap eşdeğerliği değildir; özel görsel ve bookmark bulguları sürer.
+
 Aktarım raporu indirilirken tablo/ölçü adları içerdiğini göz önünde bulundurun.
 
 Kaynak RLS/OLS rolleri varsa, kurallar birebir çevrilmiş sayılmaz: Floem rolleri
@@ -138,7 +157,7 @@ Paketlenmiş Windows `floem-service.exe --powerbi-worker` çıktısı da yeniden
 açılarak 9 satır doğrulandı. Yerel kullanıcı projesinin dönüştürülmüş kopyası
 `data/PowerBI-SAPB1Demo-Imported.floem` içindedir.
 
-Son genel koşu: **378 Python geçti / 1 atlandı, 84 saf TS kontrolü**, 33 nesneli
+Son genel koşu: **385 Python geçti / 1 atlandı, 87 saf TS kontrolü**, 33 nesneli
 tam Chromium turu, typecheck ve Desktop/web/Windows servis derlemeleri geçti.
 Paketli ana servis üzerinden açma isteği de ayrı paketli okuyucuyu başlatarak
 9 satırlık yeni belge döndürdü; üçüncü taraf lisans dosyalarının pakette olduğu

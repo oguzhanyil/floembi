@@ -538,6 +538,8 @@ export interface ReportPage {
   height: number;
   backgroundColor?: string;
   displayOption?: "FitToPage" | "FitToWidth" | "ActualSize";
+  backgroundImageData?: string;
+  backgroundImageFit?: "contain" | "cover";
   backgroundTransparency?: number;
   outspaceColor?: string;
   outspaceTransparency?: number;

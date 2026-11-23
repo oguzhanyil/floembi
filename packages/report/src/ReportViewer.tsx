@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { journeyFilters, journeySlicers } from "./reportJourney";
 import { useReportJourney } from "./useReportJourney";
 import { ReportViewport } from "./ReportViewport";
-import { pageBackground } from "./pageAppearance";
+import { pageBackground, pageImageStyle } from "./pageAppearance";
 import { VisualContextMenu } from "./VisualContextMenu";
 import {
   DrillBanner, DrillThroughButton, VisualBody, crossFiltersFor, drillTargets, toggleCross, toggleCrossRow, visualTitle,
@@ -132,7 +132,7 @@ export function ReportViewer({
           />
         )}>
         {(scale) => (
-        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, report.theme) }}>
+        <ReportThemeScope rootRef={layout.root} theme={report.theme} className="page" style={{ width: page.width * scale, height: layout.height * scale, backgroundColor: pageBackground(page, report.theme), ...pageImageStyle(page) }}>
           {page.visuals.length === 0 && <div className="page-hint">Bu sayfada görsel yok.</div>}
           <BindingProvider key={page.id} visuals={page.visuals} definitions={report.components}>
           {layout.visuals.filter((v) => visibleInLayout(page, v, visibility[page.id] ?? {})).map((v) => {

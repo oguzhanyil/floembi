@@ -1,5 +1,6 @@
 /* Rapor görselleri ve sayfa (Desktop + floembi.app ortak). Renk tokenları uygulamanın :root'unda tanımlıdır. */
 .page { position: relative; background: var(--surface); box-shadow: 0 1px 4px #0002; }
+.page::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: var(--page-background-image, none); background-size: var(--page-background-size, contain); background-repeat: no-repeat; background-position: center; opacity: var(--page-background-opacity, 1); }
 .page-hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 24px; line-height: 1.6; pointer-events: none; }
 .visual { position: absolute; display: flex; flex-direction: column; background: var(--surface); border: 1px solid transparent; border-radius: 8px; }
 .visual.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

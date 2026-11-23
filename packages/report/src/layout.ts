@@ -28,6 +28,12 @@ export function visibleInLayout(page: ReportPage, v: Visual, overrides: Record<s
   return [v, ...ancestors(page, v.id)].every((node) => overrides[node.id] ?? !node.format.initiallyHidden);
 }
 
+/** Kaynakta gizli grup, içinden bir katman düzenlenirken tasarımda açılır. */
+export function visibleInDesigner(page: ReportPage, v: Visual, selection: string[] = []): boolean {
+  const hidden = [v, ...ancestors(page, v.id)].filter((node) => node.format.initiallyHidden && node.format.hideInDesign);
+  return hidden.every((node) => selection.some((id) => id === node.id || ancestors(page, id).some((parent) => parent.id === node.id)));
+}
+
 export function selectionRoots(page: ReportPage, ids: string[]): Visual[] {
   const chosen = new Set(ids);
   return page.visuals.filter((v) => chosen.has(v.id) && !ancestors(page, v.id).some((p) => chosen.has(p.id)));

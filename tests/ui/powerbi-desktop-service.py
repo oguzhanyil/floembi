@@ -54,6 +54,17 @@ with tempfile.TemporaryDirectory(prefix="floem-powerbi-ui-", dir=sys.argv[1] if 
         visual("icon-button", "actionButton", 100, 100, 160, 210, 2000, {"icon": [{"properties": {"image": {"image": {"url": resource}}, "iconSize": lit(70)}}], "text": [{"properties": {"show": lit(True), "text": lit("Aç"), "verticalAlignment": lit("bottom")}}], "shape": [{"properties": {"roundEdge": lit(20)}}]}),
         visual("hidden", "shape", 0, 0, 1000, 650, 9000, {"fill": [{"properties": {"fillColor": lit("#000000")}}]}, display={"mode": "hidden"}),
     ]}]}
+    def group(name, x, y, parent=None, hidden=False):
+        return {"config": json.dumps({"name": name, "layouts": [{"id": 0, "position": {"x": x, "y": y, "width": 900, "height": 600, "z": 1000}}], "singleVisualGroup": {"displayName": name, "groupMode": 0, "isHidden": hidden}, **({"parentGroupName": parent} if parent else {})})}
+    background, button, mask = appearance_layout["sections"][0]["visualContainers"]
+    page_config = json.loads(appearance_layout["sections"][0]["config"])
+    page_config["objects"]["background"][0]["properties"].update(image={"image": {"url": resource, "scaling": lit("Fit")}}, transparency=lit(15))
+    appearance_layout["sections"][0]["config"] = json.dumps(page_config)
+    config = json.loads(button["config"]); config["parentGroupName"] = "inner"
+    config["layouts"][0]["position"].update(x=40, y=60); button["config"] = json.dumps(config)
+    config = json.loads(mask["config"]); config["name"] = "mask"; config["parentGroupName"] = "hidden"
+    config["singleVisual"].pop("display"); mask["config"] = json.dumps(config)
+    appearance_layout["sections"][0]["visualContainers"] = [background, group("outer", 40, 30), group("inner", 20, 10, "outer"), button, group("hidden", 0, 0, hidden=True), mask]
     with zipfile.ZipFile(appearance, "w") as z:
         z.writestr("Report/Layout", json.dumps(appearance_layout).encode("utf-16-le"))
         z.writestr("Report/StaticResources/SharedResources/BaseThemes/Sample.json", json.dumps({"background": "#FFFFFF", "foreground": "#252423", "dataColors": ["#118DFF"]}))

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { initialZoom, pageBackground, pageBaseColor, transparentColor } from "../../packages/report/src/pageAppearance";
+import { initialZoom, pageBackground, pageBaseColor, pageImageStyle, transparentColor } from "../../packages/report/src/pageAppearance";
 import { canvasScale } from "../../packages/report/src/ReportViewport";
 import { createTheme } from "../../packages/report/src/theme";
 
@@ -18,4 +18,9 @@ assert.equal(pageBaseColor(createTheme("electric", "dark")), "#0B1628");
 assert.equal(pageBackground(page, createTheme("electric", "dark")), "rgba(11, 22, 40, 1)");
 assert.equal(pageBackground({ ...page, backgroundColor: "#ffffff", backgroundTransparency: 50 }, createTheme("electric", "dark")), "rgba(255, 255, 255, 0.5)");
 console.log("PASS: Eksik sayfa rengi rapor temasını miras alır, özel renk bağımsız kalır");
-console.log("3 sayfa görünümü testi geçti.");
+const imageStyle = pageImageStyle({ ...page, backgroundImageData: "data:image/png;base64,AAAA", backgroundTransparency: 15 });
+assert.equal(imageStyle["--page-background-opacity" as keyof typeof imageStyle], .85);
+assert.equal(imageStyle["--page-background-image" as keyof typeof imageStyle], 'url("data:image/png;base64,AAAA")');
+assert.equal(pageImageStyle({ ...page, backgroundImageData: "https://example.test/image.png" })["--page-background-image" as keyof typeof imageStyle], "none");
+console.log("PASS: Sayfa görseli yalnız gömülü kaynaktan yüklenir; görsel alfası nesnelerden ayrıdır");
+console.log("4 sayfa görünümü testi geçti.");

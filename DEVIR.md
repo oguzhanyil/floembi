@@ -7,6 +7,8 @@ F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 Desktop izleyici modu ve geri al/ileri al araçları ribbon **Rapor** grubundadır.
 PBIX görünüm düzeltmesi: kaynakta gizli katmanlar, tema renkleri/saydamlık,
 ikonlu düğmeler ve yeni kart alanları korunur; Dashboard yerleşimi doğrulandı.
+HITInsights düzeltmesi: iç içe gruplar/yerel koordinatlar ve SVG sayfa arka
+planları taşınır. Verili güncel kopya: `data/HITInsights-B1-NMT-Floem.floem`.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
@@ -152,6 +154,39 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 23.11.2026 HITInsights PBIX grup ve sayfa resmi düzeltmesi
+
+- Kaynakta 9 sayfa, 39 grup ve 113 üst grup bağlantısı vardı. Grupların
+  `singleVisualGroup` / `parentGroupName` bilgisi eski Layout adaptöründe
+  kaybolduğu için grup içindeki konumlar sayfa konumu gibi çiziliyordu.
+- Legacy adaptör bu bilgileri ortak PBIR biçimine taşır; PBIP/PBIX okuyucu
+  yerel `container.kind=group`, `mode=free`, `parentId` üretir. Yerel koordinat
+  korunur, ortak yerleşim motoru mutlak konumu ve hiyerarşik katman sırasını çözer.
+  Saydam gezinme katmanı yalnız aynı üst gruptaki nesnelere bağlanır.
+- Kaynak gizli grup alt nesnelerini de gizler. Tasarımda gruptan bir katman
+  seçilince düzenleme için açılır; seçim kalkınca yeniden saklanır. Eski yerel
+  başlangıçta gizli nesnelerin tasarım görünümü korunur. Eksik/döngülü grup bağı
+  yanlış konuma sessiz aktarılmaz; mevcut rapor korunarak doğrulama hatası verir.
+- Bu dosyanın sayfa tasarımı ayrıca 1280×720 SVG arka planındaydı. Gömülü resim
+  `Page.backgroundImageData/backgroundImageFit` olarak taşınır; ortak Desktop/web
+  alt katmanı kaynak %15 saydamlığı uygular, nesnelerin opaklığı değişmez.
+  Resim içindeki logo/yazılar ayrı düzenlenebilir nesnelere ayrılmaz. Yalnız
+  sınırlı gömülü veri URI'si alınır; uzak URL yüklenmez.
+- Kaynak geometrisiyle 162 hedef nesne karşılaştırıldı (bir saydam tıklama
+  katmanı alttaki nesneye bağlandı). Gerçek Desktop DOM'unda 145 görünür nesne
+  mutlak konumu/boyutu korudu; 17 nesne üst grup/öz gizlilikle saklandı.
+- Gerçek PBIX ayrı okuyucuyla açıldı: **35 tablo, 48 ölçü, 734.680 gömülü satır**.
+  Veri durumu `loaded`; **29 ölçü FDX uyarlaması gerektiriyor**. İlişki sayısı
+  okuyucu sonucunda 0; hesap/filtre eşdeğerliği iddia edilmedi. Üç özel Inforiver
+  filtresinin karşılığı yok; uyumluluk raporunda açık kalır.
+  Güncel kopya `data/HITInsights-B1-NMT-Floem.floem`: 9 sayfanın arka plan resmi
+  de dosyada. Kaynak PBIX ve şirket verisi Git'e eklenmedi/değiştirilmedi.
+- Doğrulama: **385 Python geçti / 1 atlandı; 87 saf TS kontrolü**, 33 nesneli
+  tam Chromium turu, gerçek Desktop servis akışı, typecheck ve Desktop/web/Windows
+  servis derlemeleri geçti. Paketli ana servis/ayrı okuyucu, iç içe grup/gizli
+  üst grup/SVG zemin ve açık test PBIX'indeki 9 gerçek satırı korudu.
+  QA günlükleri/görüntüler `data/qa-hitinsights/` altındadır. F06 mutabakatı açık.
 
 ### 23.11.2026 Dashboard PBIX yerleşim ve görünürlük düzeltmesi
 

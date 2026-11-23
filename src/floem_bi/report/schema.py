@@ -254,6 +254,8 @@ class Page(_B):
     height: int = 720
     backgroundColor: str | None = None
     displayOption: Literal["FitToPage", "FitToWidth", "ActualSize"] | None = None
+    backgroundImageData: str | None = Field(default=None, max_length=2800000, pattern=r"^data:image/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$")
+    backgroundImageFit: Literal["contain", "cover"] | None = None
     backgroundTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
     outspaceColor: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")
     outspaceTransparency: FiniteFloat | None = Field(default=None, ge=0, le=100)
