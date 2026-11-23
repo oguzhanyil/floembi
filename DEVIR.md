@@ -1,6 +1,6 @@
-# Floem BI: devir notu (20.11.2026)
+# Floem BI: devir notu (23.11.2026)
 
-Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12'nin yerel sentetik müşteri 360° ve parti/kalite pilotları hazır; gerçek kaynak kabulü açık. Sıradaki ürün aşaması F14 Analytics ölçü/uyarı entegrasyonu.
+Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları ve F14 BI ölçü/uyarı altyapısı ile yerel pilot hazır; gerçek kaynak kabulü açık. Kullanıcı Analytics'in çalışmadığını bildirdi; F14 canlı adaptör/kabul açık. Sıradaki ürün aşaması F15 senaryo ve yetkili işlem iş akışları.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -141,6 +141,36 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 23.11.2026 F14 BI tarafı ve yerel pilot uygulandı; canlı Analytics kabulü açık
+
+- `data/F14-Analytics-ve-Uyarilar.floem`: iki firma, iki katalog ölçüsü ve iki eşik;
+  normal FDX kartlarıyla aynı sayfada; firma/dönem/müşteri seçimi ve 390 px telefon
+  düzeni. Üretici `python -m floem_bi.analytics_demo data/F14-Yeni.floem` mevcut
+  dosyaya yazmaz. F12'nin bağlantısız sentetik verisini kullanır; git dışında.
+- `Report.analytics`: kalıcı kimlik, kayıtlı FDX, firma anahtarı, tane, birim,
+  sabit filtre ve mutlak tolerans. `gt/ge/lt/le` eşikleri, Designer'da **Analytics
+  ve uyarılar** paneli, **Ölçü ve uyarı** (`signal`) nesnesi ve F13 denetimi.
+- `VisualQuery.analytics`: mevcut kimlik doğrulamalı Desktop, rapor ve App sorgu
+  uçlarından aynı FDX hesabı. Firma ve değer sorguları aynı kilit/anlık görüntüyü
+  kullanır; ikisine de RLS uygulanır. App dondurulmuş kataloğunu kullanır.
+  Katalogdaki FDX/firma/filtre bağları yeniden adlandırmayı izler.
+- `floem-metric/v1` makbuzu: model+ölçü+kural sürümü, firma/filtre/birim/tane kapsamı,
+  belge/veri/yetki sürümü, kaynak zamanı beyanı ve ayrı değerlendirme zamanı.
+  Zaman bilinmiyorsa eşit sayı doğrulanmış sayılmaz; boş sıfıra dönüşmez.
+- JSON kanıtı indir/yükle: kapsam eşitse tolerans kontrolü; farklı kullanıcı,
+  sürüm, firma veya filtrede eşit sayı bile uyum sayılmaz. Kanıt imzasız beyan;
+  oturumda kalır, rapora yazılmaz. Geciken istek/yüklemede eski makbuz aktarılmaz.
+  PDF/Excel/CSV güncel sayısal sonucu, JSON ise eşik/meta ayrıntılarını verir.
+- Kullanıcı Analytics'in **çalışmadığını** söyledi. Yerel kopya yalnız okundu;
+  Gold yanıtında ölçü+veri sürümü birlikte yok. Harici kod/servis değiştirilmedi.
+  BI API'si hazır olsa da canlı adaptör ve tek yetkili sağlayıcıyla gerçek kaynak
+  mutabakatı **açık**. İstatistiksel anomali, bildirim ve kaynak yazma eklenmedi.
+- Ayrıntı: [F14 kullanım notu](docs/f14-ortak-olcu-ve-uyarilar.md).
+  Sırada **F15**; F06-2–5, F12 gerçek kaynak/kullanıcı kabulü ve nihai tema açık.
+- Doğrulama: 335 Python geçti / 1 atlandı; 81 saf TS kontrolü, 32 nesneli tam
+  Chromium turu, typecheck ve Desktop/web derlemeleri geçti. Gerçek dosya+FDX ile
+  180 satış / 350 bakiye, eşikler ve üç viewport/DPR doğrulandı; QA git dışında.
 
 ### 20.11.2026 F12 yerel süreç pilotları uygulandı; sırada F14
 

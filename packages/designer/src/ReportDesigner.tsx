@@ -24,6 +24,7 @@ import { DesignInspector } from "./DesignInspector";
 import type { AuditTarget } from "./designAudit";
 import { journeyFilters, journeySlicers } from "../../report/src/reportJourney";
 import { useReportJourney } from "../../report/src/useReportJourney";
+import { AnalyticsPane } from "./AnalyticsPane";
 import "./designer.css";
 
 const SAVE_DELAY = 300;
@@ -155,7 +156,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
   const layout = usePageLayout(page, JSON.stringify(previewVisibility[page?.id] ?? {}), viewKey);
   const selected = page?.visuals.find((v) => v.id === selectedId) ?? null;
   const tables = host.tables;
-  const dataRev = `${host.dataRev}:${actionRev}`;
+  const dataRev = `${host.dataRev}:${actionRev}:${JSON.stringify(host.report.analytics ?? null)}`;
   const diagnosticRevision = useRef(0);
   const diagnosticScope = useMemo(() => `${viewKey}:${dataRev}:${++diagnosticRevision.current}`, [report, viewKey, dataRev]);
   const [diagnostics, setDiagnostics] = useState<{ scope: string; items: VisualDiagnostic[] }>({ scope: "", items: [] });
@@ -644,6 +645,7 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
           {layoutId ? <p className="layout-hint">Ortak bileşen kitaplığını Ana düzende düzenleyin.</p> : <ComponentLibraryPane report={report} page={page} selection={selection} resolved={layout.visuals} tables={tables} store={host.componentLibrary}
           onChange={(next) => update(() => next)} onSelect={setSelection} onImage={(data, w, h, title) => insert({ ...createVisual("image"), w, h, title, format: { showTitle: false, padding: 0, borderWidth: 0, imageData: data, imageFit: "contain" } })} />}
           <ReportThemeControls value={report.theme} onChange={(theme) => update((r) => ({ ...r, theme }))} />
+          <AnalyticsPane report={report} tables={tables} selected={selected} onChange={(next) => update(() => next)} onVisual={updateVisual} />
           <DesignInspector report={report} tables={tables} pageId={page.id} layoutId={layoutId} scope={diagnosticScope} root={layout.root} resolved={layout}
             queries={diagnostics.scope === diagnosticScope ? diagnostics.items : []} onLocate={(target) => {
               journey.clear();

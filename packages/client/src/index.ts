@@ -1,3 +1,5 @@
+import type { AnalyticsConfig, MetricEvidence, MetricReceipt } from "./analytics";
+export type { AnalyticsConfig, AnalyticsMetric, AnalyticsRule, MetricEvidence, MetricReceipt } from "./analytics";
 /**
  * Floem istemci sözleşmesi.
  *
@@ -338,7 +340,7 @@ export type VisualType =
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
   | "slicer"
-  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater" | "lineage" | "tolerance";
+  | "text" | "shape" | "image" | "button" | "ticker" | "container" | "icon" | "repeater" | "lineage" | "tolerance" | "signal";
 export type Agg = "sum" | "avg" | "min" | "max" | "count" | "distinctcount";
 
 export interface FieldRef {
@@ -581,6 +583,7 @@ export interface ImportAudit {
   pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];
 }
 export interface ReportDefinition {
+  analytics?: AnalyticsConfig | null;
   version: number;
   theme?: ThemeSnapshot | null;
   importAudit?: ImportAudit | null;
@@ -608,6 +611,7 @@ export interface ComponentLibraryStore {
 }
 
 export interface VisualQuery {
+  analytics?: { metricId: string; evidence?: MetricEvidence; snapshot?: string };
   group: FieldRef[];
   values: ValueRef[];
   filters?: FilterRef[];
@@ -634,6 +638,7 @@ export interface VisualResultColumn {
 }
 
 export interface VisualResult {
+  analytics?: MetricReceipt;
   columns: VisualResultColumn[];
   rows: (string | number | boolean | null)[][];
   truncated: boolean;

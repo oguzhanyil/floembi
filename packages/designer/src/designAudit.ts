@@ -108,7 +108,16 @@ export function auditDesign(report: ReportDefinition, tables: ModelTable[], runt
         add("ACTION_SOURCE", "error", "Etkileşim", "Satır eyleminin kaynak sütunu bulunamadı.", "Kaynak sütun sırası mevcut satır/değer alanlarının dışında.", "Satır eylemi için mevcut bir kaynak sütun seçin.");
       (page.drillthrough ?? []).forEach((r) => checkRef(r, "Sayfa detay filtresi"));
       const needsGroup = !!VISUAL_DEFS[visual.type].category || ["pie", "donut", "treemap", "waterfall", "scatter", "heatmap", "slicer", "treegrid", "repeater", "lineage"].includes(visual.type);
-      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater", "lineage"].includes(visual.type);
+      if (visual.type === "signal") {
+        const metric = report.analytics?.metrics.find((m) => m.id === visual.format.metricId);
+        if (!metric) add("ANALYTICS_METRIC", "error", "Veri bağı", "Nesnenin katalog ölçüsü bulunamadı.", "Ölçü ve uyarı nesnesi kataloğa bağlanmamış veya ölçü kaldırılmış.", "Analytics ve uyarılar bölümünden kayıtlı bir ölçü seçin.");
+        else {
+          checkRef({ measure: metric.measure }, "Katalog FDX ölçüsü"); checkRef(metric.company, "Katalog firma alanı");
+          metric.filters?.forEach((f) => checkRef(f, "Katalog sabit filtresi"));
+          if (!report.analytics?.dataTime) add("ANALYTICS_DATA_TIME", "info", "Veri kapsamı", "Kaynak veri zamanı bildirilmemiş.", "Değerlendirme zamanı kaynak veri zamanı olarak kullanılamaz.", "Kaynağın veri zamanını biliyorsanız Analytics ve uyarılar bölümünde belirtin; bilinmiyorsa karşılaştırma doğrulanmamış kalır.");
+        }
+      }
+      const needsValues = !["container", "text", "shape", "image", "button", "icon", "slicer", "table", "repeater", "lineage", "signal"].includes(visual.type);
       if (needsGroup && !visual.group.length || needsValues && visual.values.length < (visual.type === "scatter" ? 2 : 1) && !(["card", "ticker"].includes(visual.type) && visual.bindings?.value)
         || visual.type === "heatmap" && !visual.legend?.length || visual.type === "table" && !visual.group.length && !visual.values.length
         || visual.type === "lineage" && (visual.group.length < 2 || !visual.legend?.length) || visual.type === "tolerance" && visual.values.length < 3)

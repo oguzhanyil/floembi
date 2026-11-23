@@ -1,0 +1,6 @@
+.analytics-pane { border-bottom:1px solid var(--border,#cbd5e1);padding:10px;font-size:12px }
+.analytics-pane summary { font-weight:600;cursor:pointer }.analytics-pane label { display:flex;flex-direction:column;gap:4px;margin:7px 0 }
+.analytics-pane input,.analytics-pane select { width:100%;min-width:0;font:inherit;padding:6px;border:1px solid var(--border,#cbd5e1);border-radius:5px;color:var(--text,#172033);background:var(--surface,#fff) }
+.analytics-pane form,.analytics-list article { border:1px solid var(--border,#cbd5e1);border-radius:7px;padding:9px;margin:10px 0 }
+.analytics-list code { display:block;overflow-wrap:anywhere }.analytics-pane p { overflow-wrap:anywhere }.analytics-pane button { font:inherit;padding:5px 7px;margin:3px;cursor:pointer }
+.analytics-rule { display:flex;align-items:center;gap:6px;margin:7px 0 }.analytics-rule span { flex:1;min-width:0;overflow-wrap:anywhere }

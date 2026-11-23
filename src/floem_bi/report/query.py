@@ -18,6 +18,7 @@ from ..dax.rename import bracket_token, table_token
 from ..engine.duckdb_engine import DuckDBEngine
 from ..model import ModelError, SemanticModel
 from .schema import FieldRef, FilterRef, ValueRef
+from .analytics import AnalyticsQuery
 
 # Power BI Türkçe arayüzündeki örtük ölçü adları
 AGG = {
@@ -72,6 +73,7 @@ class GridPage(BaseModel):
 
 class VisualQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    analytics: AnalyticsQuery | None = None
     group: list[FieldRef] = Field(default_factory=list)
     values: list[ValueRef] = Field(default_factory=list)
     filters: list[FilterRef] = Field(default_factory=list)
@@ -130,9 +132,14 @@ def _value_meta(model: SemanticModel, v: ValueRef) -> dict:
 
 def run_visual_query(
     model: SemanticModel, engine: DuckDBEngine, q: VisualQuery, user=None, roles: list[str] | None = None,
-    revision: str = "",
+    revision: str = "", analytics=None,
 ) -> dict:
     """Görselin verisini döndürür: sütun bilgisi, satırlar, kesildi mi, toplam satırı."""
+    if q.analytics:
+        if q.group or q.values or q.page or q.order_by or q.totals:
+            raise QueryError("Ortak ölçü sorgusunda yalnız katalog kimliği ve filtreler kullanılır")
+        from .analytics import evaluate_metric
+        return evaluate_metric(model, engine, analytics, q.analytics, q.filters, revision=revision, user=user, roles=roles)
     try:
         group = [model.column(g.table, g.column)[0] for g in q.group]
         labels: list[str] = []

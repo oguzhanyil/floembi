@@ -1,0 +1,92 @@
+import assert from 'node:assert/strict';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+export async function testAnalytics({ call, evaluate, waitFor }) {
+  const el = (id) => `document.querySelector('[data-visual-id="${id}"]')`;
+  const signal = el('signal');
+  const clickText = async (selector, text) => evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(selector)})).find(e=>e.textContent===${JSON.stringify(text)})?.click()`);
+  const input = (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  const select = (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  const upload = async (value) => evaluate(`(()=>{const input=document.querySelector('${'[aria-label="Ölçü kanıtı yükle"]'}');const data=new DataTransfer();data.items.add(new File([${JSON.stringify(JSON.stringify(value))}],'olcu.json',{type:'application/json'}));input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+  await evaluate("window.setTestMode('analytics')");
+  await waitFor(`${signal}?.textContent.includes('180 TRY')`);
+  await waitFor(`${signal}?.textContent.includes('Hedef altı')`);
+  assert(await evaluate(`${el('card')}.textContent.includes('180')`));
+  const query = await evaluate('window.analyticsQueries.filter(q=>q.analytics).at(-1)');
+  assert.equal(query.analytics.metricId, 'sales.net');
+  assert(query.filters.some((f) => f.table === 'Firma' && f.values[0] === 'F1'));
+  assert(query.filters.some((f) => f.table === 'Tarih' && f.values[0] === '2026-02'));
+  const receipt = await evaluate('window.analyticsReceipt');
+  await upload(receipt); await waitFor(`${signal}?.textContent.includes('Kapsam ve değer uyumlu')`);
+  assert(!JSON.stringify(await evaluate('window.analyticsReport')).includes('snapshot'));
+  await upload({ ...receipt, value: 181 }); await waitFor(`${signal}?.textContent.includes('Değer farkı var')`);
+  await upload({ ...receipt, contextHash: 'd'.repeat(64) }); await waitFor(`${signal}?.textContent.includes('Kapsam uyuşmuyor')`);
+  await upload({ value: 180 }); await waitFor(`${signal}?.textContent.includes('eski kart JSON')`);
+  await waitFor(`!${signal}?.textContent.includes('Kapsam ve değer uyumlu')`);
+  // Kapsam değiştiği anda önceki değer/kanıt kaldırılır; geciken eski istek yeni kapsamı ezemez.
+  await evaluate('window.analyticsDelay=700;window.analyticsValue=0;window.refreshAnalytics()');
+  await waitFor(`${signal}?.textContent.includes('hesaplanıyor')`);
+  assert(!await evaluate(`${signal}.querySelector('.v-signal-value')`));
+  await waitFor(`${signal}?.textContent.includes('0 TRY')`);
+  await evaluate('window.analyticsDelay=500;window.analyticsValue=999;window.refreshAnalytics()');
+  await waitFor(`${signal}?.textContent.includes('hesaplanıyor')`);
+  await evaluate('window.analyticsDelay=0;window.analyticsValue=null;window.refreshAnalytics()');
+  await waitFor(`${signal}?.textContent.includes('Veri yok')`);
+  await new Promise((done) => setTimeout(done, 600));
+  assert(await evaluate(`${signal}.textContent.includes('Hesaplanamadı') && !${signal}.textContent.includes('999')`));
+  await evaluate('window.analyticsError=true;window.refreshAnalytics()');
+  await waitFor(`${signal}?.textContent.includes('Ölçü deneme hatası')`);
+  await evaluate('window.analyticsError=false;window.analyticsValue=180');
+  await clickText(`${'[data-visual-id="signal"]'} button`, 'Tekrar dene');
+  await waitFor(`${signal}?.textContent.includes('180 TRY')`);
+  await evaluate("window.analyticsViewer(false)");
+  await waitFor('document.querySelector(".analytics-pane")');
+  await evaluate('document.querySelector(".analytics-pane").open=true');
+  await input('[aria-label="Katalog kimliği"]', 'sales.second');
+  await input('[aria-label="Katalog ölçü adı"]', 'İkinci ölçü');
+  await select('[aria-label="Katalog FDX ölçüsü"]', 'Net');
+  await select('[aria-label="Katalog firma alanı"]', JSON.stringify({ table: 'Firma', column: 'Kod' }));
+  await input('[aria-label="Katalog birimi"]', 'TRY');
+  await input('[aria-label="Katalog tanesi"]', 'Fatura satırı');
+  await clickText('.analytics-pane button', 'Ölçüyü bağla');
+  await waitFor('window.analyticsSaved?.analytics.metrics.length===2');
+  await select('[aria-label="Uyarı ölçüsü"]', 'sales.second');
+  await input('[aria-label="Uyarı adı"]', 'Sıfır eşiği'); await input('[aria-label="Uyarı eşiği"]', '0');
+  await clickText('.analytics-pane button', 'Kural ekle');
+  await waitFor('window.analyticsSaved?.analytics.rules.some(r=>r.threshold===0)');
+  await input('[aria-label="Kaynak veri zamanı"]', '');
+  await clickText('.analytics-pane button', 'Veri zamanını kaydet');
+  await waitFor('window.analyticsSaved?.analytics.dataTime===null');
+  await evaluate('window.analyticsViewer(true)');
+  await waitFor(`${signal}?.textContent.includes('Bildirilmemiş')`);
+  await upload(await evaluate('window.analyticsReceipt'));
+  await waitFor(`${signal}?.textContent.includes('Doğrulanamadı')`);
+  assert(!JSON.stringify(await evaluate('window.analyticsSaved')).includes('contextHash'));
+  await evaluate('window.analyticsViewer(false)');
+  await waitFor('document.querySelector(".analytics-pane")');
+  await evaluate('window.setAnalyticsReport({...window.analyticsReport,analytics:{...window.analyticsReport.analytics,dataTime:"2026-04-01T00:00:00Z"}})');
+  await waitFor(`document.querySelector('[aria-label="Kaynak veri zamanı"]').value==="2026-04-01T00:00:00Z"`);
+  await evaluate('window.analyticsViewer(true)');
+  console.log('PASS: F14 aynı firma/dönem kart ve eşik, kapsam/değer kanıtı, eski JSON, boş/sıfır, geciken istek, hata/tekrar, katalog ve sıfır eşik kaydı; kanıt rapora yazılmaz.');
+
+  if (!process.env.FLOEM_UI_ANALYTICS_REPORT) return;
+  const report = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_ANALYTICS_REPORT), 'utf8'));
+  await evaluate(`window.analyticsEndpoint=${JSON.stringify(process.env.FLOEM_UI_ANALYTICS_ENDPOINT)};window.setAnalyticsReport(${JSON.stringify(report)});window.refreshAnalytics()`);
+  const sales = el('sales-signal'), balance = el('balance-signal');
+  await waitFor(`${sales}?.textContent.includes('180 TRY')`);
+  await waitFor(`${balance}?.textContent.includes('350 TRY')`);
+  assert(await evaluate(`${el('sales-card')}.textContent.includes('180') && ${el('balance-card')}.textContent.includes('350')`));
+  // Gerçek dosya + FDX sorguları, farklı çözünürlük ve DPR; yatay metin taşması yok.
+  const artifacts = resolve(process.env.FLOEM_UI_ANALYTICS_ARTIFACT_DIR ?? 'data/qa-f14'); await mkdir(artifacts, { recursive: true });
+  for (const [width, height, dpr] of [[1440, 1100, 1], [390, 844, 2], [1920, 1080, 1.25]]) {
+    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dpr, mobile: false });
+    await waitFor(`${sales}?.textContent.includes('180 TRY') && ${balance}?.textContent.includes('350 TRY')`);
+    await new Promise((done) => setTimeout(done, 300));
+    assert(await evaluate(`Array.from(document.querySelectorAll('.v-signal')).every(e=>e.scrollWidth<=e.clientWidth+1)`));
+    const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    await writeFile(resolve(artifacts, `analytics-${width}-${dpr}.png`), Buffer.from(shot.data, 'base64'));
+  }
+  console.log('PASS: F14 gerçek .floem/FDX ile 180 satış, 350 bakiye, eşikler ve 390/1440/1920px, DPR 1/1.25/2.');
+}

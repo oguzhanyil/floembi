@@ -43,6 +43,7 @@ export function ReportViewer({
   const [states, setStates] = useState<Record<string, VisualState>>({});
   const [visibility, setVisibility] = useState<Record<string, Record<string, boolean>>>({});
   const [actionRev, setActionRev] = useState(0);
+  const queryRevision = `${dataRev}:${actionRev}:${JSON.stringify(report.analytics ?? null)}`;
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const journey = useReportJourney<{ pageId: typeof pageId; drill: typeof drill; cross: typeof cross; states: typeof states; visibility: typeof visibility }>((s) => {
     setPageId(s.pageId); setDrill(s.drill); setCross(s.cross); setStates(s.states); setVisibility(s.visibility);
@@ -136,7 +137,7 @@ export function ReportViewer({
             const title = visualTitle(v);
             return (
               <VisualContextMenu key={`${page.id}:${v.id}`} visual={v}>
-              <RuntimeFrame visual={v.type === "text" ? { ...v, h: raw.h } : v} run={run} revision={`${dataRev}:${actionRev}`}
+              <RuntimeFrame visual={v.type === "text" ? { ...v, h: raw.h } : v} run={run} revision={queryRevision}
                 extra={[...pageFilters, ...crossFiltersFor(v, cross), ...slicerFilters(page.visuals, states, v.id)]}
                 selected={cross?.visualId === v.id}
                 key={v.id}
@@ -172,7 +173,7 @@ export function ReportViewer({
                       rowActionValue(v, v.format.rowAction!.sourceIndex, value)) : undefined}
                     onAction={(chosen, source, filters) => runAction(v, chosen, source, filters)}
                     pageWidth={page.width} pageHeight={layout.height}
-                    dataRev={`${dataRev}:${actionRev}`}
+                    dataRev={queryRevision}
                     cross={cross}
                     onCross={(value) => setCross(toggleCross(v, cross, value))}
                     run={run}

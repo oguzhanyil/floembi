@@ -1228,9 +1228,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     def report_query(rid: int, q: VisualQuery, user: dict = Depends(current_user)):
         with engine.connect() as c:
             rp, role = load_report(c, rid, user)
-        return dataset_query(user, rp.dataset_id, role, q)
+        return dataset_query(user, rp.dataset_id, role, q, rp.definition)
 
-    def dataset_query(user: dict, dataset_id: int, role: str, q: VisualQuery) -> dict:
+    def dataset_query(user: dict, dataset_id: int, role: str, q: VisualQuery, definition: str | None = None) -> dict:
         """Görsel sorgusu; İzleyiciye RLS rolleri uygulanır (rapor ve App ortak)."""
         with engine.connect() as c:
             ds = c.execute(select(db.datasets).where(db.datasets.c.id == dataset_id)).first()
@@ -1238,10 +1238,11 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             roles = rls_roles(c, user, ds, role, [r.ad for r in model.tanim.roller])
         try:
             with lock:
+                analytics = Report.model_validate(json.loads(definition)).analytics if q.analytics and definition else None
                 if roles is None:
-                    return run_visual_query(model, eng, q, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}")
+                    return run_visual_query(model, eng, q, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics)
                 # RLS: rol filtreleri her sorguya eklenir; USERPRINCIPALNAME() oturumdaki e-posta
-                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}")
+                return run_visual_query(model, eng, q, user=UserInfo(upn=user["email"]), roles=roles, revision=f"{ds.id}:{ds.version}:{user['id']}:{role}", analytics=analytics)
         except QueryError as e:
             raise ApiError(400, "query_error", "Görsel sorgusu çalıştırılamadı", str(e)) from e
 
@@ -2018,8 +2019,8 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     @app.post("/api/apps/{aid}/items/{iid}/query")
     def app_item_query(aid: int, iid: int, q: VisualQuery, user: dict = Depends(current_user)):
         with engine.connect() as c:
-            _, role, _, dsid = load_item(c, aid, iid, user)
-        return dataset_query(user, dsid, role, q)
+            _, role, item, dsid = load_item(c, aid, iid, user)
+        return dataset_query(user, dsid, role, q, item.definition)
 
     # -------------------------------------------------------------- satır düzeyi güvenlik (RLS)
     def security_dataset(c, dsid: int, user: dict):

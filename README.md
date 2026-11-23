@@ -35,7 +35,12 @@ telefon düzeni ve 12.050 sentetik müşteri. [Kullanım ve kapsam](docs/f13-tas
 ve telefon düzenleri var. Firma/dönem kapsamı ve çok adımlı geri dönüş korunur.
 Veri sentetiktir; gerçek kaynak kabulü ve F06 mutabakatı açıktır.
 [Deneme, hesap kuralları ve sınırlar](docs/f12-surec-pilotlari.md).
-Sırada **F14 Analytics ölçü/uyarı entegrasyonu** var.
+**F14 BI tarafı ve yerel pilot hazır:** **`data/F14-Analytics-ve-Uyarilar.floem`**
+içinde aynı FDX ölçüsünden kart ve eşik uyarısı, firma/dönem/müşteri filtreleri,
+sürümlü kapsam kanıtı ve telefon düzeni var. **Görselleştirmeler → Analytics ve
+uyarılar** ile kataloğu ve eşikleri düzenleyin. Analytics şu an çalışmadığı için
+canlı adaptör ve gerçek kaynak kabulü açık. [Kullanım, API ve sınırlar](docs/f14-ortak-olcu-ve-uyarilar.md).
+Sıradaki ürün aşaması **F15: senaryo ve yetkili işlem iş akışları**.
 
 **F08 ekran düzenleri hazır:** **Görselleştirmeler → Ekran düzenleri** ile telefon,
 tablet ve laptop yerleşimleri oluşturun. Veri, ölçü ve eylemler ortak; yerleşimler

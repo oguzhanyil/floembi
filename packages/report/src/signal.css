@@ -1,0 +1,10 @@
+.v-signal { height:100%;overflow:auto;display:flex;flex-direction:column;gap:10px;font:inherit;line-height:1.4;overflow-wrap:anywhere }
+.v-signal p { margin:0 }.v-signal-value { font-size:clamp(24px,3em,48px);font-weight:650;line-height:1.1 }.v-signal-value small { font-size:.38em;font-weight:500 }
+.v-signal-muted,.v-signal small { color:var(--muted,#64748b);font-size:12px }.v-signal-alerts { display:grid;gap:8px }
+.v-signal-rule { display:flex;gap:4px;flex-direction:column;border:1px solid var(--border,#cbd5e1);border-left:4px solid #13856d;padding:9px 12px;border-radius:7px }
+.v-signal-rule.triggered { border-left-color:#b45309;background:#f59e0b0c }.v-signal-rule.triggered.critical { border-left-color:#be123c;background:#be123c0a }.v-signal-rule.unknown { border-left-color:#64748b }
+.v-signal-compare { font-size:12px;padding:8px;border:1px solid var(--border,#cbd5e1);border-radius:7px }.v-signal-compare.match { color:var(--success,#0f766e) }
+.v-signal-compare.context_mismatch,.v-signal-compare.value_mismatch { border-left:4px solid #be123c }
+.v-signal-tools { display:flex;gap:7px;flex-wrap:wrap }.v-signal-tools button,.v-signal-file { font:inherit;font-size:12px;color:inherit;background:var(--surface,#fff);border:1px solid var(--border,#cbd5e1);padding:7px 10px;border-radius:6px;cursor:pointer }
+.v-signal-file input { width:1px;height:1px;position:absolute;clip-path:inset(50%) }.v-signal-file:focus-within { outline:2px solid var(--accent,#175cd3) }
+.v-signal details { font-size:12px }.v-signal summary { cursor:pointer }.v-signal dd { margin:0 0 8px;overflow-wrap:anywhere }.v-signal pre { white-space:pre-wrap;overflow-wrap:anywhere }

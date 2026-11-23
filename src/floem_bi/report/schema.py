@@ -21,7 +21,7 @@ VisualType = Literal[
     "scatter", "treemap", "heatmap", "waterfall", "gauge", "progress",
     "slicer",                                   # dilimleyici (liste / açılır / tarih aralığı)
     "text", "shape", "image", "button", "ticker", "container", "icon", "repeater", # tasarım nesneleri
-    "lineage", "tolerance",                     # seçili süreç altgrafı ve tolerans
+    "lineage", "tolerance", "signal",           # süreç, tolerans ve ortak ölçü/uyarı
 ]
 Agg = Literal["sum", "avg", "min", "max", "count", "distinctcount"]
 
@@ -391,9 +391,58 @@ class ThemeSnapshot(_B):
         return self
 
 
+class AnalyticsMetric(_B):
+    id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    label: str = Field(min_length=1, max_length=160)
+    measure: str = Field(min_length=1, max_length=160)
+    unit: str = Field(min_length=1, max_length=60)
+    grain: str = Field(min_length=1, max_length=200)
+    company: FieldRef
+    filters: list[FilterRef] = Field(default_factory=list, max_length=100)
+    tolerance: FiniteFloat = Field(default=0.000001, ge=0, le=1000)
+
+
+class AnalyticsRule(_B):
+    id: str = Field(min_length=1, max_length=100)
+    metricId: str = Field(min_length=1, max_length=100)
+    label: str = Field(min_length=1, max_length=200)
+    operator: Literal["gt", "ge", "lt", "le"] = "gt"
+    threshold: FiniteFloat
+    severity: Literal["info", "warning", "critical"] = "warning"
+
+
+class AnalyticsConfig(_B):
+    protocol: Literal["floem-metric/v1"] = "floem-metric/v1"
+    # Kaynağın beyanıdır; değerlendirme/yayımlama zamanı veri zamanı sayılmaz.
+    dataTime: str | None = Field(default=None, max_length=40)
+    metrics: list[AnalyticsMetric] = Field(default_factory=list, max_length=100)
+    rules: list[AnalyticsRule] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def _catalog(self):
+        from datetime import datetime
+        if self.dataTime == "":
+            self.dataTime = None
+        if self.dataTime:
+            try:
+                parsed = datetime.fromisoformat(self.dataTime.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    raise ValueError()
+                self.dataTime = parsed.isoformat()
+            except ValueError as e:
+                raise ValueError("Kaynak veri zamanı saat dilimi içeren ISO tarih olmalı") from e
+        ids = {m.id for m in self.metrics}
+        if len(ids) != len(self.metrics) or len({r.id for r in self.rules}) != len(self.rules):
+            raise ValueError("Ölçü ve kural kimlikleri kendi kataloglarında benzersiz olmalı")
+        if any(r.metricId not in ids for r in self.rules):
+            raise ValueError("Uyarı kuralının katalog ölçüsü bulunamadı")
+        return self
+
+
 class Report(_B):
     version: int = 1
     theme: ThemeSnapshot | None = None
+    analytics: AnalyticsConfig | None = None
     importAudit: dict[str, Any] | None = None
     components: list[ComponentDefinition] = Field(default_factory=list, max_length=500)
     pages: list[Page] = Field(default_factory=list)
@@ -451,6 +500,10 @@ def empty_report() -> dict:
 
 # ------------------------------------------------- yeniden adlandırmada referanslar
 def _refs(report: dict):
+    for metric in (report.get("analytics") or {}).get("metrics", []):
+        yield metric
+        yield metric.get("company") or {}
+        yield from metric.get("filters", [])
     for page in report.get("pages", []):
         yield from page.get("drillthrough", [])
         for v in page.get("visuals", []):

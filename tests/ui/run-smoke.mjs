@@ -21,6 +21,7 @@ import { testServerGrid } from "./server-grid-smoke.mjs";
 import { testRuntime } from "./runtime-smoke.mjs";
 import { testInspector } from "./inspector-smoke.mjs";
 import { testProcess } from "./process-smoke.mjs";
+import { testAnalytics } from "./analytics-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-ui-test-"));
@@ -78,7 +79,10 @@ try {
   };
   await call('Runtime.enable');
   await call("Page.navigate", { url: `http://127.0.0.1:${server.address().port}` });
-  if (process.env.FLOEM_UI_PROCESS_ONLY) {
+  if (process.env.FLOEM_UI_ANALYTICS_ONLY) {
+    await waitFor('window.setTestMode');
+    await testAnalytics({ call, evaluate, waitFor });
+  } else if (process.env.FLOEM_UI_PROCESS_ONLY) {
     await waitFor('window.setTestMode');
     await testProcess({ call, evaluate, waitFor });
   } else if (process.env.FLOEM_UI_INSPECTOR_ONLY) {
@@ -137,7 +141,7 @@ try {
   assert.equal(await evaluate('document.querySelector(".ag-floating-filter input").value'), "");
   const openMenu = async (selector = '.ag-row[row-index="0"] .ag-cell[col-id="c0"]') => {
     await waitFor(`document.querySelector(${JSON.stringify(selector)})`);
-    await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.x+10,clientY:r.y+10}))})()`);
+    await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus({preventScroll:true});const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:r.x+10,clientY:r.y+10}))})()`);
     await waitFor('document.querySelector(".v-context-menu")');
   };
   const choose = (label) => evaluate(`([...document.querySelectorAll('.v-context-menu button')].find(e=>e.textContent===${JSON.stringify(label)})).click()`);
@@ -380,6 +384,7 @@ try {
   await testRuntime({ call, evaluate, waitFor, input });
   await testInspector({ call, evaluate, waitFor, input });
   await testProcess({ call, evaluate, waitFor });
+  await testAnalytics({ call, evaluate, waitFor });
   if (process.env.FLOEM_UI_LAYOUT_REPORT) {
     const definition = JSON.parse(await readFile(resolve(process.env.FLOEM_UI_LAYOUT_REPORT), 'utf8'));
     await evaluate(`window.setAllReport(${JSON.stringify(definition)});window.setTestMode('all-viewer')`);
