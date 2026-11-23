@@ -1,5 +1,7 @@
 """Desktop aç/kaydet UI testi için kullanıcı servislerinden bağımsız yerel köprü."""
 import hashlib
+import struct
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -42,7 +44,23 @@ with tempfile.TemporaryDirectory(prefix="floem-powerbi-ui-", dir=sys.argv[1] if 
         with zipfile.ZipFile(native) as original, zipfile.ZipFile(pbix, "w") as z:
             for item in original.infolist():
                 z.writestr(item, json.dumps(layout).encode("utf-16-le") if item.filename == "Report/Layout" else original.read(item))
-    paths = {"project": str(project), "broken": str(broken), "text": str(text), "pbix": str(pbix) if pbix else None, "saved": str(area / "Saved.floem")}
+    appearance = area / "Appearance.pbix"
+    def lit(value): return {"expr": {"Literal": {"Value": "'"+value+"'" if isinstance(value, str) else str(value).lower()}}}
+    def visual(name, kind, x, y, w, h, z, objects, **extra):
+        return {"config": json.dumps({"name": name, "layouts": [{"id": 0, "position": {"x": x, "y": y, "width": w, "height": h, "z": z}}], "singleVisual": {"visualType": kind, "objects": objects, **extra}})}
+    resource = {"expr": {"ResourcePackageItem": {"ItemName": "icon.png"}}}
+    appearance_layout = {"config": json.dumps({"themeCollection": {"baseTheme": {"name": "Sample"}}}), "sections": [{"name": "p", "width": 1000, "height": 650, "config": json.dumps({"objects": {"background": [{"properties": {"color": {"solid": {"color": {"expr": {"ThemeDataColor": {"ColorId": 2, "Percent": .6}}}}}}}]}}), "visualContainers": [
+        visual("background", "shape", 10, 10, 980, 630, 0, {"fill": [{"properties": {"fillColor": lit("#EEEEEE")}}], "shape": [{"properties": {"roundEdge": lit(30)}}]}),
+        visual("icon-button", "actionButton", 100, 100, 160, 210, 2000, {"icon": [{"properties": {"image": {"image": {"url": resource}}, "iconSize": lit(70)}}], "text": [{"properties": {"show": lit(True), "text": lit("Aç"), "verticalAlignment": lit("bottom")}}], "shape": [{"properties": {"roundEdge": lit(20)}}]}),
+        visual("hidden", "shape", 0, 0, 1000, 650, 9000, {"fill": [{"properties": {"fillColor": lit("#000000")}}]}, display={"mode": "hidden"}),
+    ]}]}
+    with zipfile.ZipFile(appearance, "w") as z:
+        z.writestr("Report/Layout", json.dumps(appearance_layout).encode("utf-16-le"))
+        z.writestr("Report/StaticResources/SharedResources/BaseThemes/Sample.json", json.dumps({"background": "#FFFFFF", "foreground": "#252423", "dataColors": ["#118DFF"]}))
+        def chunk(name, data): return struct.pack(">I", len(data)) + name + data + struct.pack(">I", zlib.crc32(name + data))
+        png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress((b"\0" + b"\x11\x8d\xff" * 32) * 32)) + chunk(b"IEND", b"")
+        z.writestr("Report/StaticResources/RegisteredResources/icon.png", png)
+    paths = {"appearance": str(appearance), "project": str(project), "broken": str(broken), "text": str(text), "pbix": str(pbix) if pbix else None, "saved": str(area / "Saved.floem")}
     before = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for k, p in paths.items() if p and k != "saved"}
     app = create_app("powerbi-ui-fixture", store=ConnectionStore(area / "store", use_keyring=False), work_dir=area / "work")
     with TestClient(app) as client:

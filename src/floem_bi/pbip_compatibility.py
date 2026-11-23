@@ -87,6 +87,7 @@ def audit_visual(raw: dict, targets: list[dict]) -> dict:
     roles = {"matrix": {"Rows", "Columns", "Values"}, "table": {"Values"}, "slicer": {"Values"},
              **{k: {"Values"} for k in ("card", "multicard", "kpi", "ticker")}}
     accepted = roles.get(kind, {"Category", "Series", "Y", "Y2", "X"})
+    if source_type == "cardVisual": accepted = {"Values", "Data", "Rows"}
     for role, state in (visual.get("query", {}).get("queryState") or {}).items():
         for index, projection in enumerate(state.get("projections", [])):
             expression = projection.get("field") or {}

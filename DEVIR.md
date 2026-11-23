@@ -5,6 +5,8 @@ Power BI dosyalarını Desktop Aç/Ctrl+O ile alma eklendi; ayrıntılar
 [Power BI dosya açma](docs/powerbi-dosya-acma.md). Bu, F06 ölçü mutabakatını kapatmaz.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 Desktop izleyici modu ve geri al/ileri al araçları ribbon **Rapor** grubundadır.
+PBIX görünüm düzeltmesi: kaynakta gizli katmanlar, tema renkleri/saydamlık,
+ikonlu düğmeler ve yeni kart alanları korunur; Dashboard yerleşimi doğrulandı.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,
@@ -150,6 +152,36 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
 | H7 | ✓ | Floemway konsol uygulaması, tek kullanımlık kayıt, Windows Kimlik Bilgisi Yöneticisi'nde özel anahtar, dışa açılan WebSocket, Desktop yayımlamasında otomatik şifreli SQL bağlantısı eşlemesi, manuel yenileme, Arrow aktarımı, atomik DuckDB sürümü, hata geçmişi ve SSE |
 
 ## 6. Sırada: plana göre yapılacaklar
+
+### 23.11.2026 Dashboard PBIX yerleşim ve görünürlük düzeltmesi
+
+- Yerel Dashboard: 7 sayfa / 179 nesne. 25 kaynak gizli katman yanlışlıkla
+  görünür açılıyor, üstteki maskeler alttaki içeriği örtüyordu. `display.mode`
+  taşınır; `initiallyHidden` + `hideInDesign` ile tasarım/izleyicide saklanır.
+  Katmanlar listesinden seçilince düzenlenebilir, seçim kalkınca tekrar gizlenir.
+- Masaüstü `layouts.id=0` seçilir; telefon düzeninin dizide ilk olmasına göre
+  karar verilmez. Kaynak 179 dikdörtgenin x/y/w/h değerleri karşılaştırıldı.
+  Gerçek Desktop App DOM'unda 154 görünür nesne 1,5 kaynak pikseli toleransla
+  aynı konum/boyutta, 25 gizli nesne çizilmeden doğrulandı.
+- Gömülü BaseThemes/CustomThemes paletinden `ThemeDataColor` ve tonları çözülür.
+  Saydamlık bütün nesneye değil ilgili zemine uygulanır; dolgusuz ikonlu düğme
+  ve görsel çerçeveleri beyaz kutu üretmez. Köşe yarıçapı iç çizime de geçer.
+- `cardVisual` ve `Data` alan rolü tek/çok değerli yerel karta eşlenir; satır
+  grubu korunur. Sabit kart yazı boyutu, tablo/matris başlık görünürlüğü ve
+  belirtilmiş alt başlık taşınır. PNG/JPEG/WebP düğme ikonu mevcut güvenli
+  veri URI denetimiyle, üstte veya solda çizilir.
+- Dashboard kabulü **yerleşim kontrolüdür**: büyük gömülü DataModel yeniden
+  okunmadı, muhasebe/ölçü mutabakatı yapılmadı. Veri içermeyen yerel QA kopyası
+  kullanıldı; kaynak PBIX/PDF ve kullanıcı dosyaları değiştirilmedi/commit edilmedi.
+  Bookmark/hover durumları, bazı özel/gelişmiş grafik biçimleri ve kart alt
+  düzenleri tam eşdeğer değildir; aktarım bulguları açık kalır.
+- Doğrulama: **378 Python geçti / 1 atlandı**, 84 saf TS, 33 nesneli tam
+  Chromium, gerçek Desktop servis akışı, typecheck ve Desktop/web/Windows servis
+  derlemeleri geçti. Paketli servis ayrı okuyucuyla gerçek 9 satırlık PBIX açtı.
+  İlk yoğun paralel UI koşusunda kapsayıcı sürükleme zaman aşımı vardı; bu
+  kontrol kod/test değişmeden daraltılmış ve tam tekrarda geçti.
+  QA: `data/qa-dashboard/`. Önceden dönüştürülmüş belgeyi değiştirmek yerine
+  güncel Desktop'ta orijinal PBIX yeniden açılır.
 
 ### 23.11.2026 Desktop rapor araçları ribbon'a taşındı
 

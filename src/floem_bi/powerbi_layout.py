@@ -75,6 +75,8 @@ def _id(value, prefix):
 
 def legacy_layout(layout: dict, target: Path):
     """Eski PBIX/rapor.json alan rollerini PBIR sorgu biçimine normalize eder."""
+    from .powerbi_theme import resolve_theme
+    layout = resolve_theme(layout, target)
     sections = sorted(layout.get("sections", []) or [{"name": "page1", "displayName": "Sayfa 1"}], key=lambda s: s.get("ordinal", 0))
     ids = {s.get("name"): _id(s.get("name"), f"page{i}") for i, s in enumerate(sections)}
     def aliases(node, sources):
@@ -100,7 +102,7 @@ def legacy_layout(layout: dict, target: Path):
             selections = {f.get("Name"): {k: v for k, v in f.items() if k != "Name"} for f in query.get("Select", [])}
             state = {}
             for role, projections in visual.get("projections", {}).items():
-                state[role] = {"projections": [{"field": aliases(selections.get(p.get("queryRef"), {}), sources)} for p in projections]}
+                state["Values" if visual.get("visualType") == "cardVisual" and role == "Data" else role] = {"projections": [{"field": aliases(selections.get(p.get("queryRef"), {}), sources), **({"displayName": p["displayName"]} if p.get("displayName") else {})} for p in projections]}
             objects, containers = visual.get("objects", {}), visual.get("vcObjects", {})
             # Sayfa adları güvenli dosya kimliklerine dönüştürüldüğünden hedefi de taşı.
             def navigation(node):
@@ -112,9 +114,10 @@ def legacy_layout(layout: dict, target: Path):
                 elif isinstance(node, list):
                     for item in node: navigation(item)
             navigation(containers)
-            position = ((config.get("layouts") or [{}])[0].get("position")) or {k: raw.get(k, 0) for k in ["x", "y", "z", "width", "height"]}
+            desktop = next((p for p in config.get("layouts", []) if p.get("id", 0) == 0), {})
+            position = desktop.get("position") or {k: raw.get(k, 0) for k in ["x", "y", "z", "width", "height"]}
             item = {"name": _id(config.get("name"), f"visual{n}"), "position": position,
-                    "visual": {"visualType": visual.get("visualType", "unknown"), "objects": objects, "visualContainerObjects": containers, "query": {"queryState": state}}}
+                    "visual": {"visualType": visual.get("visualType", "unknown"), "objects": objects, "display": visual.get("display", {}), "visualContainerObjects": containers, "query": {"queryState": state}}}
             if raw.get("filters"): item["filters"] = raw["filters"]
             _write(page / f"visuals/v{n}/visual.json", item)
     _write(target / "definition/pages/pages.json", {"pageOrder": list(ids.values())})
@@ -122,7 +125,7 @@ def legacy_layout(layout: dict, target: Path):
 
 
 def stage_project(report: Path, target: Path, root: Path):
-    files = [p for p in report.rglob("*") if p.is_file() and (p.suffix.lower() == ".json" and "definition" in p.relative_to(report).parts or "StaticResources" in p.relative_to(report).parts and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"})]
+    files = [p for p in report.rglob("*") if p.is_file() and (p.suffix.lower() == ".json" and ("definition" in p.relative_to(report).parts or "BaseThemes" in p.parts or "CustomThemes" in p.parts) or "StaticResources" in p.relative_to(report).parts and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"})]
     if len(files) > MAX_ITEMS: raise ValueError("Proje dosya sayısı sınırını aşıyor")
     total = 0
     for file in files:
@@ -156,7 +159,7 @@ def stage_pbix(path: Path, target: Path) -> bool:
             canonical.add(key)
             if item.file_size > MAX_FILE: raise ValueError("PBIX bileşeni boyut sınırını aşıyor")
             relative = name.removeprefix("Report/")
-            selected = name.startswith("Report/definition/") and name.endswith(".json") or name.startswith("Report/StaticResources/") and Path(name).suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"}
+            selected = name.startswith(("Report/definition/", "Report/StaticResources/SharedResources/BaseThemes/", "Report/StaticResources/SharedResources/CustomThemes/")) and name.endswith(".json") or name.startswith("Report/StaticResources/") and Path(name).suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"}
             if selected and not item.is_dir():
                 total += item.file_size
                 if item.file_size > MAX_JSON or total > 256 * 1024 ** 2: raise ValueError("PBIX yerleşimi boyut sınırını aşıyor")

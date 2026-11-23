@@ -41,6 +41,28 @@ bulguları ve gerçek sonuç karşılaştırmasıyla kabul yapılır. F06 mutaba
 Kaynak SQL/M sorguları ve bağlantı kimlik bilgileri yeni modele taşınmaz veya
 çalıştırılmaz; kaynak sunucuya bağlanılmaz. Veri bir anlık görüntüdür. Yenileme
 için normal Floem bağlantısı ve alan eşlemesi ayrıca yapılandırılmalıdır.
+
+## Yerleşim ve başlangıçta gizli katmanlar
+
+Eski PBIX Layout'ta nesnenin masaüstü düzeni (`layouts.id=0`), kaynak piksel
+konumu/boyutu ve katman sırası kullanılır. Telefon düzeninin dizide önce gelmesi
+masaüstü nesnelerini o konumlara taşımaz. `display.mode=hidden` nesnesi
+silinmez; tasarımda ve izleyicide başlangıçta saklanır. **Biçim → Katmanlar**
+listesinden seçilince düzenlenebilir; **Başlangıçta gizle** kaldırılırsa görünür olur.
+
+Gömülü temel/özel paletin sabit renkleri ve tonları, arka plan saydamlığı ve
+yuvarlak köşeler taşınır. Dolgu tanımı olmayan ikonlu düğme saydam kalır;
+görsel çerçevesi arkasındaki nesneyi beyaz kutuyla kapatmaz. Yeni `cardVisual`
+`Data` alanları, birden çok değer ve satır grubu yerel kartlara eşlenir.
+Desteklenen ikonlu düğmelerde ikon üstte/solda ve kaynak boyutuyla çizilir.
+
+Yerel Dashboard dosyasında 7 sayfa / 179 nesnenin dikdörtgeni kaynakla aynı
+bulundu; gerçek Desktop DOM'unda 154 görünür nesne ve 25 gizli katman doğrulandı.
+Bu kontrol büyük DataModel'i tekrar içeri almadan yapıldı; veri/hesap eşdeğerliği
+iddiası değildir. Bookmark seçimi, hover durumları, kartların bütün iç yerleşimleri
+ve her Power BI grafik türü birebir taşınmaz. Bulgular aktarım raporunda kalır.
+Yeni dönüşüm için güncel Desktop'ı açıp orijinal PBIX'i tekrar seçin.
+
 Aktarım raporu indirilirken tablo/ölçü adları içerdiğini göz önünde bulundurun.
 
 Kaynak RLS/OLS rolleri varsa, kurallar birebir çevrilmiş sayılmaz: Floem rolleri
@@ -116,7 +138,7 @@ Paketlenmiş Windows `floem-service.exe --powerbi-worker` çıktısı da yeniden
 açılarak 9 satır doğrulandı. Yerel kullanıcı projesinin dönüştürülmüş kopyası
 `data/PowerBI-SAPB1Demo-Imported.floem` içindedir.
 
-Son genel koşu: **371 Python geçti / 1 atlandı, 84 saf TS kontrolü**, 33 nesneli
+Son genel koşu: **378 Python geçti / 1 atlandı, 84 saf TS kontrolü**, 33 nesneli
 tam Chromium turu, typecheck ve Desktop/web/Windows servis derlemeleri geçti.
 Paketli ana servis üzerinden açma isteği de ayrı paketli okuyucuyu başlatarak
 9 satırlık yeni belge döndürdü; üçüncü taraf lisans dosyalarının pakette olduğu

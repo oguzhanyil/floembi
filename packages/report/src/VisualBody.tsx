@@ -2,6 +2,7 @@ import { themedVisual, useReportTheme } from "./theme";
 import type { ColumnType, FilterRef, ReportPage, Visual, VisualAction, VisualResult, VisualState } from "@floem/client";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ActionGlyph } from "./ActionGlyph";
+import { safeActionIcon } from "./visualActions";
 import { AgDataGrid } from "./AgDataGrid";
 import { ServerTable, ServerTree } from "./ServerGrid";
 import { CategoryChart, PieChartVisual } from "./charts";
@@ -355,15 +356,16 @@ function VisualBodyContent({
     const label = typeof v.format.text === "string" ? v.format.text : "Düğme";
     const action = v.format.action;
     const buttonStyle = v.format.buttonStyle ?? "solid";
+    const icon = safeActionIcon(v.format.buttonIconData);
     return <div className={`v-button-wrap ${pageHeight && v.y + v.h > pageHeight - 280 ? "menu-up" : ""} ${pageWidth && v.x + v.w > pageWidth - 180 ? "menu-left" : ""}`} ref={menuRef}>
       <button type="button" aria-label={label} aria-expanded={action?.type === "menu" ? menuOpen : undefined}
-        className={`v-action-button ${v.format.buttonInvisible ? "hotspot" : v.format.buttonStyle ?? "solid"}`}
+        className={`v-action-button ${v.format.buttonInvisible ? "hotspot" : v.format.buttonStyle ?? "solid"} ${icon && v.format.buttonIconPosition === "top" ? "icon-top" : ""}`}
         style={{ backgroundColor: buttonStyle === "solid" && !v.format.buttonInvisible ? v.format.buttonColor || "#2563eb" : undefined,
           color: v.format.buttonTextColor || (buttonStyle === "solid" ? "#ffffff" : v.format.buttonColor || "#2563eb"), fontSize: v.format.fontSize,
-          borderColor: v.format.buttonColor || "#2563eb" }}
+          borderColor: v.format.buttonColor || "#2563eb", borderWidth: v.format.borderWidth, fontFamily: v.format.fontFamily }}
         onClick={(e) => { e.stopPropagation(); if (!onAction || !action) return;
           if (action.type === "menu") setMenuOpen((open) => !open); else onAction(action); }}>
-        {!v.format.buttonInvisible && <><span>{label}</span><ActionGlyph icon={v.format.buttonIcon ?? (action?.type === "menu" ? "menu" : "arrow")} /></>}
+        {!v.format.buttonInvisible && <>{icon && <img className="v-button-icon" src={icon} alt="" style={{ width: Math.max(12, Math.min(200, v.format.buttonIconSize ?? 24)), height: Math.max(12, Math.min(200, v.format.buttonIconSize ?? 24)) }} />}<span>{label}</span>{!icon && <ActionGlyph icon={v.format.buttonIcon ?? (action?.type === "menu" ? "menu" : "arrow")} />}</>}
       </button>
       {menuOpen && action?.type === "menu" && onAction && <div className="v-action-menu-list" role="menu">
         {!action.items?.length && <span className="v-action-menu-empty">Menü öğesi eklenmedi</span>}

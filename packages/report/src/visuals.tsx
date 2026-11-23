@@ -61,9 +61,10 @@ export function CardVisual({ result, format, trend }: { result: VisualResult; fo
   const text = bigNumber(shown, c);
   // Trend şeridi (~42 px) ve etiket için yer bırak
   const avail = size.h - (trend ? 26 : 0) - (format.categoryLabel !== false ? 18 : 0);
-  const font = Math.max(16, Math.min(avail * 0.7, size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
+  const autoFont = Math.max(16, Math.min(avail * 0.7, size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
+  const font = format.fontSize ? Math.max(8, Math.min(autoFont, format.fontSize)) : autoFont;
   return (
-    <div className="v-card" ref={ref}>
+    <div className="v-card" ref={ref} style={{ color: format.color, fontFamily: format.fontFamily }}>
       <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)} aria-label={fmt(v, c)}>
         {text}
       </div>
@@ -90,7 +91,7 @@ export function TickerVisual({ result, format }: { result: VisualResult; format:
 export function ShapeVisual({ format }: { format: VisualFormat }) {
   const style = format.shapeStyle ?? "rectangle";
   return (
-    <div className={`v-shape v-shape-${style}`}>
+    <div className={`v-shape v-shape-${style}`} style={{ color: format.color, fontFamily: format.fontFamily, fontSize: format.fontSize }}>
       {typeof format.text === "string" && <span>{format.text}</span>}
     </div>
   );

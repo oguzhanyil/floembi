@@ -24,7 +24,7 @@ from .report.schema import Report
 
 
 TYPE_MAP = {
-    "card": "card", "multiRowCard": "multicard", "kpi": "kpi",
+    "card": "card", "cardVisual": "card", "multiRowCard": "multicard", "kpi": "kpi",
     "clusteredColumnChart": "column", "stackedColumnChart": "stackedcolumn",
     "clusteredBarChart": "bar", "stackedBarChart": "stackedbar",
     "lineChart": "line", "areaChart": "area", "donutChart": "donut", "pieChart": "pie",
@@ -227,15 +227,72 @@ def _inside(inner: dict, outer: dict) -> bool:
             float(a.get("y", 0)) + float(a.get("height", 0)) <= float(b.get("y", 0)) + float(b.get("height", 0)) + 2)
 
 
+def _color_alpha(color: str, transparency: float) -> str:
+    if not isinstance(color, str): return "transparent"
+    if not transparency: return color
+    if transparency >= 100: return "transparent"
+    if not re.fullmatch(r"#[0-9a-fA-F]{6,8}", color): return color
+    return f"rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, {max(0, 1-transparency/100):.3f})"
+
+
+def _import_appearance(report_dir: Path, visual: dict, kind: str, fmt: dict) -> None:
+    objects = visual.get("objects") or {}
+    container = visual.get("visualContainerObjects") or {}
+    if (visual.get("display") or {}).get("mode") == "hidden":
+        fmt.update(initiallyHidden=True, hideInDesign=True)
+    fmt.setdefault("radius", 0)
+    fmt.setdefault("borderWidth", 0)
+    if kind in ("image", "text"): fmt.setdefault("backgroundColor", "transparent")
+    background = _property(container, "background", "color")
+    transparency = _number(_property(container, "background", "transparency"))
+    if _property(container, "background", "show") is False or transparency >= 100:
+        fmt["backgroundColor"] = "transparent"
+    elif background or transparency:
+        fmt["backgroundColor"] = _color_alpha(background if isinstance(background, str) else "#FFFFFF", transparency)
+    radius = _property(objects, "shape", "roundEdge")
+    if isinstance(radius, (int, float)): fmt["radius"] = min(40, max(0, radius))
+    if kind == "image":
+        fmt["imageFit"] = "cover" if _property(objects, "imageScaling", "imageScalingType") == "Fill" else "contain"
+    if visual.get("visualType") == "actionButton" and kind == "shape":
+        if _property(objects, "fill", "show") is False or not objects.get("fill"): fmt["backgroundColor"] = "transparent"
+        color = _property(objects, "text", "fontColor")
+        if isinstance(color, str): fmt["color"] = color
+        font = _property(objects, "text", "fontSize")
+        if isinstance(font, (int, float)): fmt["fontSize"] = font * 4 / 3
+    if visual.get("visualType") == "cardVisual":
+        fmt["padding"] = 0
+        fmt["categoryLabel"] = _property(objects, "label", "show") is not False
+        font = _property(objects, "value", "fontSize")
+        if isinstance(font, (int, float)): fmt["fontSize"] = font * 4 / 3
+        color = _property(objects, "value", "fontColor")
+        if isinstance(color, str): fmt["color"] = color
+    if kind == "button":
+        image = _property(objects, "icon", "image")
+        icon = _image(report_dir, {"general": [{"properties": {"imageUrl": (image.get("image") or {}).get("url")}}]}) if isinstance(image, dict) else None
+        fmt.update(buttonStyle="solid", buttonColor="transparent" if _property(objects, "fill", "show") is False or not objects.get("fill") else _color_alpha(_property(objects, "fill", "fillColor") or "#FFFFFF", _number(_property(objects, "fill", "transparency"))),
+                   buttonTextColor=_property(objects, "text", "fontColor") if isinstance(_property(objects, "text", "fontColor"), str) else "#605E5C", text=_property(objects, "text", "text") or "", showTitle=False, padding=0)
+        if icon: fmt["buttonIconData"] = icon
+        fmt["buttonIconPosition"] = "top" if _property(objects, "text", "verticalAlignment") == "bottom" else "left"
+        fmt["buttonIconSize"] = min(200, max(12, _number(_property(objects, "icon", "iconSize"), 24)))
+        font = _property(objects, "text", "fontSize")
+        if isinstance(font, (int, float)): fmt["fontSize"] = font * 4 / 3
+        family = _property(objects, "text", "fontFamily")
+        if isinstance(family, str): fmt["fontFamily"] = family
+
+
 def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | None:
     visual = raw.get("visual") or {}
     original_type = visual.get("visualType", "unknown")
     kind = TYPE_MAP.get(original_type, "text")
+    if original_type == "cardVisual" and (len(_projection(visual.get("query") or {}, "Values") or _projection(visual.get("query") or {}, "Data")) > 1 or _projection(visual.get("query") or {}, "Rows")):
+        kind = "multicard"
     if original_type in APPROXIMATE_TYPES:
         kind = "text"
     pos = raw.get("position") or {}
     name = str(raw.get("name") or "gorsel")[:64]
     objects = visual.get("objects") or {}
+    if original_type == "actionButton" and _property(objects, "icon", "image"):
+        kind = "button"
     container = visual.get("visualContainerObjects") or {}
     # Tamamen şeffaf tıklama katmanları alttaki nesneye bağlanır; burada çizilmez.
     if original_type == "actionButton" and (
@@ -249,6 +306,10 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
         title = title[:200]
     else:
         title = None
+    subtitle = _property(container, "subTitle", "text")
+    if not title and _property(container, "subTitle", "show") is True and isinstance(subtitle, str): title = subtitle[:200]
+    if _property(container, "title", "show") is False or kind in ("table", "matrix", "card", "multicard") and not title:
+        fmt["showTitle"] = False
     if kind in ("shape", "text", "image"):
         fmt["showTitle"] = False
         fmt["padding"] = 0
@@ -296,6 +357,8 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
         fmt["opacity"] = max(0, 1 - transparency / 100)
 
     query = visual.get("query") or {}
+    if original_type == "cardVisual" and "Data" in query.get("queryState", {}) and "Values" not in query.get("queryState", {}):
+        query = {**query, "queryState": {**query["queryState"], "Values": query["queryState"]["Data"]}}
     if kind not in ("shape", "text", "image"):
         labels = [str(item["displayName"]) for role in ("Category", "Rows", "Values", "Y", "X")
                   for item in _projection(query, role) if isinstance(item.get("displayName"), str)]
@@ -318,7 +381,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     elif kind == "slicer":
         group_roles, legend_roles, value_roles = ("Values",), (), ()
     elif kind in ("card", "multicard", "kpi", "ticker"):
-        group_roles, legend_roles, value_roles = (), (), ("Values",)
+        group_roles, legend_roles, value_roles = (("Rows",) if original_type == "cardVisual" else ()), (), ("Values",)
     else:
         group_roles, legend_roles, value_roles = ("Category",), ("Series",), ("Y", "Y2", "X")
     for role in group_roles:
@@ -337,6 +400,9 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
                 item_ref = bindings.value(field)
                 if item_ref:
                     values.append(item_ref)
+    _import_appearance(report_dir, visual, kind, fmt)
+    source_title_size = _property(container, "title", "fontSize")
+    if isinstance(source_title_size, (int, float)): fmt["titleSize"] = min(28, max(10, source_title_size * 4 / 3))
     return {
         "id": name,
         "type": kind,

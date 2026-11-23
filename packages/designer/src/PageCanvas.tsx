@@ -296,7 +296,7 @@ export function PageCanvas({
           />
         ))}
         <BindingProvider key={page.id} visuals={page.visuals} definitions={components}>
-        {layout.visuals.filter((v) => !previewActions || visibleInLayout(page, v, visibleOverrides)).map((v) => {
+        {layout.visuals.filter((v) => previewActions ? visibleInLayout(page, v, visibleOverrides) : !(v.format.initiallyHidden && v.format.hideInDesign) || selection.includes(v.id)).map((v) => {
           const raw = page.visuals.find((node) => node.id === v.id)!;
           const selected = selection.includes(v.id);
           const locked = lockedInLayout(page, v.id);

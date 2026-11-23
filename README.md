@@ -101,6 +101,9 @@ seçilebilir. Desteklenen yerleşim/model ve varsa gömülü veri yeni belgeye a
 **Ctrl+S** ayrı `.floem` oluşturur. Özgün Power BI dosyası korunur. Eksik veri,
 FDX uyarlaması ve görsel kayıpları **Power BI aktarım raporu** içinde açıklanır.
 PBIP dosyasını yanındaki Report/SemanticModel klasörleriyle birlikte taşıyın.
+PBIX'te başlangıçta gizli katmanlar tasarımda ve izleyicide gizli kalır;
+**Biçim → Katmanlar** listesinden seçilerek düzenlenebilir. Gömülü palet renkleri,
+saydam zeminler, ikonlu düğmeler ve yeni Power BI kartlarının alanları aktarılır.
 [Kullanım, kapsam, sınırlar ve lisans kaydı](docs/powerbi-dosya-acma.md).
 
 ## Kurulum ve çalıştırma

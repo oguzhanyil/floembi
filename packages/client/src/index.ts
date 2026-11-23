@@ -479,9 +479,14 @@ export interface VisualFormat {
   buttonColor?: string;
   buttonTextColor?: string;
   buttonIcon?: ActionIcon;
+  buttonIconData?: string;
+  buttonIconPosition?: "left" | "top";
+  buttonIconSize?: number;
   buttonInvisible?: boolean;
   /** Başka bir düğmenin göstereceği nesne başlangıçta saklanır. */
   initiallyHidden?: boolean;
+  /** Kaynakta gizli katmanı, Katmanlar listesinden seçilene kadar tasarımda da sakla. */
+  hideInDesign?: boolean;
   /** Serbest tasarım: yarı saydamlık ve düzenleme kilidi. */
   opacity?: number;
   locked?: boolean;
