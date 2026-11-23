@@ -22,7 +22,7 @@ function AuditDialog({ audit, onClose, onLocate }: { audit: ImportAudit; onClose
   };
   return createPortal(<dialog ref={ref} className="import-audit-dialog" aria-label="Power BI uyumluluk raporu" onCancel={onClose} onClose={onClose}>
     <header><div><h2>Power BI uyumluluk raporu</h2><span>{audit.source} · Aktarım anındaki inceleme</span></div><button type="button" autoFocus onClick={onClose}>Kapat</button></header>
-    <p>Bu dosya tasarım taslağıdır. Veri, ilişkiler ve özgün ölçü formülleri aktarılmadı. “Yerleşim eşlendi” tam biçim veya hesap eşdeğerliği anlamına gelmez. Sonradan yapılan düzeltmeler bu geçmiş kaydını değiştirmez.</p>
+    <p>{audit.scope === "layout_only" ? "Bu dosya tasarım taslağıdır. Veri, ilişkiler ve özgün ölçü formülleri aktarılmadı." : `Power BI aktarımı · ${audit.model?.tables ?? 0} tablo, ${audit.model?.measures ?? 0} özgün ölçü, ${audit.model?.relationships ?? 0} ilişki. ${audit.data?.rows?.toLocaleString("tr-TR") ?? 0} satır alındı. ${audit.data?.status === "loaded" ? "Gömülü veri alındı." : audit.data?.status === "partial" ? "Bazı tabloların verisi alınamadı; bulguları kontrol edin." : "Yerel veri kopyası yok veya okunamadı; tablolar boş olabilir."}`} “Yerleşim eşlendi” tam biçim veya hesap eşdeğerliği anlamına gelmez. Sonradan yapılan düzeltmeler bu geçmiş kaydını değiştirmez.</p>
     <div className="import-audit-summary">{Object.entries(labels).map(([key, label]) => <span key={key}>{label}: <strong>{audit.summary[key] ?? 0}</strong></span>)}</div>
     <Findings items={audit.issues} />
     <div className="import-audit-tools"><input type="search" aria-label="Uyumluluk raporunda ara" placeholder="Sayfa, nesne, alan veya hata kodu ara" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -37,7 +37,7 @@ function AuditDialog({ audit, onClose, onLocate }: { audit: ImportAudit; onClose
         {visuals.map((v, vi) => <details key={vi} className="import-audit-visual"><summary>{labels[v.status]} · {v.sourceType} · {v.sourceId} ({v.issues.length} bulgu)</summary>
           <p>Floem: {v.targetType || "yok"} · {v.targetIds.join(", ") || "Nesne oluşturulmadı"}</p>
           {onLocate && v.targetIds.map((id) => <button type="button" key={id} onClick={() => { onLocate(page.id, id); onClose(); }}>Nesneye git: {id}</button>)}
-          {v.fields.length > 0 && <table><thead><tr><th>Rol</th><th>Alan</th><th>Durum</th></tr></thead><tbody>{v.fields.map((f, i) => <tr key={i}><td>{f.role}</td><td>{f.table}[{f.name || "Çözülemedi"}]</td><td>{f.status === "partial" ? "Başvuru / taslak" : "Eşlenmedi"}</td></tr>)}</tbody></table>}
+          {v.fields.length > 0 && <table><thead><tr><th>Rol</th><th>Alan</th><th>Durum</th></tr></thead><tbody>{v.fields.map((f, i) => <tr key={i}><td>{f.role}</td><td>{f.table}[{f.name || "Çözülemedi"}]</td><td>{f.status === "mapped" ? "Modelle eşlendi" : f.status === "partial" ? "Başvuru / taslak" : "Eşlenmedi"}</td></tr>)}</tbody></table>}
           <Findings items={v.issues} />
         </details>)}
       </section>;
@@ -49,6 +49,6 @@ export function ImportCompatibility({ audit, onLocate }: { audit?: ImportAudit |
   const [open, setOpen] = useState(false);
   if (!audit || audit.version !== 1) return null;
   return <div className="import-audit-control"><button type="button" onClick={() => setOpen(true)}>⚠ Power BI aktarım raporu</button>
-    <p>Tasarım taslağı · {audit.summary.unsupported ?? 0} desteklenmeyen, {audit.summary.partial ?? 0} kısmi nesne</p>
+    <p>{audit.scope === "layout_only" ? "Tasarım taslağı" : audit.data?.status === "loaded" ? `Gömülü veri · ${audit.data.rows.toLocaleString("tr-TR")} satır` : audit.data?.status === "partial" ? "Kısmi veri aktarımı" : "Veri kopyası alınamadı"} · {audit.summary.unsupported ?? 0} desteklenmeyen, {audit.summary.partial ?? 0} kısmi nesne</p>
     {open && <AuditDialog audit={audit} onClose={() => setOpen(false)} onLocate={onLocate} />}</div>;
 }

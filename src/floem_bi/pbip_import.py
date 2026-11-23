@@ -154,7 +154,8 @@ class _Bindings:
             self.columns[table].setdefault("__floem_placeholder", "double")
             return {"measure": self.measures[key]}
         self.columns[table][name] = "double"
-        return {"table": table, "column": name, "agg": "sum"}
+        agg = {0: "sum", 1: "avg", 2: "distinctcount", 3: "min", 4: "max", 5: "count"}.get(field.get("Aggregation", {}).get("Function"), None) if kind == "aggregation" else "sum"
+        return {"table": table, "column": name, "agg": agg} if agg else None
 
 
 def _text(objects: dict) -> tuple[str, dict]:

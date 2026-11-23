@@ -8,6 +8,7 @@ interface DocumentApi {
   apply(ops: ModelOp[]): Promise<boolean>;
   save(saveAs?: boolean): Promise<boolean>;
   open(): Promise<void>;
+  opening: boolean;
   newDocument(): Promise<void>;
   reload(): Promise<void>;
   setDoc(d: DocumentState): void;
@@ -37,6 +38,8 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const [doc, setDocState] = useState<DocumentState | null>(null);
   const [error, setError] = useState<UiError | null>(null);
   const [job, setJob] = useState<Job | null>(null);
+  const [opening, setOpening] = useState(false);
+  const openingRef = useRef(false);
   const docRef = useRef<DocumentState | null>(null);
   const loadGeneration = useRef(0);
   const flushers = useRef(new Set<() => Promise<void>>());
@@ -93,6 +96,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
 
   const save = useCallback(
     async (saveAs = false) => {
+      if (openingRef.current) return false;
       await flushAll();
       const current = docRef.current;
       if (!current) return false;
@@ -114,15 +118,21 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   );
 
   const openPath = useCallback(async (path: string, confirmDirty = true) => {
+    if (openingRef.current) return;
     if (confirmDirty && docRef.current?.dirty && !window.confirm(DISCARD)) return;
     loadGeneration.current += 1;
+    openingRef.current = true; setOpening(true);
+    setError(null);
     try {
+      await flushAll();
       setDoc(await client.openDocument(path));
       setJob(null);
     } catch (e) {
       setError(toUiError(e));
+    } finally {
+      openingRef.current = false; setOpening(false);
     }
-  }, [client, setDoc]);
+  }, [client, setDoc, flushAll]);
 
   const open = useCallback(async () => {
     if (docRef.current?.dirty && !window.confirm(DISCARD)) return;
@@ -140,6 +150,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   }, [Boolean(doc), openPath]);
 
   const newDocument = useCallback(async () => {
+    if (openingRef.current) return;
     if (docRef.current?.dirty && !window.confirm(DISCARD)) return;
     try {
       setDoc(await client.newDocument());
@@ -161,7 +172,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   // Kısayollar: Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+N
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!e.ctrlKey || e.altKey) return;
+      if (!e.ctrlKey || e.altKey || openingRef.current) return;
       const k = e.key.toLowerCase();
       if (k === "s") {
         e.preventDefault();
@@ -180,7 +191,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ doc, apply, save, open, newDocument, reload, setDoc, patchDoc, error, setError, job, trackJob: setJob, registerFlush }}
+      value={{ doc, apply, save, open, opening, newDocument, reload, setDoc, patchDoc, error, setError, job, trackJob: setJob, registerFlush }}
     >
       {children}
     </Ctx.Provider>

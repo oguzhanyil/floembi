@@ -20,6 +20,8 @@ dependencies = [
   "pyarrow",      # Apache-2.0 (içe aktarımda kaynak → DuckDB veri taşıma)
   "PyNaCl>=1.5", # Apache-2.0 (Gateway sealed box)
   "websockets>=14", # BSD-3 (Gateway outbound WebSocket)
+  "pbixray==0.15.5", # MIT; PBIX bağımlılık istisnası kullanıcı tarafından onaylandı (DEVIR.md)
+  "numpy==2.5.5", # BSD ve onaylı Windows wheel bileşenleri; dağıtım lisansı incelenen sürüm
 ]
 
 [project.optional-dependencies]

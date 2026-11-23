@@ -38,7 +38,7 @@ export function App() {
 
 function Shell() {
   const client = useClient();
-  const { doc, save, open, newDocument, error, setError, job, trackJob } = useDocument();
+  const { doc, save, open, opening, newDocument, error, setError, job, trackJob } = useDocument();
   const [view, setView] = useState<View>("rapor");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [getData, setGetData] = useState(false);
@@ -250,14 +250,14 @@ function Shell() {
               <button onClick={() => setViewAs(null)}>Görüntülemeyi durdur</button>
             </div>
           )}
-          {view === "rapor" && tableCount > 0 && (
+          {view === "rapor" && (tableCount > 0 || doc?.report.pages.some((p) => p.visuals.length > 0)) && (
             <ReportView
               key={doc?.id}
               viewAs={activeViewAs}
               onEditMeasure={(name) => setMeasureEdit({ mode: "edit", name })}
             />
           )}
-          {view === "rapor" && tableCount === 0 && (
+          {view === "rapor" && tableCount === 0 && !doc?.report.pages.some((p) => p.visuals.length > 0) && (
             <div className="empty-state">
               <h2>Rapora veri ekleyin</h2>
               <p>Başlamak için bir kaynağa bağlanın. Yüklediğiniz tablolar burada görselleştirilebilecek.</p>
@@ -268,7 +268,7 @@ function Shell() {
                 </button>
                 <button className="tile" onClick={() => void open()}>
                   <strong>Dosya aç</strong>
-                  <span>Kayıtlı .floem raporunu aç</span>
+                  <span>Floem veya Power BI · .pbip / .pbix</span>
                 </button>
               </div>
             </div>
@@ -320,6 +320,7 @@ function Shell() {
         />
       )}
       {navigator && <Navigator connection={navigator} onClose={() => setNavigator(null)} onLoad={loadFromNavigator} />}
+      {opening && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Dosya açılıyor"><div className="modal" role="status" aria-busy="true"><h2>Dosya açılıyor…</h2><p>Power BI dosyalarında yerleşim, model ve gömülü veri aktarımı biraz sürebilir.</p></div></div>}
       {job && <JobDialog onShowModel={() => setView("model")} />}
       {publishing && <PublishDialog onClose={() => setPublishing(false)} />}
       {rolesOpen && <RolesDialog onClose={() => setRolesOpen(false)} />}

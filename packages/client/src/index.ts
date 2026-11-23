@@ -580,7 +580,10 @@ export interface ImportVisualAudit {
   issues: ImportFinding[];
 }
 export interface ImportAudit {
-  version: 1; source: string; scope: "layout_only"; summary: Record<string, number>;
+  version: 1; source: string; scope: "layout_only" | "model_only" | "model_and_data"; summary: Record<string, number>;
+  sourceFormat?: "pbip" | "pbix";
+  data?: { rows: number; tables: Record<string, number>; status: "loaded" | "unavailable" | "partial" };
+  model?: { tables: number; measures: number; relationships: number; roles: number; unsupportedMeasures: number };
   issues: ImportFinding[];
   pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];
 }

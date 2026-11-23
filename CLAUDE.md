@@ -27,6 +27,10 @@ aşağıdaki listede yer alanlar.
   0BSD lisanslı kod veya bağımlılık önerebilirsin (ISC ve 0BSD 18.11.2026'da
   eklendi; MIT ile aynı izinleri verirler). MIT-0 da MIT'in atıf şartsız hâlidir.
   PyInstaller (GPL + bootloader istisnası) yalnızca derleme aracı olarak onaylıdır.
+  Kullanıcı 23.11.2026'da PBIX gömülü veri desteği için PBIXRay bağımlılıkları
+  özelinde NumPy Windows dağıtımındaki Zlib, CC0 ve GPL + GCC Runtime Exception
+  bileşenlerine istisna verdi. Bu genel GPL izni değildir; kapsam ve bildirimler
+  `docs/powerbi-dosya-acma.md` içindedir. APSW için alternatif MIT lisansı seçildi.
 - "Sadece UX referansı" grubundaki repolardan kod KOPYALAMA. Bunları yalnızca
   fikir ve UX referansı olarak incele ve raporda açıkça belirt.
 - Her repoda lisansı LICENSE dosyasından tekrar doğrula. Aşağıdaki tablo

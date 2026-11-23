@@ -1,6 +1,8 @@
 # Floem BI: devir notu (23.11.2026)
 
 Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. Gerçek kaynak/kullanıcı kabulü ve F14 canlı Analytics adaptörü açık. Sırada gerçek süreç üzerinde kabul; ERP'ye işlem yazma ayrı tasarım/yetkilendirme kapsamında.
+Power BI dosyalarını Desktop Aç/Ctrl+O ile alma eklendi; ayrıntılar
+[Power BI dosya açma](docs/powerbi-dosya-acma.md). Bu, F06 ölçü mutabakatını kapatmaz.
 F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
@@ -46,6 +48,11 @@ PBIP taslaklarında gerçek veri yoktur.
 
 1. **Lisans:** yalnızca MIT, Apache-2.0, BSD, ISC, 0BSD, MIT-0 lisanslı bağımlılıklar kullanılabilir.
    - PyInstaller yalnızca derleme aracı olarak onaylı.
+   - **23.11.2026 kullanıcı onayı:** PBIXRay bağımlılıklarının NumPy Windows
+     dağıtımındaki Zlib, CC0 ve GPL + GCC Runtime Exception bileşenleri yalnız
+     PBIX gömülü veri okuma dağıtımı için onaylandı. Genel GPL yasağı sürer.
+     APSW'nin izin verdiği alternatifler arasından MIT seçildi. Sürüm/lisans
+     envanteri ve dağıtım bildirimleri [burada](docs/powerbi-dosya-acma.md).
    - AGPL, GPL, ELv2 ya da MPL kullanılamaz. Yeni bağımlılık eklemeden önce lisansını doğrulayın.
 2. **Kimlik bilgileri** dosyaya, depoya ve günlüğe düz metin olarak yazılmaz.
    - Desktop'ta Windows Kimlik Bilgisi Yöneticisi (`keyring`) kullanılır.
@@ -172,6 +179,34 @@ npm run web:build                          # sunucunun sunduğu web arayüzü
   Chromium turu, typecheck ve Desktop/web derlemeleri geçti. Gerçek `.floem` ve
   geçici kimlik doğrulamalı sunucuda izleyici önerisi, yönetici sürüm engeli,
   ret/geçmiş, 180→162 satış / 72→54 kâr ve üç viewport/DPR doğrulandı.
+
+### 23.11.2026 Power BI dosya açma uygulandı; hesap mutabakatı açık
+
+- Desktop **Aç/Ctrl+O**: `.pbip`, alternatif `.pbib`, `.pbix`, `definition.pbir`.
+  Kaynak değişmez; yeni/kirli belge ayrı `.floem` olarak kaydedilir. Başlangıç
+  dosya argümanı da destekler; Windows Power BI varsayılan uygulaması değiştirilmez.
+- Yeni `powerbi_layout`, `powerbi_model`, `powerbi_open`, `powerbi_worker`:
+  eski Layout/PBIR, TMDL/BIM, PBIX DataModel ve PBIP yerel `cache.abf`.
+  Kaynak M/SQL/bağlantı çalıştırılmaz veya kaydedilmez. Gömülü veri anlık görüntüdür.
+- PBIXRay 0.15.5, incelenen NumPy 2.5.5 Windows dağıtımı ve onaylı lisans
+  istisnası üstte kayıtlı. APSW için MIT seçildi; geçişli özgün lisans metinleri
+  ve `POWERBI-THIRD-PARTY-NOTICES.txt` servis paketine dahil.
+- Yerel okuyucu ayrı süreçte; 240 sn, 4 GB geçici alan, Windows 2 GB RAM sınırı.
+  Bozuk/başarısız dosyada eski belge korunur. Tablo kısmi veri geri alınır.
+  Kaynak roller bütün tablolar için kapalı alınır; güvenlik uyarlaması gerekir.
+- Aktarım raporu gerçek satır/model sayılarını, eksik veri ve uyarlanamayan ölçüleri
+  gösterir. Özgün formüller korunur; tam Power BI hesap/görsel eşdeğerliği açık.
+- Gerçek kullanıcı projesi: 18 sayfa, 28 tablo, 135 ölçü, 542.926 satır;
+  116 ölçü FDX uyarlaması istiyor. Dönüşüm `data/PowerBI-SAPB1Demo-Imported.floem`.
+  Kaynak dosyalar/şirket verisi Git'e eklenmedi.
+- Doğrulama: **371 Python geçti / 1 atlandı; 84 saf TS kontrolü**, 33 nesneli
+  tam Chromium, typecheck ve Desktop/web/Windows servis derlemeleri geçti.
+  Üretim Desktop App + gerçek servis: PBIX kartı 45, 6 tablo satırı, toplam 9
+  gömülü satır, `.floem` kaydı, bozuk dosyada koruma, boş veri ve tablosuz metin.
+  Paketli ana servis de ayrı paketli okuyucuyla 9 satır açtı; lisans dosyaları
+  pakette kontrol edildi. Yerel Electron dosya seçici elle kabulü ayrıca yapılabilir.
+- Kullanım/sınırlar/test komutları: [Power BI](docs/powerbi-dosya-acma.md).
+  F06-2–5, F12 gerçek kaynak kabulü ve F14 canlı Analytics adaptörü açık kalır.
 
 ### 23.11.2026 F14 BI tarafı ve yerel pilot uygulandı; canlı Analytics kabulü açık
 

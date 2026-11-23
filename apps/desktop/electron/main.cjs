@@ -27,7 +27,7 @@ const token = crypto.randomBytes(24).toString("hex");
 function argumentFileToOpen(argv = process.argv, cwd = process.cwd()) {
   const args = argv.slice(app.isPackaged ? 1 : 2);
   for (const arg of args) {
-    if (!arg.toLowerCase().endsWith(".floem")) continue;
+    if (![".floem", ".pbip", ".pbib", ".pbix", ".pbir"].includes(path.extname(arg).toLowerCase())) continue;
     const file = path.resolve(cwd, arg);
     if (fs.existsSync(file)) return file;
   }
@@ -225,7 +225,7 @@ const FLOEM_FILTER = [{ name: "Floem BI dosyası", extensions: ["floem"] }];
 
 ipcMain.handle("floem:open-file-dialog", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
-  const r = await dialog.showOpenDialog(win, { title: "Aç", filters: FLOEM_FILTER, properties: ["openFile"] });
+  const r = await dialog.showOpenDialog(win, { title: "Floem veya Power BI dosyası aç", filters: [{ name: "Floem ve Power BI", extensions: ["floem", "pbip", "pbib", "pbix", "pbir"] }, ...FLOEM_FILTER], properties: ["openFile"] });
   return r.canceled ? null : r.filePaths[0];
 });
 

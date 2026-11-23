@@ -94,6 +94,15 @@ Yeni verili örnek: **`data/SAPB1Demo-Floem-F05.floem` → Tasarım Atölyesi**.
 [Kullanım, dosya sözleşmesi ve testler](docs/f05-grup-kapsayici-ve-yerlesim.md).
 Yerleşim/geçmiş testleri: `node tests/design/run.mjs`. F07B kitaplığı ve F10A görünümü de hazırdır.
 
+## Power BI dosyası açma
+
+Desktop'ta **Aç / Ctrl+O** ile `.pbip`, `.pbib`, `.pbix` veya `definition.pbir`
+seçilebilir. Desteklenen yerleşim/model ve varsa gömülü veri yeni belgeye alınır;
+**Ctrl+S** ayrı `.floem` oluşturur. Özgün Power BI dosyası korunur. Eksik veri,
+FDX uyarlaması ve görsel kayıpları **Power BI aktarım raporu** içinde açıklanır.
+PBIP dosyasını yanındaki Report/SemanticModel klasörleriyle birlikte taşıyın.
+[Kullanım, kapsam, sınırlar ve lisans kaydı](docs/powerbi-dosya-acma.md).
+
 ## Kurulum ve çalıştırma
 
 ```bash

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hmac
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -178,15 +179,20 @@ def create_app(
     component_store = ComponentStore(store.dir)
     startup_error: dict | None = None
     first: Document | None = None
+    def load_document(path):
+        if Path(path).suffix.lower() == ".floem": return Document.open(work_dir, path)
+        from ..powerbi_worker import import_isolated
+        return import_isolated(work_dir, path)
     if open_path:                                   # .floem dosyasına çift tıklayarak açılış
         try:
-            first = Document.open(work_dir, open_path)
+            first = load_document(open_path)
         except FloemFileError as e:
             startup_error = {"code": "file_error", "message": e.message, "detail": e.detail}
     holder: dict[str, Document] = {"doc": first or Document.new(work_dir)}
     app.state.startup_error = startup_error
     app.state.runner = runner
     app.state.holder = holder
+    loading_lock = threading.Lock()
 
     def doc() -> Document:
         return holder["doc"]
@@ -322,8 +328,14 @@ def create_app(
     @app.post("/document/open", dependencies=[Depends(auth)])
     def open_document(body: PathIn):
         ensure_idle()
-        replace_doc(Document.open(work_dir, body.path))
-        return doc().state()
+        if not loading_lock.acquire(blocking=False):
+            raise DocumentError("Bir dosya açılıyor; işlem tamamlanana kadar bekleyin", code="file_busy")
+        try:
+            candidate = load_document(body.path)
+            replace_doc(candidate)
+            return doc().state()
+        finally:
+            loading_lock.release()
 
     @app.post("/document/save", dependencies=[Depends(auth)])
     def save_document(body: SaveIn | None = None):

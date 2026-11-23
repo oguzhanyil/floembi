@@ -6,18 +6,20 @@
 #
 # onedir modu bilinçli seçildi: onefile her açılışta %TEMP%'e açılır (yavaş başlar)
 # ve antivirüslerin yanlış alarmına daha sık takılır.
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 
 hiddenimports = (
     collect_submodules("sqlglot.dialects")      # lehçeler tembel (lazy) yükleniyor
     + collect_submodules("uvicorn")             # loop/protocol/lifespan dinamik seçiliyor
     + ["keyring.backends.Windows", "pyodbc"]
+    + collect_submodules("pbixray")
 )
 
 a = Analysis(
     ["floem_service_entry.py"],
     pathex=["../src"],
     hiddenimports=hiddenimports,
+    datas=copy_metadata("pbixray", recursive=True) + [("POWERBI-THIRD-PARTY-NOTICES.txt", ".")],
     excludes=["tkinter", "pytest", "IPython", "matplotlib", "PIL", "numpy.tests"],
     noarchive=False,
 )
