@@ -262,13 +262,12 @@ class Document:
         """Eklenen/düzenlenen ölçüler derlenebilmeli (söz dizimi, ad çözümleme, desteklenen fonksiyonlar)."""
         if not names:
             return
-        from ..compiler import CompileError, MeasureCompiler
-        from ..compiler import ir as _ir
+        from ..compiler import CompileError, QueryRequest, SqlGenerator
 
         model = SemanticModel(tanim)
         for name in names:
             try:
-                MeasureCompiler(model).measure(name, _ir.Context())
+                SqlGenerator(model).compile(QueryRequest([], [name]))
             except CompileError as e:
                 raise ModelError(f"[{name}] {e.message}") from e
 
@@ -293,8 +292,7 @@ class Document:
 
     def validate_dax(self, expression: str, table: str | None = None) -> dict:
         """Formül çubuğu için: hataları konumlarıyla döndürür (kaydetmeden)."""
-        from ..compiler import CompileError, MeasureCompiler
-        from ..compiler import ir as _ir
+        from ..compiler import CompileError, QueryRequest, SqlGenerator
         from ..dax import DaxSyntaxError, parse
 
         try:
@@ -304,11 +302,11 @@ class Document:
         with self.lock:
             model, _ = self._semantic_engine()
         try:
-            MeasureCompiler(model).expression(expression, _ir.Context())
-        except CompileError as e:
-            span = e.span
+            SqlGenerator(model).compile(QueryRequest([], [], expressions=[("değer", expression)]))
+        except (CompileError, ModelError) as e:
+            span = getattr(e, "span", None)
             return {"ok": False, "errors": [{
-                "message": e.message, "start": span.start if span else None, "end": span.end if span else None,
+                "message": getattr(e, "message", str(e)), "start": span.start if span else None, "end": span.end if span else None,
             }]}
         return {"ok": True, "errors": []}
 

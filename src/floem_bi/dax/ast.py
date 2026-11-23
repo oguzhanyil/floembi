@@ -48,6 +48,11 @@ class Name(Node):
 
 
 @dataclass(frozen=True)
+class Omitted(Node):
+    """Çağrıda varsayılan değeri seçen boş argüman."""
+
+
+@dataclass(frozen=True)
 class Call(Node):
     name: str          # büyük harfe çevrilmiş
     args: tuple[Node, ...]

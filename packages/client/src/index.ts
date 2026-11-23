@@ -337,7 +337,7 @@ export interface DiagramPosition {
 export type VisualType =
   | "table"
   | "card" | "multicard" | "kpi"
-  | "column" | "bar" | "stackedcolumn" | "stackedbar" | "line" | "area"
+  | "column" | "bar" | "stackedcolumn" | "stackedbar" | "line" | "area" | "combo" | "funnel"
   | "pie" | "donut"
   | "matrix" | "treegrid"
   | "scatter" | "treemap" | "heatmap" | "waterfall" | "gauge" | "progress"
@@ -427,6 +427,19 @@ export interface ContainerLayout {
 }
 
 export interface VisualFormat {
+  paragraphs?: { align?: "left" | "center" | "right"; runs: { text: string; color?: string; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean }[] }[];
+  cardLabelAbove?: boolean;
+  cardLabelBold?: boolean;
+  cardLabelColor?: string;
+  cardLabelSize?: number;
+  cardLabelFamily?: string;
+  cardValueBold?: boolean;
+  cardValueVisible?: boolean;
+  cardAlignment?: "left" | "center" | "right";
+  cardColumns?: number;
+  cardDisplayUnits?: number;
+  cardPrecision?: number;
+  cardBlankText?: string;
   color?: string;
   /** Metin davranışı; kaydırma yalnız kullanıcı seçerse açılır. */
   textOverflow?: "wrap" | "ellipsis" | "scroll" | "grow";
@@ -509,6 +522,7 @@ export interface VisualAction {
   type: "none" | "page" | "next" | "previous" | "back" | "reset" | "toggle" | "url" | "function" | "menu";
   /** Kaynak sayfanın firma/dönem/seçim filtrelerini detay sayfasına taşır. */
   keepContext?: boolean;
+  visibility?: Record<string, boolean>;
   pageId?: string;
   visualId?: string;
   url?: string;
@@ -589,7 +603,7 @@ export interface ImportVisualAudit {
 export interface ImportAudit {
   version: 1; source: string; scope: "layout_only" | "model_only" | "model_and_data"; summary: Record<string, number>;
   sourceFormat?: "pbip" | "pbix";
-  data?: { rows: number; tables: Record<string, number>; status: "loaded" | "unavailable" | "partial" };
+  data?: { rows: number; tables: Record<string, number>; status: "loaded" | "unavailable" | "partial" | "synthetic" };
   model?: { tables: number; measures: number; relationships: number; roles: number; unsupportedMeasures: number };
   issues: ImportFinding[];
   pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];

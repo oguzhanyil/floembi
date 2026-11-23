@@ -106,7 +106,9 @@ def cached_model(reader, name, issues):
             table = Tablo(ad=table_name, kaynak=TabloKaynak(katman="veri", tablo=f"pbi_{len(tables)}"))
             model.tablolar.append(table); tables[table_name] = table
         expression = measure.get("Expression")
-        tables[table_name].olculer.append(Olcu(ad=str(measure["Name"]), ifade=expression if isinstance(expression, str) and expression else "BLANK()"))
+        folder, fmt = measure.get("DisplayFolder"), measure.get("FormatString")
+        tables[table_name].olculer.append(Olcu(ad=str(measure["Name"]), ifade=expression if isinstance(expression, str) and expression else "BLANK()",
+                                              klasor=folder if isinstance(folder,str) else None, bicim=fmt if isinstance(fmt,str) else None))
     for r in reader.relationships.to_dict(orient="records"):
         add_relationship(model, (r.get("FromTableName"), r.get("FromColumnName"), r.get("ToTableName"), r.get("ToColumnName"), r.get("Cardinality"), str(r.get("CrossFilteringBehavior", "")).lower() in {"bothdirections", "both", "2"}, r.get("IsActive", True)), issues)
     try:

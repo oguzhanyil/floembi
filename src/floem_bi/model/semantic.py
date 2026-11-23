@@ -176,7 +176,17 @@ class SemanticModel:
                 errors.append(f"[{m.ad}] {e.render()}")
                 continue
             refs: set[str] = set()
-            self._collect(node, refs, errors, m.ad)
+            from ..compiler import CompileError, QueryRequest, SqlGenerator
+            from ..compiler.table_query import advanced
+            try:
+                if advanced(node,self,set()):
+                    # Sanal tablo sütunlarının adları yalnız iteratörün satırında
+                    # çözülebilir. Bağımlılık döngülerini aynı bağlayıcı denetler.
+                    SqlGenerator(self).compile(QueryRequest([], [m.ad]))
+                else:
+                    self._collect(node, refs, errors, m.ad)
+            except (CompileError, ModelError, DaxSyntaxError) as err:
+                errors.append(f"[{m.ad}] {err}")
             deps[key] = refs
         for t in self.tanim.tablolar:
             for c in t.sutunlar:

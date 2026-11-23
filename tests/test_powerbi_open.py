@@ -177,6 +177,27 @@ def test_chunk_failure_discards_previously_imported_rows(project, tmp_path):
     finally: doc.close()
 
 
+def test_missing_report_field_does_not_discard_cached_rows(project, tmp_path):
+    import pandas as pd
+    from floem_bi.model.schema import Sutun
+
+    doc = open_powerbi(tmp_path / "work", project)
+    table = doc.tanim.tablolar[0]
+    table.sutunlar.append(Sutun(ad="EskiAlan", tip="string"))
+    doc.con.execute('ALTER TABLE veri.pbi_0 ADD COLUMN "EskiAlan" VARCHAR')
+    class Reader:
+        tables = ["Satis"]
+        def iter_table(self, *args, **kwargs):
+            yield pd.DataFrame({"Tutar": [10., 20.]})
+    try:
+        issues = []
+        assert _fill_table(doc, table, Reader(), issues, {"Tutar"}) == 2
+        assert doc.con.execute('SELECT sum("Tutar"), count("EskiAlan") FROM veri.pbi_0').fetchone() == (30, 0)
+        assert not issues
+    finally:
+        doc.close()
+
+
 def test_measure_only_tables_and_unreadable_security_are_preserved_closed():
     import pandas as pd
     class Reader:

@@ -79,6 +79,13 @@ class Func(Expr):
 
 
 @dataclass(frozen=True)
+class ColumnExtremum(Expr):
+    """Hesaplanmış sütunda filtre bağlamından bağımsız MIN/MAX değeri."""
+    function: str
+    key: ColKey
+
+
+@dataclass(frozen=True)
 class FrozenScalar(Expr):
     """VAR'ın tanımlandığı filtre bağlamındaki değeri; satır filtresinde değişmez."""
     value: Expr

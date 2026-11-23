@@ -22,5 +22,11 @@ export async function testPowerBiAppearance({ evaluate, waitFor, open }) {
   await waitFor('document.querySelector(".visual.initially-hidden")');
   await evaluate(`document.querySelector('[role="treeitem"][title^="background_"]').click()`);
   await waitFor('document.querySelectorAll(".page .visual").length === 4');
+  await evaluate(`document.querySelector('.ribbon button[aria-label="İzleyici modu"]').click()`);
+  await waitFor('document.querySelector(".visual.preview")');
+  await evaluate(`document.querySelector('.v-action-button').click()`);
+  await waitFor('document.querySelectorAll(".page .visual").length === 6');
+  assert(await evaluate(`Boolean(document.querySelector('[data-visual-id^="mask_"]'))`));
+  console.log("PASS: Kaynak yer işaretine bağlı düğme, izleyicide gizli grubu alt öğesiyle açtı.");
   console.log("PASS: PBIX iç içe iki grup mutlak konumu korudu; gizli grup/alt maske tasarım ve izleyicide gizlendi, katman seçimiyle düzenlendi; tema/ikon/köşe korundu.");
 }

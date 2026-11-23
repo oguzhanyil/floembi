@@ -58,6 +58,7 @@ class MeasureCompiler:
         self._source = ""            # hata mesajları için o an derlenen metin
         self._stack: list[str] = []  # döngü koruması
         self._row_tables: list[str] = []  # bağlam geçişinde satırı yinelenen tablolar
+        self._calc_depth = 0
 
     # ------------------------------------------------------------------ giriş
     def measure(self, name: str, ctx: ir.Context) -> ir.Expr:
@@ -103,10 +104,12 @@ class MeasureCompiler:
             raise CompileError(f"Döngüsel hesaplanmış sütun: {name}")
         self._stack.append(name)
         saved = self._source
+        self._calc_depth += 1
         try:
             self._source = sutun.ifade
             return self.row(parse(sutun.ifade), key.table, {})
         finally:
+            self._calc_depth -= 1
             self._source = saved
             self._stack.pop()
 
@@ -566,7 +569,7 @@ class MeasureCompiler:
         if isinstance(node, ast.Name):
             if not node.quoted and node.name.lower() in env:
                 value = env[node.name.lower()]
-                if not _is_constant(value):
+                if not self._calc_depth and not _is_constant(value):
                     if allow_vars_from_scalar:
                         return ir.FrozenScalar(value)
                     raise self.err("Satır bağlamında yalnızca sabit değerli VAR kullanılabilir (MVP)", node)
@@ -587,8 +590,18 @@ class MeasureCompiler:
         if isinstance(node, ast.Binary):
             return self._binary(node, sub)
         if isinstance(node, ast.VarBlock):
+            if self._calc_depth:
+                local = dict(env)
+                for name, expr in node.variables:
+                    local[name.lower()] = self.row(expr, table, local)
+                return self.row(node.body, table, local)
             raise self.err("Satır bağlamında VAR MVP'de desteklenmiyor", node)
         if isinstance(node, ast.Call):
+            if self._calc_depth and node.name in ("MIN", "MAX") and len(node.args) == 1:
+                key = self.resolve_column(node.args[0])
+                if self.model.sutun(key).ifade:
+                    raise self.err("Hesaplanmış sütundaki MIN/MAX fiziksel sütun gerektirir",node)
+                return ir.ColumnExtremum(node.name,key)
             if node.name == "RELATED":
                 self._arity(node, 1)
                 key = self.resolve_column(node.args[0])

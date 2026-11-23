@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 VisualType = Literal[
     "table",                                    # veri ızgarası (Data Grid)
     "card", "multicard", "kpi",                 # kartlar
-    "column", "bar", "stackedcolumn", "stackedbar", "line", "area",
+    "column", "bar", "stackedcolumn", "stackedbar", "line", "area", "combo", "funnel",
     "pie", "donut",
     "matrix",                                   # pivot / ağaç tablo (satır + sütun grupları, alt toplamlar)
     "treegrid",                                 # hiyerarşik ağaç tablo

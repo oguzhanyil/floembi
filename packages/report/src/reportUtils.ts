@@ -34,6 +34,8 @@ const YVALUES: WellDef = { key: "values", label: "Y ekseni" };
 const TREND: WellDef = { key: "group", label: "Trend ekseni", max: 1, optional: true, dateOnly: true };
 
 export const VISUAL_DEFS: Record<VisualType, VisualDef> = {
+  combo: { label: "Sütun ve çizgi", icon: "◿", group: "Grafik", size: [440,280], category: {}, wells: [AXIS, {key:"values",label:"Sütun değerleri"}, {key:"target",label:"Çizgi değerleri"}] },
+  funnel: { label: "Huni", icon: "▽", group: "Grafik", size: [380,280], wells: [AXIS, {key:"values",label:"Aşama değeri",max:1}] },
   scenario: { label: "Senaryo", icon: "⇄", group: "Etkileşim", size: [900, 720], wells: [] },
   signal: { label: "Ölçü ve uyarı", icon: "♧", group: "Kart", size: [560, 500], wells: [] },
   lineage: { label: "Parti bağlantıları", icon: "⑂", group: "Veri", size: [800, 460], wells: [
@@ -258,13 +260,21 @@ export function formatValue(v: unknown, type: ColumnType | undefined, fmt?: stri
   if (v === null || v === undefined) return "";
   if (typeof v === "number") {
     if (fmt) {
-      if (fmt.endsWith("%")) {
-        const digits = (fmt.split(".")[1] ?? "").replace("%", "").length;
-        return `%${new Intl.NumberFormat("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v * 100)}`;
-      }
-      const prefix = fmt.startsWith("₺") ? "₺" : "";
-      const digits = (fmt.split(".")[1] ?? "").length;
-      return prefix + new Intl.NumberFormat("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v);
+      const sections = [...fmt.matchAll(/(?:[^;"\\]|\\.|"[^"]*")*(?:;|$)/g)].map(m => m[0].replace(/;$/, ""));
+      // matchAll son bölümden sonra bir boş eşleşme de üretir.
+      sections.pop();
+      const mask = sections[v < 0 ? 1 : v === 0 ? 2 : 0] || sections[0] || fmt;
+      const tokens = /[#,0]+(?:\.([0#]+))?/.exec(mask);
+      if (!tokens) return mask === "-" || /^"[^"]*"$/.test(mask) ? mask.replace(/"/g, "") : nfAuto.format(v);
+      const fraction = tokens[1] ?? "";
+      const digits = Math.min(20, fraction.length);
+      const nf = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: Math.min(digits, fraction.replace(/#/g, "").length), maximumFractionDigits: digits });
+      const percent = /%(?=(?:[^"]*"[^"]*")*[^"]*$)/.test(mask.replace(/\\./g, ""));
+      const value = v < 0 && sections[1] ? -v : v;
+      const affix = (s: string) => s.replace(/["\\]/g, "");
+      const prefix = affix(mask.slice(0, tokens.index));
+      const suffix = affix(mask.slice(tokens.index + tokens[0].length));
+      return prefix + nf.format(value * (percent ? 100 : 1)) + suffix;
     }
     if (type === "int32" || type === "int64") return nf0.format(v);
     if (type === "decimal") return nf2.format(v);

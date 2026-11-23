@@ -11,7 +11,7 @@ toplanır ve ortak gruplama sütunları üzerinden birleştirilir (MetricFlow/Cu
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
@@ -106,6 +106,7 @@ class SqlGenerator:
         self.compiler = MeasureCompiler(model, self.user)
         self.rls = self._rls_predicates(roles or [])
         self._calc_cache: dict[ColKey, ir.Expr] = {}
+        self._extrema: set[ColKey] = set()
 
     # ------------------------------------------------------------------ RLS
     def _rls_predicates(self, roles: list[str]) -> list[tuple[str, ir.Expr]]:
@@ -195,6 +196,16 @@ class SqlGenerator:
         r = lambda x: self.render(x, col_fn, slot_fn)  # noqa: E731
         if isinstance(e, ir.Lit):
             return _lit(e.value)
+        if isinstance(e, ir.ColumnExtremum):
+            if e.key in self._extrema:
+                raise CompileError("Hesaplanmış sütun ve rol filtresi döngü oluşturuyor")
+            self._extrema.add(e.key)
+            try:
+                axis = self._fallback_axis([e.key], ir.Context(), {e.key: 0})
+                fn = exp.Min if e.function == "MIN" else exp.Max
+                return exp.select(fn(this=_col("g0"))).from_(axis.subquery("fdx_domain")).subquery()
+            finally:
+                self._extrema.remove(e.key)
         if isinstance(e, ir.Col):
             calc = self._calc(e.key)
             return exp.Paren(this=r(calc)) if calc is not None else col_fn(e.key)
@@ -299,7 +310,11 @@ class SqlGenerator:
         if slot.agg == "COUNT":
             return exp.Nullif(this=exp.Count(this=arg), expression=_lit(0))
         if slot.agg == "DISTINCTCOUNT":
-            return exp.Nullif(this=exp.Count(this=exp.Distinct(expressions=[arg])), expression=_lit(0))
+            distinct = exp.Count(this=exp.Distinct(expressions=[arg.copy()]))
+            # DAX, BLANK'ı ayrı bir üye olarak sayar. Boş tablo yine BLANK verir.
+            has_blank = exp.Case(ifs=[exp.If(this=exp.GT(this=exp.Count(this=exp.Star()),
+                expression=exp.Count(this=arg)), true=_lit(1))], default=_lit(0))
+            return exp.Nullif(this=exp.Add(this=distinct, expression=has_blank), expression=_lit(0))
         raise CompileError(f"Bilinmeyen toplama: {slot.agg}")
 
     # ------------------------------------------------------------ planlama
@@ -341,6 +356,61 @@ class SqlGenerator:
         return _CteKey(slot.base, grain, filters, time, rels, native)
 
     def compile(self, req: QueryRequest) -> CompiledQuery:
+        from ..dax import ast, parse
+        from ..dax.lexer import DaxSyntaxError, Span
+        from .table_query import TablePlan, advanced
+
+        if self.dialect == "duckdb":
+            nodes = [ast.BracketRef(Span(0, 0), name) for name in req.measures]
+            try:
+                nodes.extend(parse(text) for _, text in req.expressions)
+                use_tables = [advanced(node, self.model, set()) for node in nodes]
+                if any(use_tables):
+                    try:
+                        return TablePlan(self).compile(req)
+                    except CompileError as table_error:
+                        # Geleneksel planın zaman zekâsı gibi önceden desteklediği
+                        # birleşimler sanal tablo seçimi yüzünden kaybolmasın.
+                        try:
+                            return self._compile_slots(req)
+                        except CompileError:
+                            if not all(use_tables):
+                                return self._mixed_query(req, use_tables)
+                            raise table_error
+            except DaxSyntaxError as error:
+                raise CompileError(error.message,error.span,error.source) from error
+        return self._compile_slots(req)
+
+    def _mixed_query(self, req, use_tables):
+        """Zaman zekâsı ve sanal tablo ölçülerini aynı görselde ortak eksende getir."""
+        from .table_query import TablePlan, ident
+
+        plans = []
+        for use_table in (False, True):
+            subset = replace(req, order_by=[], limit=None,
+                             measures=[n for n, flag in zip(req.measures, use_tables) if flag == use_table],
+                             expressions=[v for v, flag in zip(req.expressions, use_tables[len(req.measures):]) if flag == use_table])
+            plans.append(TablePlan(self).compile(subset) if use_table else self._compile_slots(subset))
+        groups = [str(g) for g in dict.fromkeys(req.group_by)]
+        measures = [self.model.measure(n)[1].ad for n in req.measures] + [n for n, _ in req.expressions]
+        # Her dal bir hücre/ölçü için en çok bir değer döndürür. NULL anahtarlar da
+        # aynı gruba girer. İki daldan birinde bulunmayan hücre kaybolmaz.
+        union = " UNION ALL BY NAME ".join(f"({p.sql})" for p in plans)
+        fields = [ident(g) for g in groups] + [f"max({ident(n)}) AS {ident(n)}" for n in measures]
+        sql = f"SELECT {', '.join(fields)} FROM ({union}) AS branches"
+        if groups:
+            sql += " GROUP BY " + ", ".join(map(ident, groups))
+        sql += " HAVING count(*) > 0"
+        order = req.order_by or [(g, False) for g in groups]
+        if any(n not in groups + measures for n, _ in order):
+            raise CompileError("Sıralama sütunu sonuçta yok")
+        if order:
+            sql += " ORDER BY " + ", ".join(ident(n) + (" DESC" if desc else " ASC") for n, desc in order)
+        if req.limit is not None:
+            sql += f" LIMIT {int(req.limit)}"
+        return CompiledQuery(sql, self.dialect, groups + measures, plans[0].time_keys | plans[1].time_keys)
+
+    def _compile_slots(self, req: QueryRequest) -> CompiledQuery:
         group = list(dict.fromkeys(req.group_by))
         gidx = {g: i for i, g in enumerate(group)}
         filter_map: dict[ColKey, tuple[ir.Expr, ...]] = {}

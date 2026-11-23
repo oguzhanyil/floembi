@@ -1,7 +1,9 @@
 # F06 — ortak model ve ölçü geçişi
 
 20.11.2026. Ortak model, yerel ölçüler ve kaynak geçiş haritası uygulandı.
-**135 özgün ölçünün tam aktarımı ve Power BI sonuç mutabakatı tamamlanmadı.**
+Bu belge sadeleştirilmiş ortak modelin 20 Kasım tarihli durumunu anlatır.
+23 Kasım'da özgün kaynak modelleri için ayrı FDX dosyaları ve Power BI
+karşılaştırması tamamlandı. [Güncel dosyalar ve testler](f06-kaynak-rapor-kabulu.md).
 
 ## Denenecek dosya
 
@@ -118,7 +120,7 @@ derlenememesi altındaki desteklenmeyen ölçüden kaynaklanabilir. Fonksiyonun 
 engelli ölçüde görünmesi, o fonksiyonun tamamının desteklenmediği anlamına gelmez.
 Özgün ölçü yerine sıfır/yer tutucu formül eklenmez.
 
-## Kalan F06 işleri
+## 20 Kasım'da kaydedilen F06 işleri
 
 | Sıra | İş | Kabul ölçütü |
 |---|---|---|
@@ -127,5 +129,5 @@ engelli ölçüde görünmesi, o fonksiyonun tamamının desteklenmediği anlam�
 | F06-4 | Eksik alanlar ve ana veri: kur, sistem tutarları, ürün adı/grubu, maliyet kapsamı, vade/açık kalemler, finansal satır eşlemesi | Kaynak tane düzeyi korunur; toplam çoğalması ve eksik satınalma iadesi açıkça yönetilir. |
 | F06-5 | Özgün ölçüler ve finansal sayfalar için Power BI mutabakatı | Aynı tarih/firma/muhatap/para birimi seçimleriyle ölçü bazında sonuç karşılaştırması; derleme başarısı yeterli değildir. |
 
-F05 için kullanılabilir ortak alan ve ölçü temeli hazırdır. Yukarıdaki işler,
-135 ölçünün tam geçişi tamamlanmış gibi kapatılmamalı.
+Kaynak modeller üzerinde gerçekleşen F06-2–5 kontrolleri ve ortak ERP modeline
+özgü kalan kapsam güncel kabul belgesinde açıklanır.

@@ -72,14 +72,33 @@ try {
   assert.match(await evaluate('document.querySelector(".import-audit-dialog").textContent'), /1 özgün ölçü.*0 satır alındı.*Yerel veri kopyası yok/s);
   await evaluate('document.querySelector(".import-audit-dialog header button").click()');
   await open("text"); await waitFor('document.querySelector(".v-text")?.textContent.includes("Verisiz rapor da açılır")');
+  const rich = await evaluate(`[...document.querySelectorAll(".v-text span")].map(s => [s.textContent, getComputedStyle(s).fontWeight, getComputedStyle(s).fontStyle, getComputedStyle(s).color])`);
+  assert.equal(rich[0][1], "700"); assert.equal(rich[1][2], "italic"); assert.equal(rich[1][3], "rgb(22, 77, 130)");
   assert.equal(await evaluate('(async()=> (await (await fetch("/api/verify")).json()).sourceUnchanged)()'), true);
   await testRibbon({ call, evaluate, waitFor, open });
   await testPowerBiAppearance({ evaluate, waitFor, open });
+  if (process.env.FLOEM_UI_CARD_REPORT) {
+    const report = resolve(process.env.FLOEM_UI_CARD_REPORT);
+    assert(existsSync(report), "Kartlı kabul raporu bulunamadı");
+    await evaluate(`window.fixture.localCardReport=${JSON.stringify(report)}`);
+    await open("localCardReport");
+    if (process.env.FLOEM_UI_CARD_PAGE) {
+      const tab = `[...document.querySelectorAll(".page-tabs .page-tab")].find(e => e.textContent.trim() === ${JSON.stringify(process.env.FLOEM_UI_CARD_PAGE)})`;
+      await waitFor(tab); await evaluate(`${tab}.click()`);
+    }
+    await waitFor(`[...document.querySelectorAll(".v-card-value")].some(e => /[0-9]/.test(e.textContent))`);
+    assert.equal(await evaluate('document.querySelector(".import-audit-control")?.textContent.includes("Gömülü veri")'), true);
+    console.log("PASS: Yerel kabul dosyası Desktop Aç yolundan açıldı, kaynak satır sayısı ve hesaplanan kart ekranda.");
+  }
   assert.deepEqual(browserErrors, []);
   console.log("PASS: Hatalı dosyada eski rapor korundu; PBIP özgün model/boş veri bildirimi; tablosuz metin raporu; kaynaklar değişmedi, tarayıcı çökmedi.");
   await call("Browser.close");
 } finally {
-  ws?.close(); child?.kill(); service?.kill(); server?.close();
+  ws?.close(); child?.kill();
+  // Büyük raporlarda ilk karttan sonra diğer görsellerin sorguları sürer.
+  // Devam eden istekleri yanıtlarken test servisini kapatma.
+  if (server?.listening) await new Promise(done => server.close(done));
+  service?.kill();
   const rel = relative(resolve(tmpdir()), resolve(dir));
   if (rel.startsWith("floem-powerbi-test-") && !rel.includes("..") && !isAbsolute(rel)) await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }).catch(() => {});
 }

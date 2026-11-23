@@ -35,7 +35,7 @@ def test_analysis_preserves_loss_inventory_without_writing_floem(tmp_path):
     import_report(root, output, analyze_only=True)
     assert not output.exists()
     audit = json.loads(output.with_suffix(".compatibility.json").read_text(encoding="utf-8"))
-    assert audit["summary"] == {"pages": 1, "visuals": 5, "mapped": 0, "partial": 2, "unsupported": 3, "skipped": 0}
+    assert audit["summary"] == {"pages": 1, "visuals": 5, "mapped": 0, "partial": 4, "unsupported": 1, "skipped": 0}
     assert {i["code"] for i in audit["issues"]} >= {"MODEL_NOT_IMPORTED", "ORDER_ENTRY_MISSING", "REPORT_PROPERTY_NOT_IMPORTED"}
     assert {i["code"] for i in audit["pages"][0]["issues"]} == {"FILTER_NOT_IMPORTED", "PAGE_PROPERTY_NOT_IMPORTED"}
     table = audit["pages"][0]["visuals"][-1]
@@ -48,9 +48,9 @@ def test_analysis_preserves_loss_inventory_without_writing_floem(tmp_path):
 def test_unsupported_types_are_explicit_placeholders_and_audit_survives_file(tmp_path):
     root = source(tmp_path)
     report, _model, _stats = prepare_report(root)
-    for v in report["pages"][0]["visuals"][:3]:
-        assert v["type"] == "text"
-        assert v["format"]["importWarning"] == "TYPE_UNSUPPORTED"
+    visuals = report["pages"][0]["visuals"]
+    assert [v["type"] for v in visuals[:3]] == ["combo","funnel","text"]
+    assert visuals[2]["format"]["importWarning"] == "TYPE_UNSUPPORTED"
     output = tmp_path / "test.floem"
     import_report(root, output)
     with zipfile.ZipFile(output) as z:
@@ -68,3 +68,23 @@ def test_unknown_role_and_duplicate_source_ids_do_not_claim_mapping(tmp_path):
     duplicates = [v for v in items if v["sourceId"] == "duplicate"]
     assert len(duplicates) == 2 and duplicates[0]["targetIds"] != duplicates[1]["targetIds"]
     assert all(v["fields"][0]["status"] == "unsupported" for v in duplicates)
+
+
+def test_source_chart_roles_stay_bound_to_their_own_series(tmp_path):
+    root = tmp_path / "Grafikler.Report"
+    page = root / "definition/pages/p1"
+    _write(page.parent / "pages.json", {"pageOrder": ["p1"]})
+    _write(page / "page.json", {"displayName": "Satış"})
+    for kind, roles in {
+        "lineClusteredColumnComboChart": {"Category": "Bölge", "Y": "Tutar", "Y2": "Oran"},
+        "treemap": {"Group": "Bölge", "Values": "Tutar"},
+        "funnel": {"Category": "Aşama", "Y": "Tutar"},
+    }.items():
+        query = {k: {"projections": [{"field": field("Column" if k in ("Category", "Group") else "Measure", n)}]} for k, n in roles.items()}
+        _write(page / f"visuals/{kind}/visual.json", {"name": kind, "visual": {"visualType": kind, "query": {"queryState": query}}})
+    report, _, _ = prepare_report(root)
+    by_type = {v["type"]: v for v in report["pages"][0]["visuals"]}
+    assert by_type["combo"]["target"] == [{"measure": "Oran"}]
+    for kind, category in (("treemap", "Bölge"), ("combo", "Bölge"), ("funnel", "Aşama")):
+        assert by_type[kind]["group"][0]["column"] == category
+        assert by_type[kind]["values"] == [{"measure": "Tutar"}]

@@ -16,7 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .pbip_compatibility import APPROXIMATE_TYPES, audit_visual, finding, finish_audit, write_audit
+from .pbip_compatibility import audit_visual, finding, finish_audit, write_audit
 from .document.document import Document
 from .model.schema import ModelBilgisi, ModelTanimi, Olcu, Sutun, Tablo, TabloKaynak
 from .model.semantic import SemanticModel
@@ -24,14 +24,15 @@ from .report.schema import Report
 
 
 TYPE_MAP = {
+    "InforiverFilterF39DAE8D57A743EF89F5C3809DEE2B69": "slicer",
     "card": "card", "cardVisual": "card", "multiRowCard": "multicard", "kpi": "kpi",
     "clusteredColumnChart": "column", "stackedColumnChart": "stackedcolumn",
     "clusteredBarChart": "bar", "stackedBarChart": "stackedbar",
     "lineChart": "line", "areaChart": "area", "donutChart": "donut", "pieChart": "pie",
     "tableEx": "table", "pivotTable": "matrix", "scatterChart": "scatter",
     "treemap": "treemap", "waterfallChart": "waterfall", "gauge": "gauge",
-    "lineClusteredColumnComboChart": "column", "lineStackedColumnComboChart": "stackedcolumn",
-    "funnel": "bar", "slicer": "slicer", "textbox": "text", "shape": "shape",
+    "lineClusteredColumnComboChart": "combo", "lineStackedColumnComboChart": "combo",
+    "funnel": "funnel", "slicer": "slicer", "textbox": "text", "shape": "shape",
     "image": "image", "actionButton": "shape",
 }
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -174,10 +175,29 @@ def _text(objects: dict) -> tuple[str, dict]:
     if not isinstance(general, list):
         return "", {}
     lines = []
+    paragraphs = []
     style: dict[str, Any] = {}
     for paragraph in general:
         runs = paragraph.get("textRuns", [])
         lines.append("".join(str(run.get("value", "")) for run in runs))
+        pieces = []
+        for run in runs:
+            source = run.get("textStyle") or {}
+            piece = {"text": str(run.get("value", ""))}
+            if isinstance(source.get("color"),str) and re.fullmatch(r"#[0-9a-fA-F]{6,8}",source["color"]):
+                piece["color"] = source["color"]
+            if isinstance(source.get("fontFamily"),str):
+                piece["fontFamily"] = source["fontFamily"][:100]
+            size = re.fullmatch(r"(\d+(?:\.\d+)?)(pt|px)?", str(source.get("fontSize","")))
+            if size:
+                piece["fontSize"] = min(144,max(8,round(float(size[1]) * (1 if size[2]=="px" else 4/3),2)))
+            if "fontWeight" in source:
+                piece["bold"] = str(source["fontWeight"]).lower() in {"bold","600","700"}
+            if source.get("fontStyle") == "italic": piece["italic"] = True
+            if source.get("textDecoration") == "underline": piece["underline"] = True
+            pieces.append(piece)
+        align = paragraph.get("horizontalTextAlignment")
+        paragraphs.append({"runs":pieces, **({"align":align} if align in ("left","right","center") else {})})
         if runs and not style:
             first = runs[0].get("textStyle", {})
             size = first.get("fontSize", "")
@@ -196,6 +216,8 @@ def _text(objects: dict) -> tuple[str, dict]:
             alignment = paragraph.get("horizontalTextAlignment")
             if alignment in ("left", "center", "right"):
                 style["align"] = alignment
+    if len(paragraphs)>1 or any(len(p["runs"])>1 or any(r.get("italic") or r.get("underline") for r in p["runs"]) for p in paragraphs):
+        style = {"textOverflow": "wrap", "paragraphs": paragraphs}
     return "\n".join(lines), style
 
 
@@ -217,14 +239,18 @@ def _projection(query: dict, role: str) -> list[dict]:
     return (query.get("queryState", {}).get(role) or {}).get("projections", [])
 
 
-def _button_action(raw: dict, page_ids: set[str]) -> dict | None:
+def _button_action(raw: dict, page_ids: set[str], bookmarks=None) -> dict | None:
     visual = raw.get("visual") or {}
     if visual.get("visualType") != "actionButton":
         return None
     container = visual.get("visualContainerObjects") or {}
     if _property(container, "visualLink", "show") is False:
         return None
-    if _property(container, "visualLink", "type") != "PageNavigation":
+    link_type = _property(container, "visualLink", "type")
+    if link_type == "Bookmark":
+        name = _property(container, "visualLink", "bookmark")
+        return (bookmarks or {}).get(name) if isinstance(name,str) else None
+    if link_type != "PageNavigation":
         return None
     page_id = _property(container, "visualLink", "navigationSection")
     return {"type": "page", "pageId": page_id} if isinstance(page_id, str) and page_id in page_ids else None
@@ -277,6 +303,25 @@ def _import_appearance(report_dir: Path, visual: dict, kind: str, fmt: dict) -> 
         if isinstance(font, (int, float)): fmt["fontSize"] = font * 4 / 3
         color = _property(objects, "value", "fontColor")
         if isinstance(color, str): fmt["color"] = color
+        for cat, prop, target in (("value","bold","cardValueBold"),("label","bold","cardLabelBold"),
+                                  ("value","show","cardValueVisible")):
+            val = _property(objects,cat,prop)
+            if isinstance(val,bool): fmt[target] = val
+        for cat, prop, target in (("label","fontColor","cardLabelColor"),("label","text","text"),
+                                  ("label","fontFamily","cardLabelFamily"),("value","fontFamily","fontFamily"),
+                                  ("value","showBlankAs","cardBlankText")):
+            val = _property(objects,cat,prop)
+            if isinstance(val,str): fmt[target] = val[:200]
+        label_size = _property(objects,"label","fontSize")
+        if isinstance(label_size,(int,float)): fmt["cardLabelSize"] = min(144,max(8,label_size*4/3))
+        fmt["cardLabelAbove"] = _property(objects,"label","position") == "aboveValue"
+        align = _property(objects,"value","horizontalAlignment")
+        if align in ("left","center","right"): fmt["cardAlignment"] = align
+        columns = _property(objects,"layout","columnCount")
+        if isinstance(columns,(int,float)): fmt["cardColumns"] = max(1,min(12,int(columns)))
+        for prop,target,maximum in (("labelDisplayUnits","cardDisplayUnits",10**12),("labelPrecision","cardPrecision",12)):
+            val = _property(objects,"value",prop)
+            if isinstance(val,(int,float)) and 0 <= val <= maximum: fmt[target] = int(val)
     if kind == "button":
         image = _property(objects, "icon", "image")
         icon = _image(report_dir, {"general": [{"properties": {"imageUrl": (image.get("image") or {}).get("url")}}]}) if isinstance(image, dict) else None
@@ -309,8 +354,6 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     kind = TYPE_MAP.get(original_type, "text")
     if original_type == "cardVisual" and (len(_projection(visual.get("query") or {}, "Values") or _projection(visual.get("query") or {}, "Data")) > 1 or _projection(visual.get("query") or {}, "Rows")):
         kind = "multicard"
-    if original_type in APPROXIMATE_TYPES:
-        kind = "text"
     pos = raw.get("position") or {}
     name = str(raw.get("name") or "gorsel")[:64]
     objects = visual.get("objects") or {}
@@ -354,7 +397,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     elif kind == "text":
         fmt["text"], style = _text(objects)
         fmt.update(style)
-        if original_type not in TYPE_MAP or original_type in APPROXIMATE_TYPES:
+        if original_type not in TYPE_MAP:
             fmt["text"] = f"PBIP görseli: {original_type}"
     elif kind == "image":
         data = _image(report_dir, objects)
@@ -397,12 +440,23 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
     group: list[dict] = []
     legend: list[dict] = []
     values: list[dict] = []
-    if kind == "matrix":
+    target = []
+    if kind == "combo":
+        group_roles, legend_roles, value_roles = ("Category",), (), ("Y",)
+        target = [ref for item in _projection(query,"Y2") if (ref := bindings.value(item.get("field") or {}))]
+        fmt["comboStacked"] = original_type == "lineStackedColumnComboChart"
+    elif kind == "treemap":
+        group_roles = ("Group",) if _projection(query, "Group") else ("Category",)
+        legend_roles = ()
+        value_roles = ("Values",) if _projection(query, "Values") else ("Y",)
+    elif kind == "matrix":
         group_roles, legend_roles, value_roles = ("Rows",), ("Columns",), ("Values",)
     elif kind == "table":
         group_roles, legend_roles, value_roles = (), (), ("Values",)
     elif kind == "slicer":
-        group_roles, legend_roles, value_roles = ("Values",), (), ()
+        group_roles, legend_roles, value_roles = (("column",) if original_type.startswith("InforiverFilter") else ("Values",)), (), ()
+        if original_type.startswith("InforiverFilter"):
+            fmt["slicerStyle"] = "dropdown"
     elif kind in ("card", "multicard", "kpi", "ticker"):
         group_roles, legend_roles, value_roles = (("Rows",) if original_type == "cardVisual" else ()), (), ("Values",)
     else:
@@ -434,7 +488,7 @@ def _convert_visual(report_dir: Path, raw: dict, bindings: _Bindings) -> dict | 
         "w": max(1, round(float(pos.get("width", 320)), 2)),
         "h": max(1, round(float(pos.get("height", 200)), 2)),
         "title": title,
-        "group": group, "legend": legend, "values": values,
+        "group": group, "legend": legend, "values": values, **({"target":target} if target else {}),
         "filters": [], "format": fmt,
     }
 
@@ -465,6 +519,8 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
         raise ValueError("PBIP .Report klasörü bulunamadı")
     meta = _read(pages_dir / "pages.json")
     order = meta.get("pageOrder") or sorted(p.name for p in pages_dir.iterdir() if p.is_dir())
+    from .powerbi_bookmarks import read_actions
+    bookmarks = read_actions(report_dir, order)
     bindings = _Bindings()
     pages = []
     visual_total = 0
@@ -484,7 +540,7 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
         converted_items: list[tuple[float, dict, dict]] = []
         buttons: list[tuple[float, dict, dict]] = []
         for z, raw in sorted(inputs, key=lambda item: item[0]):
-            action = _button_action(raw, set(order))
+            action = _button_action(raw, set(order), bookmarks)
             converted = _convert_visual(report_dir, raw, bindings)
             if converted is not None:
                 if action:
@@ -541,7 +597,7 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
         audited_visuals = []
         for _z, raw in sorted(inputs, key=lambda item: item[0]):
             targets = mapped_targets.get(id(raw), [])
-            entry = audit_visual(raw, targets)
+            entry = audit_visual(raw, targets, bookmarks)
             audited_visuals.append(entry)
             if entry["status"] == "unsupported":
                 for target in targets:
@@ -549,11 +605,12 @@ def prepare_report(report_dir: Path) -> tuple[dict, ModelTanimi, dict[str, int]]
         page_audit = {"id": pages[-1]["id"], "name": pages[-1]["name"], "issues": page_issues, "visuals": audited_visuals}
         audit_pages.append(page_audit)
         visual_total += len(visuals)
-    report = Report.model_validate({"version": 1, "pages": pages}).model_dump(mode="json", exclude_none=True)
+    from .powerbi_theme import report_theme
+    report = Report.model_validate({"version": 1, "pages": pages, "theme":report_theme(report_dir)}).model_dump(mode="json", exclude_none=True)
     name = report_dir.name.removesuffix(".Report")
     model = _model(name, bindings)
     SemanticModel(model)
-    report["importAudit"] = finish_audit(name, audit_pages, report_dir, report_issues)
+    report["importAudit"] = finish_audit(name, audit_pages, report_dir, report_issues, report.get("theme"))
     report = Report.model_validate(report).model_dump(mode="json", exclude_none=True)
     return report, model, {"pages": len(pages), "visuals": visual_total, "tables": len(model.tablolar)}
 

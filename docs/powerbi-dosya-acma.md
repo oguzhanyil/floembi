@@ -12,6 +12,9 @@ dosya argümanı da bu biçimleri alır; Windows'un Power BI varsayılan dosya
 ilişkilendirmesi değiştirilmez. Geliştirme sürümünde dosya seçiciyi yenilemek
 için Desktop tamamen kapatılıp `npm run desktop` ile yeniden açılmalıdır.
 
+Kaynak projelerden dönüştürülen dosyalar ve Power BI ile ölçü karşılaştırması
+için [FDX kabul belgesine](f06-kaynak-rapor-kabulu.md) bakın.
+
 ## Neler alınır?
 
 | Kaynak | Yerleşim | Model | Veri |

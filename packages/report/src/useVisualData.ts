@@ -43,6 +43,10 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
   const filters = [...v.filters, ...extra, ...(supportsDrill(v) ? drillFilters(v) : [])];
   const def = VISUAL_DEFS[v.type];
   const axis = currentAxis(v);
+  if (v.type === "combo") {
+    const values = [...v.values, ...(v.target ?? [])];
+    return axis && values.length ? { group:[axis], values, filters, limit:CHART_CATEGORY_LIMIT } : null;
+  }
   if (def.category) {
     if (!axis || !v.values.length) return null;
     const legend = v.legend ?? [];
@@ -66,6 +70,7 @@ export function buildQuery(v: Visual, extra: FilterRef[]): VisualQuery | null {
       const sort = v.state?.sort;
       return { group: v.group, values: v.values, filters, totals: v.format.showTotals !== false, limit: 10000, order_by: sort ? [sort] : [] };
     }
+    case "funnel":
     case "pie":
     case "donut":
     case "treemap":

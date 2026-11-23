@@ -75,11 +75,16 @@ aktarım raporu**, sayfa/nesne/alan bazında kayıpları gösterir. JSON/Markdow
 `data/SAPB1Demo-Taslak-F10.floem` (**boş verili taslak**).
 [Kullanım, yedi raporun bulguları ve sınırlar](docs/f10-pbip-uyumluluk.md).
 
-**F06 ortak model ve ölçü haritası hazır:** verili yeni dosya
+**Power BI kaynak raporlarını denemek için** Desktop'ta **Aç / Ctrl+O** ile
+`data/FDX-Test/SAPB1Demo.floem` veya `data/FDX-Test/DinamikFinans.floem` dosyasını seçin.
+Yedi ana projedeki 338 ölçü kendi kaynak modelinde çalışır. Yerel test rehberinde
+aynı filtrelerle Power BI'da alınan örnek tutarları bulabilirsiniz.
+[FDX kabulü ve tasarım özellikleri](docs/f06-kaynak-rapor-kabulu.md).
+
+**F06 sadeleştirilmiş ortak model örneği** için verili dosya
 `data/SAPB1Demo-Floem-F06.floem` (Desktop'ı yeniden açın, **Aç / Ctrl+O**).
 **Model → Ortak Model** sayfasında aynı tarih/muhatap filtresiyle satış, açık sipariş ve
-cari bakiyeleri inceleyin. 13 tablo, 27 ilişki, 29 yerel FDX ölçüsü; 135 özgün
-Power BI ölçüsünün tam geçişi henüz tamamlanmadı.
+cari bakiyeleri inceleyin. Bu modelde 13 tablo, 27 ilişki ve 29 yerel FDX ölçüsü bulunur.
 [Kapsam, denetim çıktısı ve kalan işler](docs/f06-ortak-model-ve-olcu-gecisi.md).
 
 Metin yerleşimi **Biçim → Metin**, zoom tuvalin altındadır. Sağ panellerin dış/ara kenarı

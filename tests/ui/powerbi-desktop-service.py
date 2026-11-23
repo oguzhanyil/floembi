@@ -34,6 +34,13 @@ with tempfile.TemporaryDirectory(prefix="floem-powerbi-ui-", dir=sys.argv[1] if 
     broken = area / "Broken.pbix"; broken.write_bytes(b"invalid")
     text = area / "Text.pbix"
     layout = {"sections": [{"name": "p1", "displayName": "Metin", "width": 1280, "height": 720, "visualContainers": [{"config": json.dumps({"name": "text", "layouts": [{"position": {"x": 10, "y": 10, "width": 500, "height": 120}}], "singleVisual": {"visualType": "textbox", "objects": {"general": [{"properties": {"paragraphs": [{"textRuns": [{"value": "Verisiz rapor da açılır"}]}]}}]}}})}]}]}
+    container = layout["sections"][0]["visualContainers"][0]
+    config = json.loads(container["config"])
+    config["singleVisual"]["objects"]["general"][0]["properties"]["paragraphs"] = [
+        {"horizontalTextAlignment": "center", "textRuns": [
+            {"value": "Verisiz ", "textStyle": {"fontWeight": "bold", "fontSize": "12pt"}},
+            {"value": "rapor da açılır", "textStyle": {"fontStyle": "italic", "color": "#164D82"}}]}]
+    container["config"] = json.dumps(config)
     with zipfile.ZipFile(text, "w") as z: z.writestr("Report/Layout", json.dumps(layout).encode("utf-16-le"))
     native = ROOT / "research/repos/pbixray/data/abc.pbix"
     pbix = None
@@ -65,6 +72,13 @@ with tempfile.TemporaryDirectory(prefix="floem-powerbi-ui-", dir=sys.argv[1] if 
     config = json.loads(mask["config"]); config["name"] = "mask"; config["parentGroupName"] = "hidden"
     config["singleVisual"].pop("display"); mask["config"] = json.dumps(config)
     appearance_layout["sections"][0]["visualContainers"] = [background, group("outer", 40, 30), group("inner", 20, 10, "outer"), button, group("hidden", 0, 0, hidden=True), mask]
+    config = json.loads(button["config"])
+    config["singleVisual"]["vcObjects"] = {"visualLink": [{"properties": {"show": lit(True), "type": lit("Bookmark"), "bookmark": lit("menu")}}]}
+    button["config"] = json.dumps(config)
+    settings = json.loads(appearance_layout["config"])
+    settings["bookmarks"] = [{"name": "menu", "options": {"suppressData": True}, "explorationState": {
+        "activeSection": "p", "sections": {"p": {"visualContainerGroups": {"hidden": {"isHidden": False}}}}}}]
+    appearance_layout["config"] = json.dumps(settings)
     with zipfile.ZipFile(appearance, "w") as z:
         z.writestr("Report/Layout", json.dumps(appearance_layout).encode("utf-16-le"))
         z.writestr("Report/StaticResources/SharedResources/BaseThemes/Sample.json", json.dumps({"background": "#FFFFFF", "foreground": "#252423", "dataColors": ["#118DFF"]}))

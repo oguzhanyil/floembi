@@ -90,7 +90,7 @@ export function AgDataGrid({
       sortable: true, resizable: true,
       hide: columnsEnabled && hidden.includes(i),
       pinned: i === 0 && format.gridPinFirstColumn ? "left" : undefined,
-      sort: sort?.index === i ? (sort.desc ? "desc" : "asc") : undefined,
+      initialSort: sort?.index === i ? (sort.desc ? "desc" : "asc") : undefined,
       cellClass: c.kind === "value" ? "v-ag-number" : undefined,
       valueFormatter: (params) => formatValue(params.value ?? null, c.type, c.format),
     })),
@@ -112,6 +112,17 @@ export function AgDataGrid({
 
   // Grid API'yi yalnız gridReady olayından sonra kullan.
   useEffect(() => { gridApi.current?.redrawRows(); }, [selected, selectedKey, rows]);
+  // Sunucu yanıtı geldiğinde sütun tanımı yeniden kurulur. Kullanıcının o
+  // sırada yaptığı ikinci başlık tıklamasını eski sıralama ile ezme.
+  useEffect(() => {
+    const api = gridApi.current;
+    if (!api) return;
+    const current = api.getColumnState().find(c => c.sort);
+    const colId = sort ? `c${sort.index}` : undefined;
+    const direction = sort ? (sort.desc ? "desc" : "asc") : undefined;
+    if (current?.colId === colId && current?.sort === direction) return;
+    api.applyColumnState({ state: colId && direction ? [{ colId, sort: direction }] : [], defaultState: { sort: null } });
+  }, [sort?.index, sort?.desc]);
   // Kapatılan araçlar görünmez bir filtre/sütun seçimi bırakmaz.
   useEffect(() => {
     if (!filtersEnabled) {

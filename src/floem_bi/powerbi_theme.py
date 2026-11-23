@@ -7,9 +7,7 @@ from pathlib import Path
 import re
 
 
-def resolve_theme(layout: dict, report: Path) -> dict:
-    config = layout.get("config") or {}
-    if isinstance(config, str): config = json.loads(config)
+def embedded_palette(config: dict, report: Path) -> dict:
     palette = {}
     for key, folder in [("baseTheme", "BaseThemes"), ("customTheme", "CustomThemes")]:
         theme = (config.get("themeCollection") or {}).get(key) or {}
@@ -19,6 +17,27 @@ def resolve_theme(layout: dict, report: Path) -> dict:
         path = report / "StaticResources/SharedResources" / folder / filename
         if not path.is_file() or path.stat().st_size > 64 * 1024 ** 2: continue
         palette.update(json.loads(path.read_text(encoding="utf-8-sig")))
+    return palette
+
+
+def report_theme(report: Path):
+    meta = report / "definition/report.json"
+    if not meta.is_file(): return None
+    palette = embedded_palette(json.loads(meta.read_text(encoding="utf-8-sig")), report)
+    valid = lambda c: isinstance(c,str) and re.fullmatch(r"#[0-9a-fA-F]{6}",c)
+    series = [c for c in palette.get("dataColors",[]) if valid(c)][:16]
+    if not series: return None
+    colors = {key:palette[source] for key,source in (("surface","background"),("text","foreground")) if valid(palette.get(source))}
+    colors["primary"] = series[0]
+    bg = colors.get("surface","#FFFFFF")
+    luminance = sum(w * int(bg[i:i+2],16) for w,i in ((.2126,1),(.7152,3),(.0722,5)))
+    return {"id":"powerbi","version":1,"mode":"dark" if luminance<128 else "light","colors":colors,"series":series}
+
+
+def resolve_theme(layout: dict, report: Path) -> dict:
+    config = layout.get("config") or {}
+    if isinstance(config, str): config = json.loads(config)
+    palette = embedded_palette(config, report)
     colors = [palette.get("background"), palette.get("foreground"), *(palette.get("dataColors") or [])]
 
     def convert(node):

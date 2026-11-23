@@ -126,7 +126,12 @@ def legacy_layout(layout: dict, target: Path):
             if raw.get("filters"): item["filters"] = raw["filters"]
             _write(page / f"visuals/v{n}/visual.json", item)
     _write(target / "definition/pages/pages.json", {"pageOrder": list(ids.values())})
-    _write(target / "definition/report.json", {"legacyLayout": True})
+    from .powerbi_bookmarks import actions
+    settings = layout.get("config") or {}
+    if isinstance(settings,str): settings = json.loads(settings)
+    bookmarks = actions(settings.get("bookmarks") or [], ids, lambda name:_id(name,"visual"))
+    _write(target / "definition/report.json", {"legacyLayout": True, "themeCollection":settings.get("themeCollection"),
+                                               "floemDisplayBookmarks":bookmarks})
 
 
 def stage_project(report: Path, target: Path, root: Path):

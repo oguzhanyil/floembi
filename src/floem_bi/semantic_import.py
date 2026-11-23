@@ -120,6 +120,7 @@ def read_tmdl(path: Path) -> SourceModel:
                 # Hesaplanmış sütun ifadesi yalnız derleme adayı modelinde tutulur.
                 table.sutunlar.append(Sutun(ad=name, tip=types.get(props.get("dataType"), "string"),
                                            ifade=expression or None, gizli=props.get("isHidden") == "true",
+                                           bicim=props.get("formatString"),
                                            anahtar=props.get("isKey") == "true"))
                 if expression:
                     calculated.append(name)

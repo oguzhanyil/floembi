@@ -9,7 +9,6 @@ import zipfile
 import pyarrow as pa
 
 from .compiler import QueryRequest, SqlGenerator
-from .dax.rename import bracket_token
 from .document.document import Document
 from .document.floemfile import FloemFileError
 from .model.schema import Sutun
@@ -29,21 +28,21 @@ def _empty_table(doc, table):
     doc.con.execute(f'CREATE TABLE veri.{quote(table.kaynak.tablo)} ({columns})')
 
 
-def _fill_table(doc, table, reader, issues):
+def _fill_table(doc, table, reader, issues, source_columns=None):
     if reader is None: return 0
-    if all(c.ad == "__floem_placeholder" for c in table.sutunlar): return 0
+    names = [c.ad for c in table.sutunlar if c.ad != "__floem_placeholder" and (source_columns is None or c.ad in source_columns)]
+    if not names: return 0
     physical = f'veri.{quote(table.kaynak.tablo)}'
     rows, size = 0, 0
     try:
         if table.ad not in reader.tables: raise ValueError("missing")
         for frame in reader.iter_table(table.ad, chunk_size=100000, strings_as_categorical=False):
-            names = [c.ad for c in table.sutunlar]
             if not set(names).issubset(frame.columns): raise ValueError("schema")
             batch = pa.Table.from_pandas(frame[names], preserve_index=False)
             rows += len(batch); size += batch.nbytes
             if rows > 10000000 or size > 1024 ** 3: raise ValueError("limit")
             doc.con.register("_powerbi_batch", batch)
-            try: doc.con.execute(f'INSERT INTO {physical} SELECT * FROM _powerbi_batch')
+            try: doc.con.execute(f'INSERT INTO {physical} ({",".join(map(quote,names))}) SELECT * FROM _powerbi_batch')
             finally: doc.con.unregister("_powerbi_batch")
         # Gömülü hesaplanmış sütun değerleri fiziksel anlık görüntü olarak kullanılır.
         for column in table.sutunlar: column.ifade = None
@@ -87,12 +86,19 @@ def open_powerbi(root: Path, path: str | Path) -> Document:
             report, placeholder, _ = prepare_report(staged)
             if not report["pages"]: report["pages"] = empty_report()["pages"]
             original_measures = {m.ad.lower() for t in model.tablolar for m in t.olculer} if model else set()
+            source_columns = {t.ad: {c.ad for c in t.sutunlar} for t in model.tablolar} if model else {}
+            known_fields = {(t.lower(), c.lower()) for t, cols in source_columns.items() for c in cols}
             for page in report["importAudit"]["pages"]:
                 for visual in page["visuals"]:
                     refs = [f for f in visual["fields"] if f["kind"] == "measure"]
                     if refs and all(f["name"].lower() in original_measures for f in refs):
                         visual["issues"] = [i for i in visual["issues"] if i["code"] != "MEASURE_PLACEHOLDER"]
-                        for field in refs: field["status"] = "mapped"
+                    for field in visual["fields"]:
+                        if field["status"] != "partial": continue
+                        if field["kind"] == "measure" and field["name"].lower() in original_measures:
+                            field["status"] = "mapped"
+                        elif field["kind"] in ("column","aggregation") and (field["table"].lower(),field["name"].lower()) in known_fields:
+                            field["status"] = "mapped"
             if model is None:
                 model = placeholder
                 issues.append(issue("SOURCE_MODEL_UNAVAILABLE", "Semantik model veya yerel veri kopyası bulunamadı. Alanlar taslak olarak alındı.", severity="error"))
@@ -123,24 +129,30 @@ def open_powerbi(root: Path, path: str | Path) -> Document:
             model.veri_kaynaklari = []
             # Yerleşimden sonradan eklenen taslak tablolar da kapalı rollerin kapsamındadır.
             model.roller = [deny_role(model, role.ad) for role in model.roller]
-            semantic = SemanticModel(model)
-            unsupported = 0
-            for table in model.tablolar:
-                for measure in table.olculer:
-                    try: SqlGenerator(semantic, "duckdb").compile(QueryRequest(group_by=[], measures=[], expressions=[(measure.ad, bracket_token(measure.ad))]))
-                    except Exception:
-                        unsupported += 1
-                        issues.append(issue("MEASURE_ADAPTATION_REQUIRED", "Ölçü ifadesi korundu; mevcut FDX motorunda uyarlama gerekli.", f"{table.ad}[{measure.ad}]", "error"))
             doc = Document.new(root, source.stem)
             doc.content.tanim = model
             counts = {}
             for table in model.tablolar:
                 _empty_table(doc, table)
-                counts[table.ad] = _fill_table(doc, table, reader, issues)
+                counts[table.ad] = _fill_table(doc, table, reader, issues,source_columns.get(table.ad,set()))
+            # Gömülü hesaplanmış sütunlar doldurulduktan sonra açılacak modeli denetle.
+            semantic = SemanticModel(model)
+            unsupported = 0
+            for table in model.tablolar:
+                for measure in table.olculer:
+                    try:
+                        SqlGenerator(semantic).compile(QueryRequest([], [measure.ad]))
+                    except Exception:
+                        unsupported += 1
+                        issues.append(issue("MEASURE_ADAPTATION_REQUIRED", "Ölçü ifadesi korundu; mevcut FDX motorunda uyarlama gerekli.", f"{table.ad}[{measure.ad}]", "error"))
             if not reader:
                 issues.append(issue("DATA_UNAVAILABLE", "Bu kaynakta okunabilir yerel veri yok. PBIP projelerinde .pbi/cache.abf her zaman bulunmaz; tablo ve model görünümü boş olabilir.", severity="error"))
             audit = report["importAudit"]
             audit["scope"] = "model_and_data" if reader else "model_only"
+            if reader:
+                for page in report["pages"]:
+                    for visual in page["visuals"]:
+                        visual["format"].pop("templatePreview", None)
             audit["source"] = source.name
             audit["sourceFormat"] = "pbix" if is_pbix else "pbip"
             audit["data"] = {"rows": sum(counts.values()), "tables": counts, "status": "partial" if any(i["code"] == "TABLE_DATA_NOT_IMPORTED" for i in issues) else "loaded" if reader else "unavailable"}

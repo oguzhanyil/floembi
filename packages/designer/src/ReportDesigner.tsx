@@ -455,6 +455,10 @@ export function ReportDesigner({ host }: { host: DesignerHost }) {
     const action = resolveVisualAction(v, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
+      if (action.visibility) {
+        setPreviewVisibility(old => ({ ...old, [action.pageId]: { ...old[action.pageId], ...action.visibility } }));
+        if (action.pageId === page.id) return;
+      }
       action.filters = action.keepContext ? journeyFilters(pageFilters, v.filters, slicerFilters(page.visuals, previewStates), crossFiltersFor(v, cross), rowFilters, action.filters)
         : rowFilters.length ? rowFilters : action.filters;
       remember();

@@ -13,6 +13,8 @@ export function VisualTypeIcon({ type }: { type: VisualType }) {
     case "tolerance": content = <><path d="M4 16h24" stroke="currentColor" strokeWidth="2" opacity=".4" /><rect x="10" y="11" width="12" height="10" fill="currentColor" opacity=".25" /><path d="M17 7v18" stroke="currentColor" strokeWidth="1.4" strokeDasharray="2 2" /><circle cx="13" cy="16" r="3" fill="currentColor" /></>; break;
     case "icon": content = <><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m10 16 4 4 8-9" fill="none" stroke="currentColor" strokeWidth="2.5" /></>; break;
     case "repeater": content = <>{[5,13,21].map(y=><g key={y}><rect x="5" y={y} width="22" height="6" rx="1.5" fill="none" stroke="currentColor"/><circle cx="9" cy={y+3} r="1.4" fill="currentColor"/><path d={`M13 ${y+3}h10`} stroke="currentColor"/></g>)}</>; break;
+    case "combo": content = <>{bar(5,16,11)}{bar(13,11,16)}{bar(21,14,13)}<path d="m4 13 8-7 7 3 9-6" stroke="currentColor" fill="none" strokeWidth="2"/></>; break;
+    case "funnel": content = <path d="M3 5h26l-5 7H8zm6 10h14l-4 6h-6zm5 9h4l-2 4z" fill="currentColor"/>; break;
     case "column":
     case "stackedcolumn":
       content = <>{[5, 11, 17, 23].map((x, i) => <g key={x}>{bar(x, [15, 9, 13, 6][i], [11, 17, 13, 20][i])}{type === "stackedcolumn" && <rect x={x} y={[10, 5, 8, 3][i]} width="4" height="4" fill="currentColor" opacity=".45" />}</g>)}</>;

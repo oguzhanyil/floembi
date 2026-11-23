@@ -141,7 +141,11 @@ class Parser:
         args: list[ast.Node] = []
         if self.tok.type is not T.RPAREN:
             while True:
-                args.append(self.expression(0))
+                # RANKX'in üçüncü (aranan değer) argümanı DAX'ta boş bırakılabilir.
+                if name_tok.value.upper() == "RANKX" and len(args) == 2 and self.tok.type is T.COMMA:
+                    args.append(ast.Omitted(self.tok.span))
+                else:
+                    args.append(self.expression(0))
                 if self.tok.type is T.COMMA:
                     self.advance()
                     continue

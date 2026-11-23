@@ -1,14 +1,17 @@
 # Floem BI: devir notu (23.11.2026)
 
 Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. Gerçek kaynak/kullanıcı kabulü ve F14 canlı Analytics adaptörü açık. Sırada gerçek süreç üzerinde kabul; ERP'ye işlem yazma ayrı tasarım/yetkilendirme kapsamında.
-Power BI dosyalarını Desktop Aç/Ctrl+O ile alma eklendi; ayrıntılar
-[Power BI dosya açma](docs/powerbi-dosya-acma.md). Bu, F06 ölçü mutabakatını kapatmaz.
-F06-2–5 kaynak ölçü/motor/mutabakat işleri açık; nihai tema seçilmedi.
+Power BI dosyaları Desktop Aç/Ctrl+O ile açılır. Dört kaynak dalındaki 260 ayrı
+formül FDX'te derlendi. Yedi ana raporun alan eşlemeleri ve ölçü kabulü
+`data/FDX-Test` altında. İki dosyanın kayıtlı verisi, diğer projelerin ayrıca
+etiketlenmiş sentetik örnekleri kullanıldı. Sadeleştirilmiş ortak ERP modeli için
+canlı kaynak kabulü ve nihai tema seçimi açık.
+[Kaynak raporlar, sayısal kabul ve test adımları](docs/f06-kaynak-rapor-kabulu.md).
 Desktop izleyici modu ve geri al/ileri al araçları ribbon **Rapor** grubundadır.
 PBIX görünüm düzeltmesi: kaynakta gizli katmanlar, tema renkleri/saydamlık,
 ikonlu düğmeler ve yeni kart alanları korunur; Dashboard yerleşimi doğrulandı.
 HITInsights düzeltmesi: iç içe gruplar/yerel koordinatlar ve SVG sayfa arka
-planları taşınır. Verili güncel kopya: `data/HITInsights-B1-NMT-Floem.floem`.
+planları taşınır. Güncel kopya `data/FDX-Test/HITInsights-B1-NMT.floem`.
 
 Bu dosya, projeyi devralan geliştiriciye ya da yapay zekâ ajanına yazıldı. Şunları anlatır:
 - Bugüne kadar ne yapıldığı,

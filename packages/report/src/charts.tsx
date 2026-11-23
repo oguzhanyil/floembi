@@ -6,7 +6,7 @@
  * her grafikte araç ipucu, soluk ızgara.
  */
 import type { VisualFormat, VisualResult, VisualResultColumn } from "@floem/client";
-import { BarChart, GaugeChart, HeatmapChart, LineChart, PieChart, ScatterChart, TreemapChart } from "echarts/charts";
+import { BarChart, FunnelChart, GaugeChart, HeatmapChart, LineChart, PieChart, ScatterChart, TreemapChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent, VisualMapComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -15,7 +15,7 @@ import { SERIES, formatCompact, formatValue, type VisualDef } from "./reportUtil
 import { useReportTheme } from "./theme";
 
 echarts.use([
-  BarChart, LineChart, PieChart, ScatterChart, TreemapChart, HeatmapChart, GaugeChart,
+  BarChart, LineChart, PieChart, ScatterChart, TreemapChart, HeatmapChart, GaugeChart, FunnelChart,
   GridComponent, LegendComponent, TooltipComponent, VisualMapComponent, CanvasRenderer,
 ]);
 
@@ -141,18 +141,19 @@ function shape(result: VisualResult, hasLegend: boolean, sortByTotal: boolean) {
 
 /** Sütun, çubuk, yığılmış, çizgi ve alan grafikleri. */
 export function CategoryChart({
-  result, def, format, hasLegend, selected, onSelect,
+  result, def, format, hasLegend, selected, onSelect, lineStart,
 }: {
   result: VisualResult;
   def: VisualDef;
+  lineStart?: number;
   format: VisualFormat;
   hasLegend: boolean;
   selected?: unknown;
   onSelect?: CrossSelect;
 }) {
   const kind = def.category!;
-  const shaped = useMemo(() => shape(result, hasLegend, !kind.line), [result, hasLegend, kind.line]);
-  const option = useMemo(() => categoryOption(shaped, kind, format, selected), [shaped, kind, format, selected]);
+  const shaped = useMemo(() => shape(result, hasLegend, !kind.line && lineStart == null), [result, hasLegend, kind.line, lineStart]);
+  const option = useMemo(() => categoryOption(shaped, kind, format, selected, lineStart), [shaped, kind, format, selected, lineStart]);
   return <EChart option={option} onClick={(p) => onSelect?.(shaped.cats[p.dataIndex] ?? null)} />;
 }
 
@@ -161,6 +162,7 @@ function categoryOption(
   kind: NonNullable<VisualDef["category"]>,
   format: VisualFormat,
   selected: unknown,
+  lineStart?: number,
 ): echarts.EChartsCoreOption {
   const colors = palette(format);
   const hasSel = selected !== undefined;
@@ -221,10 +223,10 @@ function categoryOption(
     },
     xAxis: horizontal ? valAxis : catAxis,
     yAxis: horizontal ? catAxis : valAxis,
-    series: series.map((s) => ({
+    series: series.map((s,i) => ({
       name: s.name,
-      type: kind.line ? "line" : "bar",
-      stack: kind.stacked ? "toplam" : undefined,
+      type: kind.line || (lineStart != null && i >= lineStart) ? "line" : "bar",
+      stack: kind.stacked || (format.comboStacked && lineStart != null && i < lineStart) ? "toplam" : undefined,
       barMaxWidth: 24,
       barGap: "10%",
       showSymbol: cats.length <= 31,
@@ -250,6 +252,13 @@ function categoryOption(
 }
 
 /** Pasta ve halka grafikleri. */
+export function FunnelVisual({ result, format, onSelect }: { result: VisualResult; format: VisualFormat; onSelect?: CrossSelect }) {
+  const data = result.rows.map(row => ({name:formatValue(row[0],result.columns[0].type),value:row[1]}));
+  return <EChart option={{color:palette(format),tooltip:{trigger:"item",renderMode:"richText"},
+    series:[{type:"funnel",left:"4%",right:"4%",top:8,bottom:8,sort:"none",label:{position:"inside"},data}]}}
+    onClick={p => onSelect?.(result.rows[p.dataIndex][0])}/>;
+}
+
 export function PieChartVisual({
   result, donut, format, selected, onSelect,
 }: {

@@ -78,6 +78,10 @@ export function ReportViewer({
     const action = resolveVisualAction(visual, report.pages, page.id, chosen, source);
     if (!action) return;
     if (action.type === "page") {
+      if (action.visibility) {
+        setVisibility(old => ({ ...old, [action.pageId]: { ...old[action.pageId], ...action.visibility } }));
+        if (action.pageId === page.id) return;
+      }
       action.filters = action.keepContext ? journeyFilters(pageFilters, visual.filters, slicerFilters(page.visuals, states), crossFiltersFor(visual, cross), rowFilters, action.filters)
         : rowFilters.length ? rowFilters : action.filters;
       remember();

@@ -5,7 +5,7 @@ import { ActionGlyph } from "./ActionGlyph";
 import { safeActionIcon } from "./visualActions";
 import { AgDataGrid } from "./AgDataGrid";
 import { ServerTable, ServerTree } from "./ServerGrid";
-import { CategoryChart, PieChartVisual } from "./charts";
+import { CategoryChart, FunnelVisual, PieChartVisual } from "./charts";
 import { GaugeVisual, HeatmapVisual, ScatterVisual, TreemapVisual, WaterfallVisual } from "./charts2";
 import { MatrixVisual, ProgressVisual } from "./matrix";
 import { VISUAL_DEFS, formatValue, groupFields, valueLabel } from "./reportUtils";
@@ -436,11 +436,12 @@ function VisualBodyContent({
       {data.state === "loading" && <span className="v-refreshing" role="status">Güncelleniyor…</span>}
       {toolbar}
       {def.category && (
-        <CategoryChart result={result} def={def} format={v.format} hasLegend={!!v.legend?.length} selected={selected} onSelect={handleClick} />
+        <CategoryChart result={result} def={def} format={v.format} hasLegend={!!v.legend?.length && v.type!=="combo"} selected={selected} onSelect={handleClick} lineStart={v.type==="combo" ? v.values.length : undefined} />
       )}
       {(v.type === "pie" || v.type === "donut") && (
         <PieChartVisual result={result} donut={v.type === "donut"} format={v.format} selected={selected} onSelect={handleClick} />
       )}
+      {v.type === "funnel" && <FunnelVisual result={result} format={v.format} onSelect={handleClick} />}
       {v.type === "treemap" && <TreemapVisual result={result} format={v.format} selected={selected} onSelect={handleClick} />}
       {v.type === "scatter" && (
         <ScatterVisual result={result} format={v.format} hasLegend={!!v.legend?.length} selected={selected} onSelect={onCross} />
@@ -463,7 +464,7 @@ function VisualBodyContent({
       )}
       {v.type === "card" && <CardVisual result={result} format={v.format} trend={trend} />}
       {v.type === "ticker" && <TickerVisual result={result} format={v.format} />}
-      {v.type === "multicard" && <MultiCard result={result} selected={selected} onSelect={onCross} />}
+      {v.type === "multicard" && <MultiCard result={result} format={v.format} selected={selected} onSelect={onCross} />}
       {v.type === "kpi" && <KpiVisual result={result} format={v.format} trend={trend} />}
       {v.type === "tolerance" && <ToleranceVisual result={result} format={v.format} />}
       {v.type === "slicer" && (

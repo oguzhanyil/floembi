@@ -5,7 +5,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-APPROXIMATE_TYPES = {"lineClusteredColumnComboChart", "lineStackedColumnComboChart", "funnel"}
 MESSAGES = {
     "MODEL_NOT_IMPORTED": "Veri, ilişkiler, kaynak sorguları ve özgün ölçü formülleri aktarılmadı. Bu dosya tasarım taslağıdır.",
     "TYPE_UNSUPPORTED": "Bu görselin eşdeğer Floem uygulaması yok; başka grafik anlamına dönüştürülmeden yer tutucu gösterilir.",
@@ -15,13 +14,14 @@ MESSAGES = {
     "AGGREGATION_UNVERIFIED": "Kaynak toplama işlevi doğrulanmadı; taslak toplamı özgün hesapla eşdeğer kabul etmeyin.",
     "HIERARCHY_UNVERIFIED": "Hiyerarşi düzey adı başvuruya çevrildi; gerçek kaynak sütunu ve tarih hiyerarşisi doğrulanmalı.",
     "STYLE_PARTIAL": "Yalnız desteklenen sabit biçimler taşınır; listelenen biçim özellikleri uygulanmadı.",
-    "RICH_TEXT_PARTIAL": "Metin düzleştirildi; tüm parça/paragraf stilleri ayrı ayrı korunmadı.",
-    "ACTION_NOT_IMPORTED": "Düğme eylemi aktarılmadı; yalnız geçerli hedefi olan sayfa geçişi desteklenir.",
+    "RICH_TEXT_PARTIAL": "Metin içindeki dinamik ifade, bağlantı veya ek biçim özelliği uyarlama gerektiriyor.",
+    "ACTION_NOT_IMPORTED": "Kaynak eylemin hedef sayfası veya görünürlük yer işareti çözülemedi.",
     "IMAGE_NOT_IMPORTED": "Görsel kaynağı alınamadı veya destek/sınır denetiminden geçmedi.",
     "GROUP_NOT_IMPORTED": "Kaynak grup/kapsayıcı yapısı aktarılmadı; alt nesnelerin yerleşimi kontrol edilmeli.",
     "ORDER_ENTRY_MISSING": "Sayfa sırasındaki kaynak klasör bulunamadı; sayfa aktarılmadı.",
     "PAGE_PROPERTY_NOT_IMPORTED": "Kaynak sayfa özelliği uygulanmadı.",
     "REPORT_PROPERTY_NOT_IMPORTED": "Rapor düzeyindeki özellik uygulanmadı.",
+    "THEME_PARTIAL": "Kaynak renk paleti alındı. Temanın görsel türü bazındaki bütün biçim kuralları uygulanmadı.",
     "BUTTON_SKIPPED": "Eylemsiz saydam tıklama katmanı aktarılmadı.",
     "QUERY_OPTION_NOT_IMPORTED": "Kaynak sıralaması veya sorgu seçeneği aktarılmadı.",
 }
@@ -42,11 +42,15 @@ def _unsupported_styles(raw: dict) -> list[str]:
     if kind == "textbox":
         objects = {"general": {"paragraphs"}}
     elif kind == "image":
-        objects = {"general": {"imageUrl"}}
+        objects = {"general": {"imageUrl"}, "imageScaling": {"imageScalingType"}}
+    elif kind == "cardVisual":
+        objects = {"label": {"show", "bold", "fontSize", "fontFamily", "fontColor", "text", "position"},
+                   "value": {"show", "bold", "fontSize", "fontFamily", "fontColor", "showBlankAs", "horizontalAlignment", "labelDisplayUnits", "labelPrecision"},
+                   "layout": {"columnCount"}}
     elif kind not in ("shape", "actionButton"):
         objects = {}
-    containers = {"title": {"text"}, "background": {"color", "show"}, "border": {"color", "show", "radius"},
-                  "dropShadow": {"show"}, "visualLink": {"show", "type", "navigationSection"}}
+    containers = {"title": {"text", "show"}, "subTitle": {"text", "show"}, "background": {"color", "show", "transparency"}, "border": {"color", "show", "radius"},
+                  "dropShadow": {"show"}, "visualLink": {"show", "type", "navigationSection", "bookmark"}}
     lost = []
     for prefix, source, supported in [("objects", visual.get("objects") or {}, objects),
                                        ("container", visual.get("visualContainerObjects") or {}, containers)]:
@@ -68,13 +72,13 @@ def _dynamic(value) -> bool:
     return isinstance(value, list) and any(_dynamic(v) for v in value)
 
 
-def audit_visual(raw: dict, targets: list[dict]) -> dict:
+def audit_visual(raw: dict, targets: list[dict], bookmarks=None) -> dict:
     from .pbip_import import TYPE_MAP, _field, _property, _button_action
     visual = raw.get("visual") or {}
     source_type = "group" if raw.get("visualGroup") is not None else visual.get("visualType", "unknown")
     issues = []
     group_mapped = source_type == "group" and any(t.get("type") == "container" for t in targets)
-    placeholder = not group_mapped and (source_type not in TYPE_MAP or source_type in APPROXIMATE_TYPES)
+    placeholder = not group_mapped and source_type not in TYPE_MAP
     if placeholder:
         issues.append(finding("GROUP_NOT_IMPORTED" if raw.get("visualGroup") else "TYPE_UNSUPPORTED", severity="error"))
     if raw.get("parentGroupName") and (not targets or any(t.get("parentId") != raw["parentGroupName"] for t in targets)):
@@ -91,14 +95,16 @@ def audit_visual(raw: dict, targets: list[dict]) -> dict:
              **{k: {"Values"} for k in ("card", "multicard", "kpi", "ticker")}}
     accepted = roles.get(kind, {"Category", "Series", "Y", "Y2", "X"})
     if source_type == "cardVisual": accepted = {"Values", "Data", "Rows"}
+    if kind == "treemap": accepted = {"Group", "Category", "Y", "Values"}
+    if kind == "slicer" and source_type.startswith("InforiverFilter"): accepted = {"column"}
     for role, state in (visual.get("query", {}).get("queryState") or {}).items():
         for index, projection in enumerate(state.get("projections", [])):
             expression = projection.get("field") or {}
             ref = _field(expression)
             bound = bool(ref) and any(
-                (ref[0] == "measure" and any(v.get("measure") in (ref[2], f"{ref[1]} · {ref[2]}") for v in target.get("values", []))) or
+                (ref[0] == "measure" and any(v.get("measure") in (ref[2], f"{ref[1]} · {ref[2]}") for v in [*target.get("values", []),*target.get("target",[])])) or
                 any(v.get("table") == ref[1] and v.get("column") == ref[2]
-                    for v in [*target.get("group", []), *target.get("legend", []), *target.get("values", [])])
+                    for v in [*target.get("group", []), *target.get("legend", []), *target.get("values", []), *target.get("target", [])])
                 for target in targets) and not placeholder and role in accepted
             if (role == "Series" or (kind in ("pie", "donut", "treemap", "card") and role in ("Y", "Y2", "X", "Values"))) and index > 0:
                 bound = False
@@ -119,10 +125,12 @@ def audit_visual(raw: dict, targets: list[dict]) -> dict:
     if styles:
         issues.append(finding("STYLE_PARTIAL", ", ".join(styles)))
     paragraphs = _property(visual.get("objects") or {}, "general", "paragraphs")
-    if isinstance(paragraphs, list) and (len(paragraphs) > 1 or any(len(p.get("textRuns", [])) > 1 for p in paragraphs)):
+    if isinstance(paragraphs, list) and any(set(p) - {"horizontalTextAlignment", "textRuns"} or
+            any(set(r) - {"value","textStyle"} or set(r.get("textStyle",{})) -
+                {"fontSize","fontFamily","color","fontWeight","fontStyle","textDecoration"} for r in p.get("textRuns",[])) for p in paragraphs):
         issues.append(finding("RICH_TEXT_PARTIAL"))
     link = (visual.get("visualContainerObjects") or {}).get("visualLink")
-    expected_action = _button_action(raw, {t.get("format", {}).get("action", {}).get("pageId") for t in targets})
+    expected_action = _button_action(raw, {t.get("format", {}).get("action", {}).get("pageId") for t in targets}, bookmarks)
     if link and (not expected_action or any(t.get("format", {}).get("action") != expected_action for t in targets)):
         issues.append(finding("ACTION_NOT_IMPORTED"))
     if source_type == "image" and not any(t.get("format", {}).get("imageData") for t in targets):
@@ -134,14 +142,16 @@ def audit_visual(raw: dict, targets: list[dict]) -> dict:
             "fields": fields, "issues": list({(i["code"], i["detail"]): i for i in issues}.values())}
 
 
-def finish_audit(source_name: str, pages: list[dict], report_dir: Path, issues: list[dict]) -> dict:
+def finish_audit(source_name: str, pages: list[dict], report_dir: Path, issues: list[dict], theme=None) -> dict:
     report_file = report_dir / "definition" / "report.json"
     if report_file.is_file():
         raw = json.loads(report_file.read_text(encoding="utf-8-sig"))
         if _has_filter(raw):
             issues.append(finding("FILTER_NOT_IMPORTED"))
         for key, value in raw.items():
-            if key != "$schema" and value:
+            if key == "themeCollection" and theme:
+                issues.append(finding("THEME_PARTIAL", "themeCollection"))
+            elif key not in ("$schema", "floemDisplayBookmarks", "legacyLayout") and value:
                 issues.append(finding("REPORT_PROPERTY_NOT_IMPORTED", key))
     bookmarks = report_dir / "definition" / "bookmarks"
     if bookmarks.is_dir() and any(bookmarks.iterdir()):

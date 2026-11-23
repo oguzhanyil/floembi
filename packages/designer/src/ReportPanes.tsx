@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FIELD_MIME, isMeasure, readPayload, usesField, type FieldPayload } from "./fields";
 import { CalcIcon, ColumnTypeIcon, DateTableIcon, TableIcon } from "./icons";
 import { VisualTypeIcon } from "./VisualTypeIcon";
+import { RichTextEditor } from "./RichTextEditor";
 import { WELL_MIME, readWellDrag, setWell, wellItems, type WellDrag } from "./wells";
 import { RuntimePanel } from "./RuntimePanel";
 
@@ -340,12 +341,7 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
       <>
       <AppearancePanel visual={visual} onChange={onChange} />
       <Section title="Metin">
-        <textarea
-          rows={7}
-          value={typeof f.text === "string" ? f.text : ""}
-          placeholder={"# Satış özeti\nBu dönemin satışı: [Toplam Satış]"}
-          onChange={(e) => set({ text: e.target.value })}
-        />
+        <RichTextEditor key={visual.id} format={f} update={set} />
         <p className="hint">
           "# " ile başlayan satır başlık, "## " ara başlık olur.
           {labels.length > 0 ? (
@@ -608,12 +604,18 @@ function FormatPanel({ visual, page, pages, tables, onChange }: { visual: Visual
         </Section>
         <RowActionPanel visual={visual} page={page} pages={pages} measures={measures} onChange={onChange} /></>
       )}
-      {(visual.type === "card" || visual.type === "ticker") && (
+        {(visual.type === "card" || visual.type === "ticker" || visual.type === "multicard") && (
         <Section title="Kart">
           <label className="inline">
             <input type="checkbox" checked={f.categoryLabel !== false} onChange={(e) => set({ categoryLabel: e.target.checked })} />
             Kategori etiketi
           </label>
+            {visual.type !== "ticker" && <>
+              <label className="inline"><input type="checkbox" checked={!!f.cardLabelAbove} onChange={e => set({cardLabelAbove:e.target.checked})} />Etiket değerin üstünde</label>
+              <label>Etiket boyutu<input type="number" min={8} max={144} value={f.cardLabelSize ?? 12} onChange={e => set({cardLabelSize:Math.min(144,Math.max(8,Number(e.target.value)))})}/></label>
+              <label>Etiket rengi<input type="color" value={f.cardLabelColor ?? "#526277"} onChange={e => set({cardLabelColor:e.target.value})}/></label>
+              {visual.type === "multicard" && <label>Kart sütunları<input type="number" min={1} max={12} value={f.cardColumns ?? 1} onChange={e => set({cardColumns:Math.max(1,Math.min(12,Number(e.target.value)))})}/></label>}
+            </>}
           {visual.group.length > 0 && (
             <label>
               Trend yönü

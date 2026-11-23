@@ -53,22 +53,40 @@ function bigNumber(v: Raw, c: VisualResultColumn): string {
   return typeof v === "number" && !c.format ? formatCompact(v) : fmt(v, c);
 }
 
+function cardNumber(value: Raw, column: VisualResultColumn, format: VisualFormat) {
+  if (value === null && typeof format.cardBlankText === "string") return format.cardBlankText;
+  if (typeof value !== "number" || (format.cardPrecision == null && !format.cardDisplayUnits)) return bigNumber(value, column);
+  const units = format.cardDisplayUnits || 1;
+  const digits = Math.max(0, Math.min(12, format.cardPrecision ?? 2));
+  if (units === 1 && format.cardPrecision == null && column.format) return fmt(value, column);
+  const percent = column.format?.split(";")[0].includes("%");
+  const number = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: format.cardPrecision != null ? digits : 0, maximumFractionDigits: digits }).format(value * (percent ? 100 : 1) / units);
+  const suffix = ({ 1000: " B", 1000000: " Mn", 1000000000: " Mr" } as Record<number, string>)[units] ?? "";
+  return (percent ? "%" : "") + number + suffix;
+}
+
+function CardLabel({ format, text }: { format: VisualFormat; text: string }) {
+  return <div className="v-card-label" style={{ color: format.cardLabelColor, fontSize: format.cardLabelSize,
+    fontFamily: format.cardLabelFamily, fontWeight: format.cardLabelBold ? 700 : undefined,
+    order: format.cardLabelAbove ? -1 : undefined, textAlign: format.cardAlignment }}>{text}</div>;
+}
+
 export function CardVisual({ result, format, trend }: { result: VisualResult; format: VisualFormat; trend?: VisualResult }) {
   const c = result.columns[0];
   const v = result.rows[0]?.[0] ?? null;
   const shown = useAnimatedScalar(v, format);
   const [ref, size] = useSize<HTMLDivElement>();
-  const text = bigNumber(shown, c);
+  const text = cardNumber(shown, c, format);
   // Trend şeridi (~42 px) ve etiket için yer bırak
   const avail = size.h - (trend ? 26 : 0) - (format.categoryLabel !== false ? 18 : 0);
   const autoFont = Math.max(16, Math.min(avail * 0.7, size.h * 0.42, (size.w / Math.max(text.length, 3)) * 1.6));
   const font = format.fontSize ? Math.max(8, Math.min(autoFont, format.fontSize)) : autoFont;
   return (
-    <div className="v-card" ref={ref} style={{ color: format.color, fontFamily: format.fontFamily }}>
-      <div className="v-card-value" style={{ fontSize: font }} title={fmt(v, c)} aria-label={fmt(v, c)}>
+    <div className="v-card" ref={ref} style={{ fontFamily: format.fontFamily, alignItems: format.cardAlignment === "left" ? "flex-start" : format.cardAlignment === "right" ? "flex-end" : undefined }}>
+      {format.cardValueVisible !== false && <div className="v-card-value" style={{ fontSize: font, color: format.color, fontWeight: format.cardValueBold === false ? 400 : format.cardValueBold ? 700 : undefined }} title={fmt(v, c)} aria-label={fmt(v, c)}>
         {text}
-      </div>
-      {format.categoryLabel !== false && <div className="v-card-label">{typeof format.text === "string" ? format.text : c.name}</div>}
+      </div>}
+      {format.categoryLabel !== false && <CardLabel format={format} text={typeof format.text === "string" ? format.text : c.name} />}
       {trend && <TrendStrip result={trend} higherIsBetter={format.higherIsBetter !== false} />}
     </div>
   );
@@ -106,7 +124,7 @@ export function ImageVisual({ format }: { format: VisualFormat }) {
 }
 
 /** Çok satırlı kart: kategori başına bir satır, her satırda değerler. */
-export function MultiCard({ result, selected, onSelect }: { result: VisualResult; selected?: unknown; onSelect?: CrossSelect }) {
+export function MultiCard({ result, format, selected, onSelect }: { result: VisualResult; format: VisualFormat; selected?: unknown; onSelect?: CrossSelect }) {
   const groupCount = result.columns.filter((c) => c.kind === "group").length;
   const values = result.columns.slice(groupCount);
   const hasSel = selected !== undefined;
@@ -119,11 +137,11 @@ export function MultiCard({ result, selected, onSelect }: { result: VisualResult
           onClick={groupCount && onSelect ? () => onSelect(r[0]) : undefined}
         >
           {groupCount > 0 && <div className="v-mc-title">{fmt(r[0], result.columns[0])}</div>}
-          <div className="v-mc-values">
+          <div className="v-mc-values" style={format.cardColumns ? { display: "grid", gridTemplateColumns: `repeat(${Math.min(12, Math.max(1,format.cardColumns))}, minmax(0, 1fr))` } : undefined}>
             {values.map((c, ci) => (
-              <div key={ci}>
-                <div className="v-mc-value">{bigNumber(r[groupCount + ci], c)}</div>
-                <div className="v-mc-label">{c.name}</div>
+              <div key={ci} style={{ display: "flex", flexDirection: "column", textAlign: format.cardAlignment }}>
+                {format.cardValueVisible !== false && <div className="v-mc-value" style={{ fontSize: format.fontSize, fontFamily: format.fontFamily, color: format.color, fontWeight: format.cardValueBold === false ? 400 : undefined }}>{cardNumber(r[groupCount + ci], c, format)}</div>}
+                {format.categoryLabel !== false && <CardLabel format={format} text={c.name} />}
               </div>
             ))}
           </div>
@@ -234,6 +252,8 @@ export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualR
   const fill = (line: string) =>
     line.replace(/\[([^\]]+)\]/g, (m, name: string) => values.get(name.trim().toLocaleLowerCase("tr")) || m);
   const content = fill(text);
+  const paragraphs = Array.isArray(f.paragraphs) && f.paragraphs.every(p => p && Array.isArray(p.runs) && p.runs.every(r => r && typeof r.text === "string")) &&
+    f.paragraphs.map(p => p.runs.map(r => r.text).join("")).join("\n") === text ? f.paragraphs : undefined;
   const ref = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [overflows, setOverflows] = useState(false);
@@ -249,7 +269,7 @@ export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualR
     let active = true;
     void document.fonts.ready.then(() => { if (active) check(); });
     return () => { active = false; observer.disconnect(); };
-  }, [content, f.fontSize, f.fontFamily, f.bold, f.lineHeight, policy]);
+  }, [content, paragraphs, f.fontSize, f.fontFamily, f.bold, f.lineHeight, policy]);
   if (!text.trim()) {
     return <div className="v-text v-text-empty">Metni Biçim bölmesindeki "Metin" alanına yazın</div>;
   }
@@ -265,7 +285,11 @@ export function TextVisual({ v, result, loading }: { v: Visual; result?: VisualR
         fontWeight: f.bold ? 600 : undefined,
       }}
     >
-      {(policy === "ellipsis" ? [text.replace(/\n/g, " ")] : text.split("\n")).map((line, i) =>
+      {paragraphs && policy !== "ellipsis" ? paragraphs.map((p,i) => <div key={i} style={{ textAlign: p.align }}>
+        {p.runs.length ? p.runs.map((r,j) => <span key={j} style={{ color: r.color, fontFamily: r.fontFamily, fontSize: r.fontSize,
+          fontWeight: r.bold == null ? undefined : r.bold ? 700 : 400, fontStyle: r.italic ? "italic" : undefined,
+          textDecoration: r.underline ? "underline" : undefined }}>{fill(r.text)}</span>) : "\u00a0"}
+      </div>) : (policy === "ellipsis" ? [text.replace(/\n/g, " ")] : text.split("\n")).map((line, i) =>
         line.startsWith("# ") ? (
           <div key={i} className="v-text-h1">{fill(line.slice(2))}</div>
         ) : line.startsWith("## ") ? (
