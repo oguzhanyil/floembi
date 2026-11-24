@@ -1,5 +1,13 @@
 # F14 · Ortak ölçü ve uyarılar
 
+**24.11.2026:** BI'ı hesap sağlayıcısı olarak kullanan Python tüketicisi eklendi.
+Floemdata Analytics içinden `floem_bi.analytics_client.report_metric(bi_adresi, rapor_id,
+kullanici_oturumu, "sales.net", filtreler)` çağrısı aynı kullanıcının rapor yetkisi ve
+RLS kapsamındaki ölçü makbuzunu döndürür. Sürümü sabitlemek için `snapshot`, önceki
+kanıtı karşılaştırmak için `evidence` verilir. Gerçek HTTP bağlantısında kapsam, eşik,
+yeniden karşılaştırma ve süresi geçersiz oturum test edildi. Çalışan Analytics kurulumunda
+bu çağrının kullanıcı oturumuna bağlanması ve gerçek firma/dönem kabulü açıktır.
+
 **23.11.2026:** BI kataloğu, ortak hesap API'si, eşik nesnesi ve verili yerel pilot
 hazır. Kullanıcı Analytics'in çalışmadığını bildirdi; canlı Analytics adaptörü ve
 gerçek kaynakla uçtan uca kabul açık. [F15 senaryo ve uygulama içi öneri akışı](f15-senaryo-ve-oneriler.md)

@@ -39,7 +39,8 @@ Veri sentetiktir; gerçek kaynak kabulü ve F06 mutabakatı açıktır.
 içinde aynı FDX ölçüsünden kart ve eşik uyarısı, firma/dönem/müşteri filtreleri,
 sürümlü kapsam kanıtı ve telefon düzeni var. **Görselleştirmeler → Analytics ve
 uyarılar** ile kataloğu ve eşikleri düzenleyin. Analytics şu an çalışmadığı için
-canlı adaptör ve gerçek kaynak kabulü açık. [Kullanım, API ve sınırlar](docs/f14-ortak-olcu-ve-uyarilar.md).
+BI ölçü tüketicisi HTTP üzerinden yerelde doğrulandı. Analytics kurulumuyla gerçek kaynak kabulü açık.
+[Kullanım, API ve sınırlar](docs/f14-ortak-olcu-ve-uyarilar.md).
 **F15 senaryo ve uygulama içi öneriler hazır:** **`data/F15-Senaryo-Atolyesi.floem`**
 ile iskonto/hacim/maliyet etkisini deneyin. **Görselleştirmeler → Senaryolar** ile
 kendi sabit FDX parametrelerinizi bağlayın; web'de yetkili öneri, onay/ret ve geçmiş

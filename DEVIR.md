@@ -1,4 +1,17 @@
-# Floem BI: devir notu (23.11.2026)
+# Floem BI: devir notu (24.11.2026)
+
+**24.11.2026 H7–H9** · Floemway yenilemesi gerçek SQL Server'da salt okunur bir sorguyla
+kabul edildi. H8 günlük saat/saat dilimi, kalıcı kuyruk ve sahip bildirimleri web'de hazır.
+Paketli Floemway, elle başlatılan Windows hizmet yükleyicisi, PostgreSQL/Compose dağıtımı
+ve yedekleme/kurtarma eklendi. Paketli Desktop'ta iki ayrı dosya açıldı. H9 tarayıcı
+kabulü ve 1/5 milyon satırlık ölçüm yapıldı. Canlı süreç sahibi kabulü, çalışan Analytics
+kurulumuna tüketici adaptörünü bağlama, yükseltilmiş Windows hizmeti ve Docker ortamında
+son kurulum kabulü açık. [Kurulum, doğrulama ve sınırlar](docs/h7-h9-isletim-ve-kabul.md).
+
+24 Kasım'daki toplu koşuda 406 Python testi geçti; ayrı ortam değişkenleri bekleyen eski
+SQL bağlayıcı testi atlandı. Kayıtlı Desktop bağlantısı ile gerçek SQL saha testi bu
+koşuya dahildi. Chromium ürün turu ve 22 tasarım kontrolü geçti. Canlı pilotun sağlık
+ucu HTTPS üzerinden 200, oturumsuz rapor ve yenileme ayarları 401 döndürdü.
 
 Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. Gerçek kaynak/kullanıcı kabulü ve F14 canlı Analytics adaptörü açık. Sırada gerçek süreç üzerinde kabul; ERP'ye işlem yazma ayrı tasarım/yetkilendirme kapsamında.
 Power BI dosyaları Desktop Aç/Ctrl+O ile açılır. Dört kaynak dalındaki 260 ayrı
@@ -749,16 +762,16 @@ eksik olanları başlatır. Anahtarlar Windows Kimlik Bilgisi Yöneticisi'nden o
 Ayrıntılı plan kullanıcının bilgisayarında: `~/.claude/plans/g-r-nen-sorunlar-mevcutta-yok-greedy-fairy.md`.
 Özeti ve güncel kalanlar aşağıda.
 
-### Güncel iş sırası (19.11.2026)
+### 19.11.2026 planındaki maddelerin güncel durumu (24.11.2026)
 
 | Sıra | Kalan iş | Bitti sayılma koşulu |
 |---|---|---|
-| 0 | **H7 saha kabulü:** gerçek SQL Server ile Floemway yenilemesi | Bağlı model yenilenir, yeni veri raporda görünür; hatalı şifre ve çevrimdışı durumda hata geçmişi yazılır, eski anlık görüntü korunur. Sahte bağlayıcı testleri geçiyor; yerel kurulumda eşleme sonrası başarılı yenileme henüz doğrulanmadı. |
-| 1 | **H8 zamanlanmış yenileme** | Anlam modeli için günlük saat ve saat dilimi API/arayüzde saklanır; sunucu aynı yenileme kuyruğunu zamanı gelince tetikler, çakışma ve yeniden başlatma davranışı test edilir. |
-| 2 | **H8 yenileme e-postası** | Başarısız işin özeti, tablo/adım bilgisi ve geçmiş bağlantısı model sahibine gider; isteğe bağlı başarı bildirimi ve gönderim hatası test edilir. |
-| 3 | **H8 Floemway kurulumu** | Ayrı yükleyici ve Windows servisiyle kullanıcı oturumu olmadan çalışır; özel anahtar erişimi, yeniden bağlanma ve kaldırma doğrulanır. |
-| 4 | **H8 sunucu dağıtımı ve Desktop kabulü** | Docker Compose ile sunucu, PostgreSQL metadata ve geliştirme posta servisi kurulur; gerçek alan adı/TLS ve yedekleme ayarları tanımlanır. Paketli Desktop'ta `.floem` dosyasına çift tıklama doğrulanır. |
-| 5 | **H9 sağlamlaştırma** | Gerçek SQL entegrasyon ve temel tarayıcı uçtan uca senaryoları, 1–5 milyon satır performans ölçümü, demo ve işletim belgeleri tamamlanır. |
+| 0 | **H7 saha kabulü** | Gerçek SQL sorgusuyla rapordaki değer değişti. Geçersiz giriş ve çevrimdışı ağ geçidi geçmişe yazıldı. Eski anlık görüntü korundu. |
+| 1 | **H8 zamanlanmış yenileme** | Web ve API, saat dilimi geçişleri, meşgul ağ geçidi kuyruğu ve yeniden başlatmada telafi doğrulandı. |
+| 2 | **H8 yenileme e-postası** | Sahibe hata ve isteğe bağlı başarı bildirimi, geçmiş bağlantısı ve gönderim arızası yerel posta kutusunda test edildi. |
+| 3 | **H8 Floemway kurulumu** | Ayrı Windows yükleyicisi derlendi. Paketli worker DPAPI anahtarıyla yeniden bağlandı. Sistem hizmetinin gerçek kurulum, oturum kapatma ve kaldırma kabulü yönetici oturumu bekliyor. |
+| 4 | **H8 sunucu dağıtımı ve Desktop** | Compose tanımı, Mailpit yapılandırması ve PostgreSQL gerçek yedek dönüşü hazır. Paketli Desktop iki dosya açtı. Docker Desktop grup üyeliği hatası nedeniyle konteynerlerle kurulum kabulü açık. Windows Gezgini dosya ilişkisinin son kurulmuş sistemde denenmesi açık. |
+| 5 | **H9 sağlamlaştırma** | Gerçek SQL, tarayıcı yayımlama sonrası kabulü, 1/5 milyon satır FDX ölçümü ve işletim rehberi hazır. |
 
 Eski iki aylık plan, H7'deki web üzerinden elle bağlantı tanımını ve "Gateway" adını anlatıyor.
 Güncel ürün akışı Desktop yayımlamasında otomatik eşleme ve **Floemway** adıdır.

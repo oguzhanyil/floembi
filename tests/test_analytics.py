@@ -227,3 +227,26 @@ def test_file_roundtrip_and_authenticated_web_queries(tmp_path):
         assert blocked.status_code == 400, blocked.text
         mismatched = server.post(route, headers=reader, json={**payload, "analytics": {"metricId": "sales.net", "evidence": evidence}})
         assert mismatched.status_code == 200 and mismatched.json()["analytics"]["comparison"]["status"] == "context_mismatch"
+
+
+def test_analytics_consumer_over_http(tmp_path):
+    from fastapi.testclient import TestClient
+    from floem_bi.analytics_client import report_metric
+    from floem_bi.server import ServerSettings, create_server
+    from test_browser_refresh import local_http
+    from test_server import YON, login, publish
+
+    target = tmp_path / "F14.floem"
+    create_demo(target)
+    app = create_server(ServerSettings(data_dir=tmp_path / "server", secret="s" * 48))
+    client = TestClient(app)
+    h = login(client, YON)
+    rid = publish(client, h, target).json()["report_id"]
+    token = h["Authorization"].removeprefix("Bearer ")
+    with local_http(app) as url:
+        receipt = report_metric(url, rid, token, "sales.net", SCOPE)
+        assert receipt["value"] == 180 and receipt["alerts"][0]["status"] == "triggered"
+        same = report_metric(url, rid, token, "sales.net", SCOPE, snapshot=receipt["snapshot"], evidence=receipt)
+        assert same["comparison"]["status"] == "match"
+        with pytest.raises(RuntimeError, match="401"):
+            report_metric(url, rid, "invalid", "sales.net", SCOPE)
