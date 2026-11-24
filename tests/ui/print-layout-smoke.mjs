@@ -5,6 +5,7 @@ import { join } from "node:path";
 export async function testPrintLayout({ call, evaluate, waitFor, open, click, dir, path, outputs }) {
   await click("Fatura");
   await waitFor("document.querySelector('.form-ruler.horizontal')");
+  assert(await evaluate("document.querySelector('.form-ruler.horizontal span:last-of-type').offsetHeight <= 10"), "180 mm etiketi tek satır olmalı");
   const label = name => `[...document.querySelectorAll('.print-studio label')].find(el=>el.firstChild?.textContent.trim()===${JSON.stringify(name)} || el.textContent.trim()===${JSON.stringify(name)})`;
   async function choose(name, value) {
     await evaluate(`(()=>{const el=${label(name)}.querySelector('select');el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}))})()`);

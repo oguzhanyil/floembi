@@ -43,7 +43,8 @@
 .print-paper.form-sheet { width: 210mm; min-height: 297mm; max-width: none; padding: 17.3mm 0 15mm; border-top: 0; }
 .form-sheet-body { width: 181mm; min-height: 264mm; margin-left: 14.111mm; position: relative; display: flow-root; }
 .form-unit,.form-ruler { position: absolute; color: #47626b; font: 8px/1 "Segoe UI", sans-serif; user-select: none; }
-.form-unit { top:-7mm; left:-7mm; } .form-ruler span { position: absolute; pointer-events: none; }
+.form-unit { top:-7mm; left:-7mm; } .form-ruler span { position: absolute; pointer-events: none; white-space: nowrap; }
+.form-ruler.horizontal span:last-of-type { transform: translateX(-75%); }
 .form-ruler.horizontal { width: 100%; height: 6mm; top: -7mm; border-bottom: 1px solid #80999e; cursor: crosshair; touch-action: none;
   background: repeating-linear-gradient(90deg,#a7b7ba 0 .2mm,transparent .2mm 1mm) bottom / 100% 1.3mm no-repeat,
               repeating-linear-gradient(90deg,#67828a 0 .25mm,transparent .25mm 5mm) bottom / 100% 2.3mm no-repeat; }

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { testPrintLayout } from "./print-layout-smoke.mjs";
 
 export async function testPrintForms({ call, evaluate, waitFor, open, dir, source, outputs }) {
-  const path = join(dir, "Belge-UI.floem");
+  const path = join(dir, "Belge-Tasarim-Ornegi.floem");
   await copyFile(source, path);
   const downloads = join(dir, "indirilen");
   await mkdir(downloads);
