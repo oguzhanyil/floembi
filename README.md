@@ -461,7 +461,9 @@ anahtarı oluşturun. Müşteri ağındaki Windows bilgisayarında Python ortam�
 `pip install -e .` ile kurup ekranda verilen `python -m floem_bi.gateway ...` komutunu bir kez
 çalıştırın. Floemway daha sonra `python -m floem_bi.gateway --id <numara>` ile yeniden başlatılır;
 ayar dosyası `%APPDATA%\FloemBI\gateway-<numara>.json` içindedir. Özel anahtar Windows Kimlik
-Bilgisi Yöneticisi'nde tutulur. İlk sürüm konsol uygulamasıdır; Windows servisi H8 kapsamındadır.
+Bilgisi Yöneticisi'nde tutulur. Ayrı Floemway Windows hizmet yükleyicisi de hazırlanabilir.
+Web'de anlam modelini açarak günlük saatleri, saat dilimini ve başarı bildirimlerini kaydedebilirsiniz.
+[Floemway hizmeti, zamanlama, PostgreSQL dağıtımı, yedekleme ve saha testleri](docs/h7-h9-isletim-ve-kabul.md).
 Uzak floembi.app adresi HTTPS olmalıdır; yerel geliştirmede `127.0.0.1` için HTTP kullanılabilir.
 
 Floem BI Desktop'ta kayıtlı SQL bağlantısıyla raporu kaydedip **Yayımla** düğmesine basın. Tek kayıtlı

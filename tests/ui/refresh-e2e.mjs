@@ -1,0 +1,30 @@
+import { createRequire } from "node:module";
+import assert from "node:assert/strict";
+const { chromium } = createRequire(new URL("../../build/h9-browser/package.json", import.meta.url))("playwright-core");
+const [url, dataset, report] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: process.env.FLOEM_TEST_BROWSER, headless: true });
+try {
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await page.goto(`${url}/reports/${report}`);
+  await page.getByRole("button", { name: /yonetici@floembi.test/ }).click();
+  await page.getByRole("button", { name: "Oturum aç", exact: true }).click();
+  await page.getByText("Anadolu Gıda", { exact: true }).first().waitFor();
+  await page.goto(`${url}/datasets/${dataset}/refresh`);
+  await page.getByLabel("Günlük yenilemeyi etkinleştir").check();
+  await page.getByLabel("Günlük saatler").fill("08:30, 18:45");
+  await page.getByRole("button", { name: "Yenileme ayarlarını kaydet" }).click();
+  await page.getByText("Yenileme ayarları kaydedildi.").waitFor();
+  await page.reload();
+  await page.getByText(/Sonraki yenileme/).waitFor();
+  assert.equal(await page.getByLabel("Günlük saatler").inputValue(), "08:30, 18:45");
+  await page.getByRole("button", { name: /Şimdi yenile/ }).click();
+  await page.getByText("Veri kaynağı Floemway bağlantısıyla eşleştirilmedi", { exact: true }).waitFor();
+  await page.goto(`${url}/inbox`);
+  await page.getByText(/modelinin yenilemesi başarısız/).first().waitFor();
+  await page.goto(`${url}/datasets/${dataset}/history`);
+  await page.getByRole("heading", { name: "Yenileme geçmişi" }).waitFor();
+  await page.getByText("Eşleme", { exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+} finally { await browser.close(); }
