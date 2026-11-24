@@ -1,14 +1,14 @@
 # Floem BI: devir notu (24.11.2026)
 
-**Öncelik · Fatura ve teklif çıktısı için Belge Tasarımcısı planı**
+**Desktop · Fatura ve teklif için Belge Tasarımcısı**
 
-Desktop deneyim testlerinden önce bant tabanlı belge tasarımı incelendi. Önerilen
-sıra, çok sayfalı fatura/teklif baskı denemesi, Desktop'ta düzenlenebilir şablonlar,
-ilk kullanıcı testi ve ardından rapor satırından web çıktısını açma şeklindedir.
-İlk denemenin yerel SQLite dosyası `data/SAPB1Demo-Belgeler.sqlite` hazır.
-Power BI demosunun fatura yapısıyla 409 örnek fatura ve 2.225 kalem üretildi.
-Kaynakta teklif tablosu bulunmadığı için 1, 40 ve 200 kalemli üç sentetik teklif eklendi.
-[Araç karşılaştırması, geliştirme sırası ve kabul örnekleri](docs/belge-tasarimcisi-plani.md).
+Üst şeritte **Belge Tasarımcısı** bulunur. Hazır yerel rapor `data/Belge-Demo.floem`
+doğrudan FAT-0200 ile açılır. Başlık, firma, logo, renk, sütunlar, gruplama ve
+not düzenlenebilir. Aynı A4 çıktı önizlenir, yazdırılır ve PDF olarak indirilir.
+FAT-0200'de 182 satır, iki depo, altı sayfa ve son sayfada 33.061,80 TL doğrulandı.
+Üç sentetik teklifin 1, 40 ve 200 kalemli örnekleri sırasıyla 1, 2 ve 7 sayfa.
+Yeni şablonlu dosyalar biçim 2, şablonsuz dosyalar biçim 1 ile kaydedilir.
+[Kullanım, kaynak eşlemesi ve sonraki geliştirmeler](docs/belge-tasarimcisi-plani.md).
 
 **Kullanıcı testi · Desktop'ta rapor hazırlama deneyimi**
 

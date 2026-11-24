@@ -1,6 +1,6 @@
 import { ApplicationThemeControl } from "@floem/report";
 import type { ConnectResult, Connection, ImportItem, ViewAs } from "@floem/client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ClientProvider, toUiError, useClient } from "./api";
 import { DateTableDialog } from "./components/DateTableDialog";
 import { ErrorBox } from "./components/ErrorBox";
@@ -14,13 +14,15 @@ import { DocumentProvider, useDocument } from "./document";
 import { DataView } from "./data/DataView";
 import { ModelView } from "./model/ModelView";
 import { ReportView } from "./report/ReportView";
+import { PrintDesigner } from "./print/PrintDesigner";
 import { RolesDialog, ViewAsDialog } from "./model/RolesDialog";
 import { FloemQueryEditor } from "./transform/FloemQueryEditor";
 
-type View = "rapor" | "veri" | "model" | "sql";
+type View = "rapor" | "veri" | "model" | "sql" | "belge";
 
 const VIEWS: { id: View; label: string; icon: string; ready: boolean; note?: string }[] = [
   { id: "rapor", label: "Rapor görünümü", icon: "▤", ready: true },
+  { id: "belge", label: "Belge Tasarımcısı", icon: "▧", ready: true },
   { id: "veri", label: "Tablo görünümü", icon: "▦", ready: true },
   { id: "model", label: "Model görünümü", icon: "⛁", ready: true },
   { id: "sql", label: "SQL sorgusu", icon: "⌨", ready: true },
@@ -40,6 +42,12 @@ function Shell() {
   const client = useClient();
   const { doc, save, open, opening, newDocument, error, setError, job, trackJob } = useDocument();
   const [view, setView] = useState<View>("rapor");
+  const openedDocId = useRef("");
+  useEffect(() => {
+    if (!doc || openedDocId.current === doc.id) return;
+    openedDocId.current = doc.id;
+    if (doc.documentTemplates?.length && !doc.report.pages.some(p => p.visuals.length)) setView("belge");
+  }, [doc]);
   const [reportToolbar, setReportToolbar] = useState<HTMLDivElement | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [getData, setGetData] = useState(false);
@@ -138,6 +146,12 @@ function Shell() {
             <span className="ribbon-ico">✎</span>Farklı kaydet
           </button>
           <span className="ribbon-label">Dosya</span>
+        </div>
+        <div className="ribbon-group">
+          <button className="ribbon-btn" aria-pressed={view === "belge"} onClick={() => setView("belge")}>
+            <span className="ribbon-ico">▧</span>Belge Tasarımcısı
+          </button>
+          <span className="ribbon-label">Belgeler</span>
         </div>
         {view === "rapor" && (tableCount > 0 || doc?.report.pages.some((p) => p.visuals.length > 0)) && <div className="ribbon-group">
           <div ref={setReportToolbar} />
@@ -279,6 +293,12 @@ function Shell() {
               </div>
             </div>
           )}
+          {view === "belge" && (activeViewAs ? <div className="empty-state">
+            <h2>Rol önizlemesi açık</h2><p>Belge tasarımına dönmek için rol önizlemesini kapatın.</p>
+            <button onClick={() => setViewAs(null)}>Farklı görüntülemeyi durdur</button>
+          </div> : tableCount === 0 ? <div className="empty-state"><h2>Belge için veri ekleyin</h2>
+            <p>Fatura veya teklif başlıklarıyla bunlara bağlı kalem tablolarını yükleyin.</p>
+            <button className="primary" onClick={() => setGetData(true)}>Veri al</button></div> : <PrintDesigner key={doc?.id} />)}
           {view === "model" && (
             <ModelView
               onGetData={() => setGetData(true)}

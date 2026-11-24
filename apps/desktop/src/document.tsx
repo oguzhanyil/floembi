@@ -1,4 +1,5 @@
-import type { DocumentState, Job, ModelOp } from "@floem/client";
+import type { DocumentState, FormKind, Job, ModelOp, PrintTemplate } from "@floem/client";
+import { defaultPrintTemplate } from "@floem/client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { toUiError, useClient, type UiError } from "./api";
 
@@ -14,6 +15,7 @@ interface DocumentApi {
   setDoc(d: DocumentState): void;
   /** Belgenin bir kısmını güncel duruma göre değiştirir (eşzamanlı güncellemelerde eski kopyayı yazmamak için) */
   patchDoc(fn: (d: DocumentState) => DocumentState): void;
+  editPrintTemplate(id: string, kind: FormKind, change: Partial<PrintTemplate>): void;
   error: UiError | null;
   setError(e: UiError | null): void;
   /** Çalışan ya da sonucu gösterilen içe aktarım/yenileme işi */
@@ -43,6 +45,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const docRef = useRef<DocumentState | null>(null);
   const loadGeneration = useRef(0);
   const flushers = useRef(new Set<() => Promise<void>>());
+  const pendingTemplates = useRef(new Map<FormKind, PrintTemplate>());
   const registerFlush = useCallback((fn: () => Promise<void>) => {
     flushers.current.add(fn);
     return () => {
@@ -51,9 +54,20 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   }, []);
   const flushAll = useCallback(async () => {
     for (const f of flushers.current) await f();
-  }, []);
+    const id = docRef.current?.id;
+    if (id) for (const [kind, template] of pendingTemplates.current) {
+      await client.setPrintTemplate(id, template.title.trim() ? template : { ...template, title: defaultPrintTemplate(kind).title });
+      if (docRef.current?.id === id && pendingTemplates.current.get(kind) === template) pendingTemplates.current.delete(kind);
+    }
+  }, [client]);
 
   const setDoc = useCallback((d: DocumentState) => {
+    if (docRef.current?.id !== d.id) pendingTemplates.current.clear();
+    if (pendingTemplates.current.size) {
+      const templates = new Map((d.documentTemplates ?? []).map(t => [t.kind, t]));
+      for (const [kind, template] of pendingTemplates.current) templates.set(kind, template);
+      d = { ...d, dirty: true, documentTemplates: [...templates.values()] };
+    }
     docRef.current = d;
     setDocState(d);
     window.floem?.setDocState({ name: d.name, dirty: d.dirty });
@@ -62,6 +76,14 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const patchDoc = useCallback((fn: (d: DocumentState) => DocumentState) => {
     const cur = docRef.current;
     if (cur) setDoc(fn(cur));
+  }, [setDoc]);
+
+  const editPrintTemplate = useCallback((id: string, kind: FormKind, change: Partial<PrintTemplate>) => {
+    const current = docRef.current;
+    if (current?.id !== id) return;
+    const before = current.documentTemplates?.find(t => t.kind === kind) ?? defaultPrintTemplate(kind);
+    pendingTemplates.current.set(kind, { ...before, ...change });
+    setDoc(current);
   }, [setDoc]);
 
   const reload = useCallback(async () => {
@@ -97,7 +119,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const save = useCallback(
     async (saveAs = false) => {
       if (openingRef.current) return false;
-      await flushAll();
+      try { await flushAll(); } catch (e) { setError(toUiError(e)); return false; }
       const current = docRef.current;
       if (!current) return false;
       let path: string | undefined;
@@ -191,7 +213,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ doc, apply, save, open, opening, newDocument, reload, setDoc, patchDoc, error, setError, job, trackJob: setJob, registerFlush }}
+      value={{ doc, apply, save, open, opening, newDocument, reload, setDoc, patchDoc, editPrintTemplate, error, setError, job, trackJob: setJob, registerFlush }}
     >
       {children}
     </Ctx.Provider>

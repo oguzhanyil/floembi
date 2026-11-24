@@ -2,6 +2,27 @@
 
 24 Kasım 2026 · Ürün ve geliştirme planı
 
+## Desktop'ta bugün deneyebileceğiniz sürüm
+
+**Aç → `data/Belge-Demo.floem`** ile hazır raporu açın. Dosya, tasarımcıda FAT-0200 faturasını seçer. Kendi açık raporunuzda aynı ekrana üst şeritteki **Belge Tasarımcısı** düğmesiyle geçebilirsiniz. **A4 önizleme** bütün kalemleri gerçek sayfalarda gösterir. **PDF indir** aynı çıktıyı kaydeder. Önizlemedeki yazıcı simgesi yazdırma penceresini açar.
+
+**Fatura** ve **Teklif** ayrı şablonlardır. Sol panelde firma, başlık, PNG/JPEG logo, vurgu rengi, detay sütunları, depo/ürün gruplaması, ara toplam ve not düzenlenir. Sütunlar sürüklenerek veya ok düğmeleriyle sıralanır. **Ctrl+S** iki şablonu ve seçilen örnekleri `.floem` dosyasına yazar. Şablonlar biçim 2 arşivindeki `documentTemplates.json` dosyasında saklanır. Düzenleyici, açık yerel modelin anlık görüntüsünü okur.
+
+| Kabul belgesi | PDF'deki kalem | Depo | A4 sayfa | Son sayfada tek genel toplam |
+|---|---:|---:|---:|---:|
+| FAT-0200 | 182 | 2 | 6 | 33.061,80 TL |
+| TEK-0001 | 1 | 1 | 1 | 17,10 TL |
+| TEK-0002 | 40 | 3 | 2 | 2.886,00 TL |
+| TEK-0003 | 200 | 3 | 7 | 14.766,00 TL |
+
+İlk sürüm aşağıdaki SAP B1 demo alanlarını kullanır. Sıradaki tasarım işleri başka modeller için elle alan eşleme, boş şablon ve nesneleri bant içinde milimetreyle konumlandırmadır. Web'de yetkili rapor satırından belge açma üçüncü aşamadadır.
+
+Hazır raporu aynı kaynaktan yeni bir yola tekrar üretmek için depo kökünde aşağıdaki komutu kullanın.
+
+```powershell
+.\.venv\Scripts\python -m floem_bi.demo.belge_raporu data\SAPB1Demo-Belgeler.sqlite data\Belge-Demo-Yeni.floem
+```
+
 İlk kullanıcı hedefi, aynı Floem modelinden **satış faturası** ve **satış teklifi** için iki ayrı şablon hazırlamak. Kullanıcı logosunu, alanları ve toplamları yerleştirecek, örnek bir belge seçip kaç sayfa tuttuğunu görecek ve baskıya uygun PDF alacak. Bu tasarım yaklaşımı *bant tabanlı raporlama* (banded reporting), fiziksel sayfalara bölünen çıktı ise *sayfalandırılmış rapor* (paginated report) adıyla kullanılıyor. Arayüz için önerilen ad **Belge Tasarımcısı**. [SAP Crystal Reports 2025 kullanıcı kılavuzu](https://help.sap.com/doc/37c8938b12384f399940e22b7315979f/2025/en-US/cr2025_usergde_en.pdf) · [Microsoft Learn, sayfalandırılmış fatura ve formlar](https://learn.microsoft.com/en-us/power-bi/paginated-reports/report-design/create-invoices-forms-lists-report-builder)
 
 ## Güncel araçlardan alınacak tasarım kararları
@@ -35,7 +56,7 @@ Teklif şablonunda aynı bantlarla **geçerlilik tarihi, teslim ve ödeme koşul
 | Mevcut dayanak | Planlanan geliştirme |
 |---|---|
 | [Desktop tasarımcısı](../packages/designer/src/ReportDesigner.tsx) alan paneli, seçim, hizalama ve geri alma içeriyor. | Belge düzenleyicisi aynı etkileşimleri kullanır. Bantların içinde mm cinsinden konumlar saklanır. Ayrıntı satırları çoğaldıkça alttaki bantların başlangıcını sayfalama motoru belirler. |
-| [.floem arşivi](../src/floem_bi/document/floemfile.py), [Python rapor şeması](../src/floem_bi/report/schema.py) ve [TypeScript tanımı](../packages/client/src/index.ts) mevcut. | Bir rapor birden çok adlandırılmış şablon taşıyabilir. Öneri, şablonları sürümlü ve isteğe bağlı bir `documentTemplates` koleksiyonu olarak `report.json` içinde saklamak. Eski dosya boş koleksiyonla açılır. Şablonlu dosyayı tanımayan eski Desktop'ın kaydederek şablonu kaybetmesi biçim sürümüyle önlenir. |
+| [.floem arşivi](../src/floem_bi/document/floemfile.py) ve [belge şablonu tanımı](../packages/client/src/printForms.ts) | Şablonlar arşivde ayrı bir `documentTemplates.json` girdisinde saklanır. Böylece rapor görsellerini düzenleyen bir kayıt işlemi şablonları korur. Eski dosya boş şablon listesiyle açılır. Şablon içeren rapor biçim 2 olarak kaydedilir. |
 | [Sorgu motoru](../src/floem_bi/report/query.py) alanları, filtreleri ve FDX ölçülerini çözüyor. [Yayımlanmış rapor ve App sorguları](../src/floem_bi/server/app.py) kullanıcı yetkisini ve RLS'yi uyguluyor. | Aynı güvenlik ve model bağlamında tek belgenin başlığını, sıralı kaynak satırlarını ve toplamlarını getiren belge sorgusu eklenir. Seçici, önizleme ve PDF aynı yetkili veri sürümünü kullanır. Baskı sürerken sürüm değişirse yeniden önizleme istenir. |
 | [Satır eylemi](../packages/report/src/visualActions.ts) bugün seçili hücrenin değerini taşıyor. | **Belgeyi aç** eylemi şablonu ve tam belge anahtarını taşır. Tekil birleşik anahtar varsa doğrudan kullanılır. Firma, belge türü ve iç numara ayrı sütunlardaysa alanların birlikte eşlenmesi gerekir. Ürün filtresi faturayı bulmaya yardım eder. Baskıda seçili faturanın bütün yetkili kalemleri alınır. Kapsamı eksik bir belge tam fatura olarak üretilmez. |
 | [PDF aktarımı](../packages/report/src/tablePdf.ts) pdfmake 0.3.14, gömülü Türkçe font, tekrarlı sütun başlığı ve sayfa numarası kullanıyor. [Büyük tablo aktarımının](f09-buyuk-grid-ve-aktarim.md) kendi grup sınırları var. | Ayrı bir belge üreticisi aynı PDF altyapısını kullanır. Önce fiziksel ölçü, satır akışı ve grup kuralları sınanır. Önizleme, indirme ve yazdırma aynı üretilmiş PDF'yi kullanır. Eksik satırlı PDF indirmesi engellenir ve sorunlu alan/bant tasarımda gösterilir. pdfmake'in yerel paket lisansı MIT, kullanılan Roboto fontları Apache-2.0'dır. [pdfmake 0.3 belgeleri](https://pdfmake.github.io/docs/0.3/) · [Floem font kaydı](../packages/report/src/fonts/README.md) |
@@ -67,7 +88,7 @@ Desktop'ın içe aktarma servisinde dört tablonun satır sayıları, iki etkin 
 
 | Sıra | Teslim | Bittiğini nasıl anlayacağız? |
 |---|---|---|
-| 1 | **Belge ve baskı denemesi.** Hazırlanan SQLite kaynağından başlık ve detay çekilir. İlk A4 baskı denemesinde FAT-0200 depo bazında gruplanır. | 182 fatura kalemi ve üç teklifin 1, 40 ve 200 kalemi kaynakla karşılaştırılır. Aynı ürünün ayrı satırları korunur. Sonraki sayfada sütun başlığı tekrarlar. Genel toplam belge sonunda bir kez çıkar. |
+| 1 | **Belge ve baskı denemesi tamamlandı.** FAT-0200 ve üç teklifin PDF'leri Desktop'tan indirildi. | PDF'den okunan bütün kalem kimlikleri, satır tutarları, depo ara toplamları, vergi ve son sayfadaki genel toplam SQLite ile karşılaştırıldı. |
 | 2 | **İlk kullanılabilir Desktop tasarımcısı.** İki hazır şablon ve boş şablon, sürükle-bırak, bantlar, gruplama/sıralama, biçimlendirme, logo, önizleme, PDF ve kaydet/aç. | Kullanıcı yardım almadan logosunu değiştirir, depoya göre grup ve ara toplam ekler, teklif koşulunu düzenler ve iki PDF'yi alır. Dosyayı kapatıp açınca yaptığı düzen korunur. **İlk kullanıcı denemesi bu aşamada yapılır.** |
 | 3 | **Raporla bütünleşme ve web çıktısı.** Fatura satırından ilgili şablonu açma, mevcut yayımlama ile taşıma, tarayıcıdan önizleme/indirme/yazdırma. | Desktop ve web'de aynı şablon/veri sürümü aynı sayfa sayısını ve toplamı verir. İki firmada numarası aynı olan faturalar karışmaz. Yetkisiz kullanıcı alanları, belgeyi ve PDF'yi açamaz. |
 | 4 | **Kullanım sonucuna göre genişletme.** İç içe gruplar, matbu form/PDF üzerine koordinatla baskı, toplu belge çıktısı, barkod/QR, etiket ve irsaliye adayları. | Önceliği ilk denemede işi durduran veya elle düzeltme gerektiren adımlar belirler. Matbu baskı seçilirse gerçek yazıcıda %100 ölçekte alan eşleşmesi ayrıca denenir. |

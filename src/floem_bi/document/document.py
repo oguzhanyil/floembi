@@ -211,6 +211,7 @@ class Document:
                 "model": self.tanim.model_dump(mode="json", exclude_none=True),
                 "diagram": self.content.diagram,
                 "report": self.content.report,
+                "documentTemplates": [t.model_dump() for t in self.content.print_templates],
                 "stats": {
                     t.ad: {"rows": counts.get(t.kaynak.tablo.lower()) if t.kaynak.katman == DATA_SCHEMA else None}
                     for t in self.tanim.tablolar
@@ -330,6 +331,16 @@ class Document:
                     self.revision += 1
 
     # ---------------------------------------------------------------- rapor
+    def set_print_template(self, template):
+        with self.lock:
+            if self.closed:
+                raise DocumentError("Açık rapor değişti. Belgeyi yeniden seçin.")
+            items = {t.kind: t for t in self.content.print_templates}
+            if items.get(template.kind) != template:
+                items[template.kind] = template
+                self.content.print_templates = list(items.values())
+                self._touch()
+
     def set_report(self, report: dict) -> None:
         """Rapor tanımını doğrulayıp saklar (görsel ekleme, taşıma, alan atama...)."""
         clean = Report.model_validate(report).model_dump(mode="json", exclude_none=True)

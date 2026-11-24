@@ -25,3 +25,5 @@ export * from "./ThemeControls";
 export * from "./ImportCompatibility";
 export * from "./layout";
 export * from "./usePageLayout";
+export const createPrintFormPdf = async (...args: Parameters<typeof import("./printFormPdf").printFormPdf>) =>
+  (await import("./printFormPdf")).printFormPdf(...args);

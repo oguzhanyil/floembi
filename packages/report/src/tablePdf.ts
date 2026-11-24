@@ -1,17 +1,8 @@
-import pdfMake from "pdfmake/build/pdfmake";
+import pdfMake from "./pdfEngine";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
-import regular from "./fonts/Roboto-Regular.ttf?inline";
-import medium from "./fonts/Roboto-Medium.ttf?inline";
 import fontLicense from "./fonts/LICENSE.txt?raw";
 import type { ExportTable } from "./tableExport";
 import { formatValue } from "./reportUtils";
-
-// Roboto v2.138 (Apache-2.0). pdfmake'in farklı lisanslı hazır font paketi kullanılmaz.
-pdfMake.addVirtualFileSystem({
-  "Floem-Regular.ttf": regular.split(",")[1],
-  "Floem-Medium.ttf": medium.split(",")[1],
-});
-pdfMake.addFonts({ Floem: { normal: "Floem-Regular.ttf", bold: "Floem-Medium.ttf", italics: "Floem-Regular.ttf", bolditalics: "Floem-Medium.ttf" } });
 
 export async function tablePdfBlob(table: ExportTable): Promise<Blob> {
   const content: Content[] = [];

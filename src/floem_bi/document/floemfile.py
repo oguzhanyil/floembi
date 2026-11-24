@@ -5,6 +5,7 @@ Zip arşivi:
   model.yaml      semantik model (ModelTanimi; şifre içermez)
   diagram.json    model görünümündeki kart konumları
   report.json     rapor tanımı (H4'te doluyor)
+  documentTemplates.json   düzenlenebilir baskı şablonları (biçim 2)
   data.duckdb     içe aktarılmış veri (Import modu anlık görüntüsü)
 
 Yazma atomiktir: önce geçici dosyaya yazılır, sonra yerine taşınır. Okurken yalnızca
@@ -26,9 +27,10 @@ import yaml
 from pydantic import ValidationError
 
 from ..model.schema import ModelTanimi
+from .print_forms import PrintTemplate
 
 FORMAT = "floem"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 MAX_JSON_BYTES = 50 * 1024 * 1024
 
 
@@ -45,6 +47,7 @@ class FloemContent:
     diagram: dict[str, Any] = field(default_factory=dict)
     report: dict[str, Any] = field(default_factory=dict)
     manifest: dict[str, Any] = field(default_factory=dict)
+    print_templates: list[PrintTemplate] = field(default_factory=list)
 
 
 def dump_model(tanim: ModelTanimi) -> str:
@@ -58,7 +61,7 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     manifest = {
         "format": FORMAT,
-        "format_version": FORMAT_VERSION,
+        "format_version": FORMAT_VERSION if content.print_templates else 1,
         "app": f"Floem BI Desktop {app_version}",
         "created": content.manifest.get("created", now),
         "modified": now,
@@ -71,6 +74,8 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
             z.writestr("model.yaml", dump_model(content.tanim))
             z.writestr("diagram.json", json.dumps(content.diagram, ensure_ascii=False, indent=2))
             z.writestr("report.json", json.dumps(content.report or {"version": 1, "pages": []}, ensure_ascii=False))
+            if content.print_templates:
+                z.writestr("documentTemplates.json", json.dumps([t.model_dump() for t in content.print_templates], ensure_ascii=False))
             # DuckDB dosyası zaten sıkıştırılmış; tekrar sıkıştırmak yalnızca yavaşlatır
             z.write(db_file, "data.duckdb", compress_type=zipfile.ZIP_STORED)
         os.replace(tmp, path)
@@ -117,8 +122,17 @@ def read(path: str | Path, db_dest: str | Path) -> FloemContent:
         diagram = _json(z, "diagram.json", {})
         report = _json(z, "report.json", {"version": 1, "pages": []})
         try:
+            entries = _json(z, "documentTemplates.json", [] if manifest.get("format_version", 1) == 1 else None)
+            if not isinstance(entries, list):
+                raise ValueError("Belge şablonları listesi eksik veya geçersiz")
+            templates = [PrintTemplate.model_validate(t) for t in entries]
+            if len({t.kind for t in templates}) != len(templates):
+                raise ValueError("Yinelenen belge şablonu")
+        except (TypeError, ValueError) as e:
+            raise FloemFileError("Belge şablonu okunamadı", str(e)) from e
+        try:
             with z.open("data.duckdb") as src, open(db_dest, "wb") as dst:
                 shutil.copyfileobj(src, dst, 1024 * 1024)
         except KeyError:
             pass  # veri yoksa (yalnızca model) boş veritabanıyla açılır
-    return FloemContent(tanim=tanim, diagram=diagram, report=report, manifest=manifest)
+    return FloemContent(tanim=tanim, diagram=diagram, report=report, manifest=manifest, print_templates=templates)

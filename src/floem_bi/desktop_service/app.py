@@ -32,6 +32,7 @@ from .connections import ConnectionStore
 from .publish import PublishClient
 from .component_library import ComponentStore
 from ..report.schema import ComponentDefinition
+from ..document.print_forms import FormKind, PrintTemplate, read_form
 
 
 class ConnectionIn(BaseModel):
@@ -376,6 +377,24 @@ def create_app(
         except ValueError as e:                      # pydantic doğrulama hatası
             raise DocumentError("Rapor tanımı geçersiz", str(e), code="report_invalid") from e
         return {"ok": True, "dirty": doc().dirty}
+
+    def print_document(document_id: str):
+        current = doc()
+        if current.id != document_id:
+            raise DocumentError("Açık rapor değişti. Belgeyi yeniden seçin.")
+        return current
+
+    @app.put("/document/{document_id}/print-template", dependencies=[Depends(auth)])
+    def put_print_template(document_id: str, body: PrintTemplate):
+        print_document(document_id).set_print_template(body)
+        return {"ok": True}
+
+    @app.get("/document/{document_id}/print-data/{kind}", dependencies=[Depends(auth)])
+    def print_data(document_id: str, kind: FormKind, record: str | None = None, search: str = ""):
+        try:
+            return read_form(print_document(document_id), kind, record, search)
+        except ValueError as e:
+            raise DocumentError(str(e), code="print_data") from e
 
     @app.post("/document/query", dependencies=[Depends(auth)])
     def visual_query(body: VisualQuery, view_as: list[str] = Query(default_factory=list), upn: str | None = None):

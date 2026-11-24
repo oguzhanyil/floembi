@@ -13,6 +13,7 @@ const csp: Plugin = {
       "img-src 'self' data:",
       "font-src 'self' data:",
       "worker-src 'self' blob:",
+      "frame-src 'self' blob:",
       "connect-src http://127.0.0.1:*",
     ].join("; ");
     return html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${policy}" />`);

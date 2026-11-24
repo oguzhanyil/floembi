@@ -1,4 +1,6 @@
 import type { AnalyticsConfig, MetricEvidence, MetricReceipt } from "./analytics";
+import type { FormKind, PrintChoices, PrintRecord, PrintTemplate } from "./printForms";
+export * from "./printForms";
 import type { ScenarioDefinition, ScenarioQuery, ScenarioReceipt, ScenarioWorkflow } from "./scenarios";
 export type { ScenarioDefinition, ScenarioParameter, ScenarioOutput, ScenarioQuery, ScenarioReceipt, ScenarioProposal, ScenarioScope, ScenarioProposalInput, ScenarioHistory, ScenarioWorkflow } from "./scenarios";
 export type { AnalyticsConfig, AnalyticsMetric, AnalyticsRule, MetricEvidence, MetricReceipt } from "./analytics";
@@ -676,6 +678,7 @@ export interface VisualResult {
 }
 
 export interface DocumentState {
+  documentTemplates?: PrintTemplate[];
   id: string;
   name: string;
   path: string | null;
@@ -839,6 +842,15 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
 
   getDocument() {
     return this.doc.request<DocumentState>("GET", "/document");
+  }
+  printChoices(id: string, kind: FormKind, search: string) {
+    return this.doc.request<PrintChoices>("GET", `/document/${encodeURIComponent(id)}/print-data/${kind}`, undefined, { search });
+  }
+  printRecord(id: string, kind: FormKind, record: string) {
+    return this.doc.request<PrintRecord>("GET", `/document/${encodeURIComponent(id)}/print-data/${kind}`, undefined, { record });
+  }
+  setPrintTemplate(id: string, template: PrintTemplate) {
+    return this.doc.request<{ ok: boolean }>("PUT", `/document/${encodeURIComponent(id)}/print-template`, template);
   }
   newDocument() {
     return this.doc.request<DocumentState>("POST", "/document/new", {});

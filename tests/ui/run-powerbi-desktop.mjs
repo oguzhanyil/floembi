@@ -10,6 +10,7 @@ import { join, resolve, relative, isAbsolute } from "node:path";
 import assert from "node:assert/strict";
 import { testRibbon } from "./ribbon-smoke.mjs";
 import { testPowerBiAppearance } from "./powerbi-appearance-smoke.mjs";
+import { testPrintForms } from "./print-form-smoke.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const dir = await mkdtemp(join(tmpdir(), "floem-powerbi-test-"));
@@ -87,6 +88,10 @@ try {
   assert.equal(await evaluate('(async()=> (await (await fetch("/api/verify")).json()).sourceUnchanged)()'), true);
   await testRibbon({ call, evaluate, waitFor, open });
   await testPowerBiAppearance({ evaluate, waitFor, open });
+  if (process.env.FLOEM_UI_PRINT_DEMO) {
+    await testPrintForms({ call, evaluate, waitFor, open, dir, source: resolve(process.env.FLOEM_UI_PRINT_DEMO),
+      outputs: process.env.FLOEM_UI_PRINT_OUTPUT });
+  }
   if (process.env.FLOEM_UI_CARD_REPORT) {
     const report = resolve(process.env.FLOEM_UI_CARD_REPORT);
     assert(existsSync(report), "Kartlı kabul raporu bulunamadı");
