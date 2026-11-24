@@ -1,6 +1,13 @@
 # Floem BI: devir notu (24.11.2026)
 
-**Sıradaki aşama · Desktop'ta rapor hazırlama deneyimi**
+**Öncelik · Fatura ve teklif çıktısı için Belge Tasarımcısı planı**
+
+Desktop deneyim testlerinden önce bant tabanlı belge tasarımı incelendi. Önerilen
+sıra, çok sayfalı fatura/teklif baskı denemesi, Desktop'ta düzenlenebilir şablonlar,
+ilk kullanıcı testi ve ardından rapor satırından web çıktısını açma şeklindedir.
+[Araç karşılaştırması, geliştirme sırası ve kabul örnekleri](docs/belge-tasarimcisi-plani.md).
+
+**Kullanıcı testi · Desktop'ta rapor hazırlama deneyimi**
 
 Kullanıcı kendi seçtiği raporları Floem BI Desktop arayüzünde hazırlayacak. Hangi
 işlemleri kendi başına tamamlayabildiğini, nerede yardıma ihtiyaç duyduğunu ve
