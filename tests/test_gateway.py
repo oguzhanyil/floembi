@@ -85,17 +85,32 @@ def test_gateway_refresh_success(server, floem_file, monkeypatch):
                          json={"values": [{"table": "INV1", "column": "LineTotal"}]}).json()["rows"][0][0]
     td.SOURCE.tables[("dbo", "INV1")][1].append((2, 1, "B1", 2, td.Decimal("1"), td.Decimal("20")))
     monkeypatch.setattr(gateway_agent, "make_connector", td.FakeConnector)
+    assert server.put(f"/api/datasets/{dsid}/schedule", headers=headers, json={"notify_success": True}).is_success
     with connect_gateway(server, gateway_id, key, headers) as ws:
         assert server.get("/api/workspaces/1/gateways", headers=headers).json()[0]["online"] is True
         started = server.post(f"/api/datasets/{dsid}/refresh", headers=headers)
         assert started.status_code == 200 and started.json()["status"] == "queued"
         job = ws.receive_json()
         assert job["type"] == "refresh" and len(job["tables"]) == 5
+        overlap = server.post(f"/api/datasets/{dsid}/refresh", headers=headers).json()
+        assert overlap["status"] == "failed" and overlap["stage"] == "Kuyruk"
         assert job["tables"][0]["source"]["password_enc"] != "yalnızca-gateway-bilir"
         gateway_agent.extract_job(job, key, lambda payload: ws.send_bytes(payload) if isinstance(payload, bytes)
                                   else ws.send_json(payload))
-        run = wait_run(server, headers, dsid, "succeeded")
+        for _ in range(100):
+            history = server.get(f"/api/datasets/{dsid}/refreshes", headers=headers).json()
+            run = next(r for r in history if r["id"] == started.json()["id"])
+            if run["status"] == "succeeded":
+                break
+            time.sleep(.05)
+        assert run["status"] == "succeeded"
         assert run["elapsed_ms"] >= 0
+        for _ in range(100):
+            inbox = server.get("/api/mail/inbox", headers=headers).json()["items"]
+            if any(item["subject"].endswith("yenilemesi başarılı") for item in inbox):
+                break
+            time.sleep(.05)
+        assert any(item["subject"].endswith("yenilemesi başarılı") for item in inbox)
     after = server.post(f"/api/reports/{rid}/query", headers=headers,
                         json={"values": [{"table": "INV1", "column": "LineTotal"}]}).json()["rows"][0][0]
     assert after == before + 20

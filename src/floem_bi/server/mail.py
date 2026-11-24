@@ -330,6 +330,16 @@ def test_mail(*, to: str, by: str, url: str, server: str) -> Mail:
     return Mail(to=to, subject=subject, text=text, html=html)
 
 
+def refresh_mail(*, to: str, model: str, run: dict, url: str) -> Mail:
+    status = "başarılı" if run["status"] == "succeeded" else "başarısız"
+    summary = " · ".join(filter(None, [run["table_name"], run["stage"], f'{run["elapsed_ms"] / 1000:.1f} sn']))
+    message = (run["error"] or {}).get("message", "")
+    subject = f"{model} modelinin yenilemesi {status}"
+    html = _layout(intro="Anlam modeli yenilemesi", title=escape(model), subtitle=escape(summary),
+                   quote=escape(message) or None, button="Geçmişi aç", url=url, footer=escape(subject))
+    return Mail(to=to, subject=subject, text=f"{subject}\n{summary}\n{message}\nGeçmişi aç: {url}", html=html)
+
+
 def sender_display(name: str, settings: MailSettings) -> str:
     """Gönderen adı paylaşan kişinin adıyla, adres floembi.app'in adresiyle (Power BI'daki gibi)."""
     addr = settings.sender.split("<")[-1].rstrip(">").strip() if "<" in settings.sender else settings.sender

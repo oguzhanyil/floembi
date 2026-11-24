@@ -1225,7 +1225,16 @@ export interface DatasetDetails {
   tables: { ad: string; sutunlar: number; gizli: boolean }[];
   relationships: unknown[]; sources: { sunucu: string; veritabani: string | null }[];
 }
+export interface RefreshSchedule {
+  enabled: boolean;
+  times: string[];
+  timezone: string;
+  notify_success: boolean;
+  next_run: string | null;
+}
+
 export interface RefreshRun {
+  trigger: "manual" | "scheduled";
   id: number; dataset_id: number; gateway_id: number | null;
   status: "queued" | "running" | "succeeded" | "failed";
   stage: string | null; table_name: string | null;
@@ -1284,6 +1293,12 @@ export class WebClient {
   }
   refreshHistory(id: number) {
     return this.http.request<RefreshRun[]>("GET", `/api/datasets/${id}/refreshes`);
+  }
+  refreshSchedule(id: number) {
+    return this.http.request<RefreshSchedule>("GET", `/api/datasets/${id}/schedule`);
+  }
+  saveRefreshSchedule(id: number, schedule: Omit<RefreshSchedule, "next_run">) {
+    return this.http.request<RefreshSchedule>("PUT", `/api/datasets/${id}/schedule`, schedule);
   }
   sharedWithMe() {
     return this.http.request<SharedReport[]>("GET", "/api/shared-with-me");

@@ -20,6 +20,10 @@ extraResources:
   - from: build-resources/floem-bi.png
     to: floem-bi.png
 asar: true
+fileAssociations:
+  - ext: floem
+    name: Floem BI raporu
+    role: Editor
 npmRebuild: false
 win:
   icon: build-resources/floem-bi.ico

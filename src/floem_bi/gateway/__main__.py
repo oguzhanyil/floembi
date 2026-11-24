@@ -8,6 +8,7 @@ import base64
 import io
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -23,8 +24,7 @@ from websockets.exceptions import WebSocketException
 from ..connectors import ConnectionSpec, SourceRef
 from ..connectors.base import ConnectorError
 from ..connectors.sqlserver import make_connector
-from ..importer.loader import unique_names
-from ..importer.types import arrow_type, to_arrow
+from ..importer.types import arrow_type, to_arrow, unique_names
 
 KEY_SERVICE = "Floemway"
 LEGACY_KEY_SERVICE = "FloemBI Gateway"
@@ -180,11 +180,29 @@ def main() -> None:
     parser.add_argument("--id", type=int, help="Floemway numarası")
     parser.add_argument("--token", help="İlk kayıt için tek kullanımlık anahtar")
     parser.add_argument("--config", type=Path, help="Şifresiz Floemway ayar dosyası")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--copy-to-service", action="store_true", help="Konsol kaydını kurulu Windows hizmetine aktar")
+    mode.add_argument("--service", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     default_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "FloemBI"
     config = args.config or default_dir / f"gateway-{args.id or 1}.json"
     try:
-        if args.token:
+        if args.copy_to_service or args.service:
+            from .service_identity import read_identity, store_identity
+            private = Path(sys.executable).resolve().parent.parent / "Private" / "identity.json"
+            if not getattr(sys, "frozen", False) or not private.parent.is_dir():
+                parser.error("Önce Floemway Windows hizmeti yükleyicisini çalıştırın")
+            if args.copy_to_service:
+                server, gateway_id, key = load(config)
+                store_identity(private, server, gateway_id, key)
+                registration = private.parent.parent / "registration.json"
+                temp = registration.with_suffix(".tmp")
+                temp.write_text(json.dumps({"server": server, "gateway_id": gateway_id}), encoding="utf-8")
+                temp.replace(registration)
+                print("Floemway kaydı hizmete aktarıldı.")
+                return
+            server, gateway_id, key = read_identity(private)
+        elif args.token:
             if not args.server or not args.id:
                 parser.error("İlk kayıt için --server ve --id gerekir")
             key = enroll(args.server, args.id, args.token, config)

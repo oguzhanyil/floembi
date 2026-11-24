@@ -22,7 +22,7 @@ from . import db, pilot_config
 from .auth import hash_password
 
 
-def bootstrap(directory: Path, email: str, name: str, password: str) -> None:
+def bootstrap(directory: Path, email: str, name: str, password: str, *, metadata_url=None) -> None:
     """Boş pilot veritabanına tek gerçek yönetici ve çalışma alanı ekler."""
     email = email.strip().lower()
     name = name.strip()
@@ -35,12 +35,12 @@ def bootstrap(directory: Path, email: str, name: str, password: str) -> None:
         raise ValueError("Yönetici şifresi 8-200 karakter olmalı.")
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    engine = db.make_engine(f"sqlite:///{(directory / 'floem.db').as_posix()}")
+    engine = db.make_engine(metadata_url or f"sqlite:///{(directory / 'floem.db').as_posix()}")
     try:
         with engine.begin() as c:
             if c.execute(select(db.users.c.id).limit(1)).first():
                 raise ValueError("Pilot veritabanında kullanıcı var; başlangıç hesabı tekrar oluşturulmadı.")
-            if not pilot_config.server_secret(directory):
+            if metadata_url is None and not pilot_config.server_secret(directory):
                 pilot_config.save_server_secret(directory, secrets.token_urlsafe(48))
             uid = c.execute(db.users.insert().values(
                 email=email, name=name, password_hash=hash_password(password), is_admin=True,

@@ -26,6 +26,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import os
 from email import policy as email_policy
 from email.parser import BytesParser
@@ -34,7 +35,7 @@ import shutil
 import tempfile
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import timedelta, timezone
 from pathlib import Path
@@ -46,6 +47,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine import URL
 
 from ..compiler import UserInfo
 from ..document import floemfile
@@ -58,15 +60,17 @@ from . import db
 from .mail import (
     SECURITY, Mail, MailError, MailSettings, SecretBox, SmtpSettings, access_mail, app_mail, invite_mail,
     load_mail_settings,
-    login_hint, send, sender_display, settings_from_row, share_mail, test_mail,
+    login_hint, refresh_mail, send, sender_display, settings_from_row, share_mail, test_mail,
 )
 from . import pilot_config
 from .events import EventHub
 from .refresh import RefreshError, SnapshotBuilder
+from .schedule import RefreshSchedule
 from .auth import CAN_PUBLISH, ROLE_LABEL, ROLES, hash_password, issue_token, read_token, verify_password
 
 MAX_UPLOAD = 2 * 1024 ** 3          # 2 GB
 KEEP_VERSIONS = 2
+WAITING_GATEWAY = "Floemway bekleniyor"
 
 
 def iso(dt) -> str:
@@ -97,6 +101,9 @@ class ServerSettings:
     mail: MailSettings = field(default_factory=MailSettings)   # ortam değişkenlerinden; ekran ayarı önceliklidir
     invite_days: int = 7
     events_keepalive: float = 20.0                             # SSE: boşta yorum satırı aralığı (sn)
+    metadata_url: URL | None = None
+    deployment: bool = False
+    schedule_interval: float = 15.0
 
 
 # Geliştirme için iki sahte kullanıcı (gerçek kullanıcı yönetimi/SSO sonraki aşamada)
@@ -340,13 +347,13 @@ class EngineCache:
 
 def create_server(settings: ServerSettings | None = None) -> FastAPI:
     settings = settings or load_settings()
-    if settings.pilot and settings.seed_users:
+    if (settings.pilot or settings.deployment) and settings.seed_users:
         raise RuntimeError("Pilot modunda geliştirme kullanıcıları oluşturulamaz.")
     settings.data_dir.mkdir(parents=True, exist_ok=True)
-    engine = db.make_engine(f"sqlite:///{(settings.data_dir / 'floem.db').as_posix()}")
+    engine = db.make_engine(settings.metadata_url or f"sqlite:///{(settings.data_dir / 'floem.db').as_posix()}")
     if settings.seed_users:
         seed(engine, settings)
-    if settings.pilot:
+    if settings.pilot or settings.deployment:
         with engine.connect() as c:
             seeded = c.execute(select(db.users.c.id).where(
                 db.users.c.email.in_([email for email, *_ in SEED_USERS])).limit(1)).first()
@@ -358,26 +365,42 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             raise RuntimeError("Pilot veritabanında geliştirme hesabı bulundu; ayrı boş veri klasörü kullanın.")
         if admin is None:
             engine.dispose()
-            raise RuntimeError("Pilot yönetici hesabı yok. Önce 'python -m floem_bi.server.pilot init' çalıştırın.")
+            raise RuntimeError("Yönetici hesabı yok. Önce dağıtımın init komutunu çalıştırın.")
     with engine.begin() as c:
-        c.execute(db.refresh_runs.update().where(db.refresh_runs.c.status.in_(["queued", "running"])).values(
+        interrupted = c.execute(db.refresh_runs.update().where(db.refresh_runs.c.status.in_(["queued", "running"]),
+            db.refresh_runs.c.stage.is_distinct_from(WAITING_GATEWAY)).values(
             status="failed", stage="Sunucu yeniden başlatıldı", finished_at=db.now(),
             error=json.dumps({"message": "Sunucu yeniden başlatıldığı için yenileme durdu", "detail": ""},
-                             ensure_ascii=False)))
+                             ensure_ascii=False)).returning(db.refresh_runs.c.id)).scalars().all()
     engines = EngineCache()
     publish_lock = threading.Lock()
     login_throttle = LoginThrottle()
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        yield
-        engines.close()
-        engine.dispose()
+        async def schedule_loop():
+            for run_id in interrupted:
+                await send_refresh_notice(run_id)
+            while True:
+                try:
+                    await run_due()
+                except Exception:
+                    logging.getLogger(__name__).exception("Zamanlanmış yenilemeler kontrol edilemedi")
+                await asyncio.sleep(settings.schedule_interval)
+        worker = asyncio.create_task(schedule_loop())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+            engines.close()
+            engine.dispose()
 
     app = FastAPI(title="floembi.app", version="0.1.0", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.db = engine
 
-    if settings.pilot:
+    if settings.pilot or settings.deployment:
         @app.middleware("http")
         async def pilot_headers(request: Request, call_next):
             response = await call_next(request)
@@ -739,7 +762,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         error = json.loads(row.error) if row.error else None
         elapsed = int(((row.finished_at or db.now()).replace(tzinfo=timezone.utc) -
                        row.started_at.replace(tzinfo=timezone.utc)).total_seconds() * 1000)
-        return {"id": row.id, "dataset_id": row.dataset_id, "gateway_id": row.gateway_id,
+        return {"id": row.id, "dataset_id": row.dataset_id, "gateway_id": row.gateway_id, "trigger": row.trigger,
                 "status": row.status, "stage": row.stage, "table_name": row.table_name,
                 "error": error, "started_at": iso(row.started_at),
                 "finished_at": iso(row.finished_at) if row.finished_at else None, "elapsed_ms": max(0, elapsed)}
@@ -747,6 +770,35 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
     def refresh_row(run_id: int) -> dict:
         with engine.connect() as c:
             return refresh_view(c.execute(select(db.refresh_runs).where(db.refresh_runs.c.id == run_id)).one())
+
+    def notify_owner(run_id: int) -> None:
+        run = refresh_row(run_id)
+        with engine.connect() as c:
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == run["dataset_id"])).one()
+            success = c.scalar(select(db.refresh_schedules.c.notify_success).where(
+                db.refresh_schedules.c.dataset_id == ds.id))
+            if run["status"] == "succeeded" and not success:
+                return
+            owner = c.execute(select(db.users.c.email, db.users.c.id).where(db.users.c.id == ds.published_by)).one()
+            if not role_in(c, owner.id, ds.workspace_id):
+                return
+        url = f"{settings.public_url}/datasets/{ds.id}/history"
+        mail = refresh_mail(to=owner.email, model=ds.name, run=run, url=url)
+        deliver("refresh", mail, {"id": owner.id, "name": "Floemway"})
+
+    async def send_refresh_notice(run_id: int) -> None:
+        try:
+            await asyncio.to_thread(notify_owner, run_id)
+        except Exception:
+            logging.getLogger(__name__).exception("Yenileme bildirimi kaydedilemedi (iş %s)", run_id)
+
+    async def reject_run(run_id: int, message: str, stage: str) -> dict:
+        with engine.begin() as c:
+            c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
+                status="failed", stage=stage, finished_at=db.now(),
+                error=json.dumps({"message": message, "detail": ""}, ensure_ascii=False)))
+        await send_refresh_notice(run_id)
+        return refresh_row(run_id)
 
     async def fail_refresh(gateway_id: int, message: str, *, stage: str = "Floemway", table: str | None = None,
                            detail: str = "") -> None:
@@ -765,6 +817,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 await asyncio.to_thread(task.builder.close)
         finally:
             await asyncio.to_thread(shutil.rmtree, task.stage, True)
+            await send_refresh_notice(task.id)
 
     async def complete_refresh(task: ActiveRefresh) -> None:
         if task.builder is None:
@@ -803,15 +856,83 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             except ValueError:
                 pass
         notify_dataset(task.dataset_id, version)
+        await send_refresh_notice(task.id)
 
     @app.post("/api/datasets/{dsid}/refresh")
     async def start_refresh(dsid: int, user: dict = Depends(current_user)):
+        return await enqueue_refresh(dsid, user["id"])
+
+    def managed_dataset(c, dsid: int, uid: int):
+        ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
+        if ds is None:
+            raise NOT_FOUND("Anlam modeli")
+        if role_in(c, uid, ds.workspace_id) not in ("admin", "member"):
+            raise FORBIDDEN("Yenileme için Yönetici ya da Üye olmalısınız")
+        return ds
+
+    def read_schedule(row):
+        if row is None:
+            return RefreshSchedule()
+        return RefreshSchedule(enabled=row.enabled, timezone=row.timezone, times=json.loads(row.times),
+                               notify_success=row.notify_success)
+
+    @app.get("/api/datasets/{dsid}/schedule")
+    def get_schedule(dsid: int, user: dict = Depends(current_user)):
         with engine.connect() as c:
-            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
-            if ds is None:
-                raise NOT_FOUND("Anlam modeli")
-            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
-                raise FORBIDDEN("Şimdi yenile için Yönetici ya da Üye olmalısınız")
+            managed_dataset(c, dsid, user["id"])
+            row = c.execute(select(db.refresh_schedules).where(db.refresh_schedules.c.dataset_id == dsid)).first()
+        return {**read_schedule(row).model_dump(), "next_run": iso(row.next_run) if row and row.next_run else None}
+
+    @app.put("/api/datasets/{dsid}/schedule")
+    def set_schedule(dsid: int, body: RefreshSchedule, user: dict = Depends(current_user)):
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        with engine.begin() as c:
+            managed_dataset(c, dsid, user["id"])
+            values = {**body.model_dump(), "times": json.dumps(body.times), "next_run": body.after(db.now()),
+                      "configured_by": user["id"]}
+            insert = pg_insert if engine.dialect.name == "postgresql" else sqlite_insert
+            stmt = insert(db.refresh_schedules).values(dataset_id=dsid, **values)
+            c.execute(stmt.on_conflict_do_update(index_elements=["dataset_id"], set_=values))
+        return get_schedule(dsid, user)
+
+    async def run_due():
+        now = db.now()
+        schedules = db.refresh_schedules
+        with engine.connect() as c:
+            due = c.execute(select(schedules).where(schedules.c.next_run <= now)
+                            .order_by(schedules.c.next_run, schedules.c.dataset_id)).all()
+        for row in due:
+            with engine.begin() as c:
+                # Zamanın ilerletilmesi ve işin kaydı aynı işlemdedir. Kaçırılan saatler bir kez telafi edilir.
+                claimed = c.execute(schedules.update().where(schedules.c.dataset_id == row.dataset_id,
+                    schedules.c.next_run == row.next_run, schedules.c.configured_by == row.configured_by,
+                    schedules.c.times == row.times, schedules.c.timezone == row.timezone)
+                    .values(next_run=read_schedule(row).after(now))).rowcount
+                if not claimed:
+                    continue
+                waiting = c.scalar(select(db.refresh_runs.c.id).where(db.refresh_runs.c.dataset_id == row.dataset_id,
+                    db.refresh_runs.c.stage == WAITING_GATEWAY, db.refresh_runs.c.status == "queued").limit(1))
+                if waiting is None:
+                    c.execute(db.refresh_runs.insert().values(dataset_id=row.dataset_id, status="queued",
+                        trigger="scheduled", stage=WAITING_GATEWAY, requested_by=row.configured_by))
+        with engine.connect() as c:
+            jobs = c.execute(select(db.refresh_runs.c.id, db.refresh_runs.c.dataset_id, db.refresh_runs.c.requested_by)
+                .where(db.refresh_runs.c.status == "queued", db.refresh_runs.c.stage == WAITING_GATEWAY)
+                .order_by(db.refresh_runs.c.id)).all()
+        for rid, dsid, uid in jobs:
+            try:
+                await enqueue_refresh(dsid, uid, rid)
+            except ApiError as exc:
+                await reject_run(rid, exc.message, "Yetki")
+            except Exception:
+                await reject_run(rid, "Zamanlanmış yenileme başlatılamadı", "Sunucu")
+                logging.getLogger(__name__).exception("Zamanlanmış iş %s başlatılamadı", rid)
+
+    async def enqueue_refresh(dsid: int, uid: int, run_id: int | None = None):
+        scheduled = run_id is not None
+        with engine.connect() as c:
+            ds = managed_dataset(c, dsid, uid)
             model = ModelTanimi.model_validate(yaml.safe_load(ds.model_yaml))
             bindings = {r.source_key: r.gateway_source_id for r in c.execute(select(db.dataset_source_bindings).where(
                 db.dataset_source_bindings.c.dataset_id == dsid)).all()}
@@ -829,30 +950,23 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         elif len({s.gateway_id for s in selected}) != 1:
             error = "Bir anlam modeli için aynı Floemway üzerindeki bağlantıları seçin"
         with engine.begin() as c:
-            run_id = c.execute(db.refresh_runs.insert().values(
-                dataset_id=dsid, gateway_id=gateway_id, status="queued", stage="Kuyruk",
-                requested_by=user["id"])).inserted_primary_key[0]
+            if run_id is None:
+                run_id = c.execute(db.refresh_runs.insert().values(
+                    dataset_id=dsid, gateway_id=gateway_id, status="queued", stage="Kuyruk",
+                    requested_by=uid)).inserted_primary_key[0]
+            else:
+                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(gateway_id=gateway_id))
         if error:
-            with engine.begin() as c:
-                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Eşleme", error=json.dumps({"message": error, "detail": ""}, ensure_ascii=False),
-                    finished_at=db.now()))
-            return refresh_row(run_id)
+            return await reject_run(run_id, error, "Eşleme")
         with gateway_lock:
             connected = gateway_sockets.get(gateway_id)
             busy = gateway_id in active_refreshes
         if busy:
-            with engine.begin() as c:
-                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Kuyruk", error=json.dumps({"message": "Floemway üzerinde başka bir yenileme sürüyor", "detail": ""}, ensure_ascii=False),
-                    finished_at=db.now()))
-            return refresh_row(run_id)
+            if scheduled:
+                return refresh_row(run_id)
+            return await reject_run(run_id, "Floemway üzerinde başka bir yenileme sürüyor", "Kuyruk")
         if connected is None:
-            with engine.begin() as c:
-                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Bağlantı", error=json.dumps({"message": "Floemway çevrimdışı", "detail": ""}, ensure_ascii=False),
-                    finished_at=db.now()))
-            return refresh_row(run_id)
+            return await reject_run(run_id, "Floemway çevrimdışı", "Bağlantı")
         tmp_root = settings.data_dir / "tmp"
         tmp_root.mkdir(exist_ok=True)
         stage = Path(tempfile.mkdtemp(dir=tmp_root))
@@ -864,12 +978,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 active_refreshes[gateway_id] = task
         if not reserved:
             shutil.rmtree(stage, ignore_errors=True)
-            with engine.begin() as c:
-                c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(
-                    status="failed", stage="Kuyruk", finished_at=db.now(),
-                    error=json.dumps({"message": "Floemway bağlantısı değişti; yeniden deneyin", "detail": ""},
-                                     ensure_ascii=False)))
-            return refresh_row(run_id)
+            return await reject_run(run_id, "Floemway bağlantısı değişti; yeniden deneyin", "Kuyruk")
         payload = {"type": "refresh", "run_id": run_id, "tables": []}
         for table in tables:
             source = sources[bindings[table.sorgu.kaynak]]
@@ -879,6 +988,9 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         try:
             socket, send_lock = connected
             async with send_lock:
+                if scheduled:
+                    with engine.begin() as c:
+                        c.execute(db.refresh_runs.update().where(db.refresh_runs.c.id == run_id).values(stage="Kuyruk"))
                 await socket.send_json(payload)
         except Exception:
             await fail_refresh(gateway_id, "Floemway çevrimdışı", stage="Bağlantı")
@@ -901,7 +1013,8 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
             ds = c.execute(select(db.datasets).where(db.datasets.c.id == dsid)).first()
             if ds is None:
                 raise NOT_FOUND("Anlam modeli")
-            if role_in(c, user["id"], ds.workspace_id) not in ("admin", "member"):
+            role = role_in(c, user["id"], ds.workspace_id)
+            if role not in ("admin", "member") and not (role and ds.published_by == user["id"]):
                 raise FORBIDDEN()
             rows = c.execute(select(db.refresh_runs).where(db.refresh_runs.c.dataset_id == dsid)
                              .order_by(db.refresh_runs.c.id.desc()).limit(30)).all()

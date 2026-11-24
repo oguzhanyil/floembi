@@ -87,6 +87,20 @@ def tip_family(tip: str) -> str:
     return tip
 
 
+def unique_names(names: list[str]) -> list[str]:
+    """DuckDB sütun adları büyük/küçük harf duyarsızdır: 'Ad', 'ad' → 'Ad', 'ad (2)'."""
+    seen: set[str] = set()
+    out = []
+    for n in names:
+        cand, i = n.strip() or "Sütun", 2
+        while cand.lower() in seen:
+            cand = f"{n} ({i})"
+            i += 1
+        seen.add(cand.lower())
+        out.append(cand)
+    return out
+
+
 def to_arrow(rows: list[tuple], schema: pa.Schema) -> pa.Table:
     n = len(schema)
     cols = list(zip(*rows)) if rows else [()] * n

@@ -29,9 +29,11 @@ dev = ["pytest", "httpx"]  # MIT, BSD-3
 # Paketleme aracı: PyInstaller GPLv2 + bootloader istisnası. Ürüne bağımlılık olarak girmez;
 # istisna, üretilen kapalı kaynak uygulamanın dağıtımına izin verir (kullanıcı onayı 17.11.2026).
 package = ["pyinstaller>=6.22"]
-# floembi.app sunucusu (yerel MVP: SQLite; ileride Postgres)
+# floembi.app sunucusu
 server = [
   "sqlalchemy>=2.1",       # MIT
+  "pg8000==1.31.6",        # BSD-3; PostgreSQL metadata
+  "tzdata",                # Apache-2.0; Windows'ta IANA saat dilimleri
   "argon2-cffi>=25.1",     # MIT (şifre özeti)
   "pyjwt>=2.15",           # MIT (oturum)
   "python-multipart",      # Apache-2.0 (dosya yükleme)

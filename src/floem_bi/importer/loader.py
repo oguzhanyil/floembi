@@ -9,7 +9,7 @@ import duckdb
 import pyarrow as pa
 
 from ..connectors import ExtractColumn, Extraction
-from .types import arrow_type, to_arrow
+from .types import arrow_type, to_arrow, unique_names
 
 BATCH_ROWS = 50_000
 
@@ -24,20 +24,6 @@ class LoadResult:
     types: list[pa.DataType]
     rows: int
     skipped: list[str]
-
-
-def unique_names(names: list[str]) -> list[str]:
-    """DuckDB sütun adları büyük/küçük harf duyarsızdır: 'Ad', 'ad' → 'Ad', 'ad (2)'."""
-    seen: set[str] = set()
-    out = []
-    for n in names:
-        cand, i = n.strip() or "Sütun", 2
-        while cand.lower() in seen:
-            cand = f"{n} ({i})"
-            i += 1
-        seen.add(cand.lower())
-        out.append(cand)
-    return out
 
 
 def qident(name: str) -> str:

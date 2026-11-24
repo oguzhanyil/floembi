@@ -1,0 +1,39 @@
+name: floembi
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: floem
+      POSTGRES_DB: floem
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [metadata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U floem -d floem"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["127.0.0.1:${FLOEM_PORT:-8890}:8800"]
+    environment:
+      FLOEM_PUBLIC_URL: ${FLOEM_PUBLIC_URL:-http://127.0.0.1:8890}
+      FLOEM_DB_PASSWORD_FILE: /run/secrets/db_password
+      FLOEM_SECRET_FILE: /run/secrets/server_key
+    secrets: [db_password, server_key]
+    volumes: [reports:/data]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8800/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+volumes:
+  metadata:
+  reports:
+secrets:
+  db_password: { environment: FLOEM_DEPLOY_DB_PASSWORD }
+  server_key: { environment: FLOEM_DEPLOY_SERVER_KEY }

@@ -116,6 +116,20 @@ def _start_server(label: str, url: str, port: int, *extra: str) -> bool:
     return True
 
 
+def running_service_registration() -> dict:
+    folder = Path(os.environ.get("ProgramW6432") or os.environ.get("ProgramFiles", "")) / "Floemway"
+    marker = folder / "registration.json"
+    if not marker.is_file():
+        return {}
+    try:
+        state = subprocess.run(["powershell", "-NoProfile", "-Command",
+            "(Get-Service -Name Floemway -ErrorAction SilentlyContinue).Status -eq 'Running'"],
+            capture_output=True, timeout=8, creationflags=subprocess.CREATE_NO_WINDOW)
+        return json.loads(marker.read_text(encoding="utf-8")) if state.stdout.strip() == b"True" else {}
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        return {}
+
+
 def main() -> int:
     if os.name != "nt":
         print("Bu başlatıcı yalnızca Windows için hazırlanmıştır.")
@@ -162,6 +176,7 @@ def main() -> int:
 
     gateway_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "FloemBI"
     configs = sorted(gateway_dir.glob("gateway-*.json"))
+    service = running_service_registration()
     if not configs:
         print("Floemway: kayıtlı yapılandırma bulunamadı")
     for config in configs:
@@ -171,7 +186,9 @@ def main() -> int:
             print(f"Hata: {config.name} okunamadı ({type(exc).__name__}).")
             ok = False
             continue
-        if _gateway_running(processes, gateway_id, config):
+        if service.get("gateway_id") == gateway_id and service.get("server") == _server:
+            print(f"Floemway {gateway_id}: Windows hizmeti açık")
+        elif _gateway_running(processes, gateway_id, config):
             print(f"Floemway {gateway_id}: zaten açık")
         else:
             _start(sys.executable, "-m", "floem_bi.gateway", "--config", str(config))

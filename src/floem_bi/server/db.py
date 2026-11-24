@@ -169,6 +169,17 @@ dataset_source_bindings = Table(
     Column("source_key", String(120), primary_key=True),
     Column("gateway_source_id", Integer, ForeignKey("gateway_sources.id", ondelete="CASCADE"), nullable=False),
 )
+refresh_schedules = Table(
+    "refresh_schedules", metadata,
+    Column("dataset_id", Integer, ForeignKey("datasets.id", ondelete="CASCADE"), primary_key=True),
+    Column("timezone", String(100), nullable=False),
+    Column("times", Text, nullable=False),
+    Column("enabled", Boolean, nullable=False),
+    Column("notify_success", Boolean, nullable=False),
+    Column("next_run", DateTime(timezone=True), index=True),
+    Column("configured_by", Integer, ForeignKey("users.id"), nullable=False),
+)
+
 refresh_runs = Table(
     "refresh_runs", metadata,
     Column("id", Integer, primary_key=True),
@@ -181,6 +192,7 @@ refresh_runs = Table(
     Column("started_at", DateTime(timezone=True), nullable=False, default=now),
     Column("finished_at", DateTime(timezone=True)),
     Column("requested_by", Integer, ForeignKey("users.id"), nullable=False),
+    Column("trigger", String(16), nullable=False, server_default="manual"),
 )
 
 
@@ -273,20 +285,23 @@ scenario_events = Table(
 
 def _migrate(engine: Engine) -> None:
     """Eski metadata veritabanlarına yeni sütunları ekler (create_all var olan tabloyu değiştirmez)."""
+    if "trigger" not in {c["name"] for c in inspect(engine).get_columns("refresh_runs")}:
+        with engine.begin() as c:
+            c.execute(text("ALTER TABLE refresh_runs ADD COLUMN trigger VARCHAR(16) NOT NULL DEFAULT 'manual'"))
     cols = {c["name"] for c in inspect(engine).get_columns("users")}
     if "is_admin" not in cols:
         with engine.begin() as c:
-            c.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+            c.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE"))
             # Mevcut kurulum: herhangi bir çalışma alanının Yöneticisi olanlar sistem yöneticisi olur
-            c.execute(text("UPDATE users SET is_admin = 1 WHERE id IN (SELECT user_id FROM members WHERE role = 'admin')"))
+            c.execute(text("UPDATE users SET is_admin = TRUE WHERE id IN (SELECT user_id FROM members WHERE role = 'admin')"))
     if "app_id" not in {c["name"] for c in inspect(engine).get_columns("pending_grants")}:
         with engine.begin() as c:
             c.execute(text("ALTER TABLE pending_grants ADD COLUMN app_id INTEGER REFERENCES apps(id) ON DELETE CASCADE"))
 
 
-def make_engine(url: str) -> Engine:
+def make_engine(url) -> Engine:
     engine = create_engine(url, future=True)
-    if url.startswith("sqlite"):
+    if engine.dialect.name == "sqlite":
         @event.listens_for(engine, "connect")
         def _fk(dbapi_con, _):  # SQLite'ta yabancı anahtarlar varsayılan kapalı
             cur = dbapi_con.cursor()

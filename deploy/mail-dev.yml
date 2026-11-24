@@ -1,0 +1,9 @@
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:8025:8025"]
+  server:
+    environment:
+      FLOEM_SMTP_HOST: mailpit
+      FLOEM_SMTP_PORT: 1025
+      FLOEM_SMTP_SECURITY: none

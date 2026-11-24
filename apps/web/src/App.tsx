@@ -1,7 +1,7 @@
 import { ApplicationThemeControl } from "@floem/report";
 import {
   FloemApiError, type DatasetBindings, type DatasetDetails, type GatewaySource, type GatewaySourceStatus, type RefreshRun,
-  type PublishedReport, type SharedReport, type VisualQuery, type WorkspaceContent,
+  type PublishedReport, type RefreshSchedule, type SharedReport, type VisualQuery, type WorkspaceContent,
 } from "@floem/client";
 import { InboxPage, ShareDialog } from "./share";
 import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
@@ -67,6 +67,7 @@ function Router() {
   else if ((m = /^\/workspaces\/(\d+)\/app$/.exec(path))) page = <AppSetupPage workspaceId={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/datasets\/(\d+)\/security$/.exec(path))) page = <SecurityPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/datasets\/(\d+)\/refresh$/.exec(path))) page = <DatasetRefreshPage id={Number(m[1])} key={m[1]} />;
+  else if ((m = /^\/datasets\/(\d+)\/history$/.exec(path))) page = <HistoryPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)\/gateways$/.exec(path))) page = <GatewayPage id={Number(m[1])} key={m[1]} />;
   else if ((m = /^\/workspaces\/(\d+)/.exec(path))) page = <WorkspacePage id={Number(m[1])} key={m[1]} />;
   else if (path === "/inbox") page = <InboxPage />;
@@ -387,6 +388,50 @@ function GatewayPage({ id }: { id: number }) {
   </div>;
 }
 
+function ScheduleForm({ id }: { id: number }) {
+  const { client, guard } = useSession();
+  const [schedule, setSchedule] = useState<RefreshSchedule | null>(null);
+  const [times, setTimes] = useState("");
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState<UiError | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    guard(client.refreshSchedule(id)).then(value => {
+      setSchedule(value); setTimes(value.times.join(", "));
+    }).catch(e => setError(toUiError(e)));
+  }, [id, client, guard]);
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!schedule) return;
+    setError(null); setStatus("");
+    const daily = times.trim().split(/[,;\s]+/).filter(Boolean);
+    if ((schedule.enabled && !daily.length) || daily.some(t => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) {
+      setError({ message: "Günlük saatleri 08:30, 17:00 biçiminde girin." }); return;
+    }
+    try { new Intl.DateTimeFormat("tr", { timeZone: schedule.timezone }); }
+    catch { setError({ message: "Geçerli bir saat dilimi girin (ör. Europe/Istanbul)." }); return; }
+    setSaving(true);
+    try {
+      const result = await guard(client.saveRefreshSchedule(id, { times: daily, enabled: schedule.enabled,
+        timezone: schedule.timezone, notify_success: schedule.notify_success }));
+      setSchedule(result); setTimes(result.times.join(", ")); setStatus("Yenileme ayarları kaydedildi.");
+    } catch (e) { setError(toUiError(e)); }
+    finally { setSaving(false); }
+  }
+  return <section className="form-card"><h2>Zamanlanmış yenileme</h2>
+    {error && <ErrorPanel error={error} />}
+    {schedule && <form onSubmit={save} onChange={() => setStatus("")} className="gateway-fields">
+      <label><input type="checkbox" checked={schedule.enabled} onChange={e => setSchedule({ ...schedule, enabled: e.target.checked })} /> Günlük yenilemeyi etkinleştir</label>
+      <label>Günlük saatler<input placeholder="08:30, 17:00" value={times} onChange={e => setTimes(e.target.value)} /></label>
+      <label>Saat dilimi<input required value={schedule.timezone} onChange={e => setSchedule({ ...schedule, timezone: e.target.value })} /></label>
+      <label><input type="checkbox" checked={schedule.notify_success} onChange={e => setSchedule({ ...schedule, notify_success: e.target.checked })} /> Başarılı yenilemeleri de model sahibine bildir</label>
+      <button className="primary" disabled={saving}>Yenileme ayarlarını kaydet</button>
+    </form>}
+    {schedule?.next_run && <p>Sonraki yenileme (yerel saatiniz) · {when(schedule.next_run)}</p>}
+    {status && <p role="status">{status}</p>}
+  </section>;
+}
+
 function DatasetRefreshPage({ id }: { id: number }) {
   const { client, guard } = useSession();
   const [dataset, setDataset] = useState<DatasetDetails | null>(null);
@@ -438,7 +483,7 @@ function DatasetRefreshPage({ id }: { id: number }) {
     <p><Link to={`/workspaces/${dataset.workspace_id}`}>← Çalışma alanı</Link></p>
     <div className="ws-head"><h1>{dataset.name}</h1><span className="spacer" />
       <Link className="button" to={`/datasets/${id}/security`}>Güvenlik</Link>
-      <button className="primary" onClick={refresh} disabled={busy || history[0]?.status === "running" || history[0]?.status === "queued"}>
+      <button className="primary" onClick={refresh} disabled={busy || history.some(r => r.status === "running" || r.status === "queued")}>
         {busy ? "Başlatılıyor…" : "⟳ Şimdi yenile"}
       </button>
     </div>
@@ -466,10 +511,27 @@ function DatasetRefreshPage({ id }: { id: number }) {
       {saved && <p className="ok-text" role="status">{saved}</p>}
       <p><Link to={`/workspaces/${dataset.workspace_id}/gateways`}>Floemway bağlantılarını yönet</Link></p>
     </section>
-    <h2>Yenileme geçmişi</h2>
+    <ScheduleForm id={id} />
+    <HistoryTable history={history} />
+  </div>;
+}
+
+function HistoryPage({ id }: { id: number }) {
+  const { client, guard } = useSession();
+  const [history, setHistory] = useState<RefreshRun[] | null>(null);
+  const [error, setError] = useState<UiError | null>(null);
+  useEffect(() => {
+    guard(client.refreshHistory(id)).then(setHistory).catch(e => setError(toUiError(e)));
+  }, [client, guard, id]);
+  return <div className="page-wrap">{error ? <ErrorPanel error={error} /> : history
+    ? <HistoryTable history={history} /> : "Yükleniyor…"}</div>;
+}
+
+function HistoryTable({ history }: { history: RefreshRun[] }) {
+  return <><h2>Yenileme geçmişi</h2>
     <table className="items"><thead><tr><th>Başlangıç</th><th>Durum</th><th>Tablo / adım</th><th>Süre</th><th>Hata</th></tr></thead><tbody>
       {history.map((r) => <tr key={r.id} className="static">
-        <td>{when(r.started_at)}</td>
+        <td>{when(r.started_at)} · {r.trigger === "scheduled" ? "Zamanlanmış" : "Elle"}</td>
         <td>{({ queued: "Kuyrukta", running: "Çalışıyor", succeeded: "Başarılı", failed: "Hata" })[r.status]}</td>
         <td>{r.table_name ? `${r.table_name} · ` : ""}{r.stage}</td>
         <td>{(r.elapsed_ms / 1000).toFixed(1)} sn</td>
@@ -478,7 +540,7 @@ function DatasetRefreshPage({ id }: { id: number }) {
       </tr>)}
       {history.length === 0 && <tr><td colSpan={5} className="muted">Henüz yenileme yapılmadı.</td></tr>}
     </tbody></table>
-  </div>;
+  </>;
 }
 
 // ------------------------------------------------------------------ rapor
