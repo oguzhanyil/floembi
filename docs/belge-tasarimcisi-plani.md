@@ -44,17 +44,36 @@ Teklif şablonunda aynı bantlarla **geçerlilik tarihi, teslim ve ödeme koşul
 
 **Sürüm ve yetki.** Modelde bir sütun yeniden adlandırılınca şablondaki bağı da güncellenir. Silinen bir alan için tasarımcı, alanı ve bandı gösterip yeniden eşleme ister. Yayımlanmış bir Floem uygulamasından belge açıldığında o uygulamanın yayımlanmış şablonu kullanılır. Kaynak satırlar ve belge toplamı için aynı yetki denetimi uygulanır. Farklı yetkili kullanıcıların çıktı önbelleği paylaşılmaz.
 
+## İlk denemenin veri kaynağı
+
+Desktop'ta **Veri al → SQLite dosyası** seçilir ve yerel `data/SAPB1Demo-Belgeler.sqlite` dosyasının tam yolu girilir. Dört tablo birlikte yüklenir. Faturalar `OINV.DocEntry → INV1.DocEntry`, örnek teklifler `OQUT.TeklifDocEntry → QUT1.TeklifDocEntry` ile eşlenir. Sentetik teklif anahtarının adı, Desktop'ın ada göre ilişki algılarken faturaya da bağlamasını önler. Görünen belge numarası `DocNum`, detay sırası `LineNum`, grup alanı `WhsCode` ve vergi öncesi satır tutarı `LineTotal` alanıdır.
+
+Power BI demosundaki `tmp/ham/Firma1.sqlite`, maskelemeden önce alınmış fatura verisini içerir. [Yerel örnek üreticisi](../src/floem_bi/demo/belge_sqlite.py) bu dosyayı salt okunur açar. Fatura başına satır sayısını, aynı ürünün tekrarlanmasını, müşteriye ve depoya göre gruplanmayı ve boş ürün/depo alanlarını korur. Belge numaraları, kodlar, adlar, adresler, tarihler ve tutarlar örnek için üretilir. Kaynaktaki 409 faturadan 2.225 örnek kalem elde edildi. Kaynakta teklif tabloları bulunmadığından üç sentetik teklif eklendi. Dosya yalnız yerel `data/` klasöründe tutulur. Aynı makinede yeni bir kopya üretme komutu aşağıdadır. Çıktı dosya adının boşta olması gerekir.
+
+```powershell
+.\.venv\Scripts\python -m floem_bi.demo.belge_sqlite "..\powerbi-main\tmp\ham\Firma1.sqlite" "data\SAPB1Demo-Belgeler.sqlite"
+```
+
+| Belge | Neyi sınar? | SQLite dosyasında doğrulanan değer |
+|---|---|---|
+| FAT-0200 | Uzun fatura, tekrarlayan ürün, iki depo | 182 satır, vergi dâhil 33.061,80 TL |
+| TEK-0001 | Tek satırda başlık, detay ve toplam | 1 satır, vergi dâhil 17,10 TL |
+| TEK-0002 | Depo ara toplamları ve sayfa geçişi | 40 satır. Üç deponun net tutarı sırasıyla 834,75 TL, 774,50 TL ve 795,75 TL. Vergi dâhil toplam 2.886,00 TL |
+| TEK-0003 | Birden fazla sayfaya yayılan teklif | 200 satır, vergi dâhil 14.766,00 TL |
+
+Desktop'ın içe aktarma servisinde dört tablonun satır sayıları, iki etkin başlık–detay ilişkisi ve tablo önizlemeleri doğrulandı. SQLite'ta 412 belgenin her birinde kalemlerden hesaplanan vergi ve genel toplam başlıkla kuruş düzeyinde eşleşti. Örnekte tarihler ISO biçiminde metindir. Desktop modelinde tarih biçimlendirmesini denemek için `DocDate` ve `DocDueDate` alanları Tarih tipine dönüştürülür.
+
 ## Geliştirme ve kullanıcı testi sırası
 
 | Sıra | Teslim | Bittiğini nasıl anlayacağız? |
 |---|---|---|
-| 1 | **Belge ve baskı denemesi.** Sentetik fatura/teklif, başlık–kalem eşlemesi, bir grup ve A4 PDF. Önce en riskli örnek olarak çok sayfalı belge hazırlanır. | 1, 40 ve 200 kalemli örneklerde sayfa içeriği sayılır. Aynı ürünün iki kalemi korunur. Sonraki sayfada sütun başlığı tekrarlar. Genel toplam belge sonunda bir kez çıkar. |
+| 1 | **Belge ve baskı denemesi.** Hazırlanan SQLite kaynağından başlık ve detay çekilir. İlk A4 baskı denemesinde FAT-0200 depo bazında gruplanır. | 182 fatura kalemi ve üç teklifin 1, 40 ve 200 kalemi kaynakla karşılaştırılır. Aynı ürünün ayrı satırları korunur. Sonraki sayfada sütun başlığı tekrarlar. Genel toplam belge sonunda bir kez çıkar. |
 | 2 | **İlk kullanılabilir Desktop tasarımcısı.** İki hazır şablon ve boş şablon, sürükle-bırak, bantlar, gruplama/sıralama, biçimlendirme, logo, önizleme, PDF ve kaydet/aç. | Kullanıcı yardım almadan logosunu değiştirir, depoya göre grup ve ara toplam ekler, teklif koşulunu düzenler ve iki PDF'yi alır. Dosyayı kapatıp açınca yaptığı düzen korunur. **İlk kullanıcı denemesi bu aşamada yapılır.** |
 | 3 | **Raporla bütünleşme ve web çıktısı.** Fatura satırından ilgili şablonu açma, mevcut yayımlama ile taşıma, tarayıcıdan önizleme/indirme/yazdırma. | Desktop ve web'de aynı şablon/veri sürümü aynı sayfa sayısını ve toplamı verir. İki firmada numarası aynı olan faturalar karışmaz. Yetkisiz kullanıcı alanları, belgeyi ve PDF'yi açamaz. |
 | 4 | **Kullanım sonucuna göre genişletme.** İç içe gruplar, matbu form/PDF üzerine koordinatla baskı, toplu belge çıktısı, barkod/QR, etiket ve irsaliye adayları. | Önceliği ilk denemede işi durduran veya elle düzeltme gerektiren adımlar belirler. Matbu baskı seçilirse gerçek yazıcıda %100 ölçekte alan eşleşmesi ayrıca denenir. |
 
 **Baskı kabulü.** Uzun Türkçe açıklama ve adres, boş isteğe bağlı alan, farklı para birimi, boş kalem listesi ve sayfanın dibinde başlayan grup test edilir. Bir gruplama başlığı sonraki kalem olmadan sayfa sonunda kalmamalı. Tek kalem bir sayfadan uzunsa devamı anlaşılır biçimde sonraki sayfaya taşınmalı. 200 kalemli örnekte PDF'den okunan satır anahtarları ve tutarları kaynakla karşılaştırılmalı. Tasarımcı taşan nesneyi baskıdan önce işaretlemeli.
 
-İlk deneme için küçük bir sayısal örnek kullanılabilir. Aynı ürünün iki ayrı satırında 100,00 ve 50,00 TL, başka bir grupta 25,00 TL olsun. Vergi ve iskonto içermeyen örnekte üç kalem, 150,00 ve 25,00 TL grup ara toplamları ve tek bir 175,00 TL belge toplamı beklenir. Kullanıcı sütunları taşıdığında veya veri ikinci sayfaya aktığında bu sonuçlar korunmalı.
+Kullanıcı TEK-0002 şablonunda sütunları taşıdığında veya kalemler ikinci sayfaya aktığında yukarıdaki üç ara toplam ve tek belge toplamı korunmalı. Bu ilk SQLite dosyasında para birimi TRY ve örnek vergi oranı %20. Kur, iskonto ve boş belge senaryoları ayrıca sınanacak.
 
 **Başlangıç önerisi.** İlk tasarım boş A4 üzerine, logonun ve antetin Floem BI içinde düzenlendiği biçimde hazırlanır. Önceden basılı kâğıt veya hazır PDF antet ilk kullanım için gerekliyse arka plan ile mm tabanlı kalibrasyon 1. ve 2. aşamaya alınır. Bu çalışma kayıtlı faturanın veya teklifin baskı görünümünü üretir. Resmî elektronik belge düzenleme ve gönderme ayrı bir entegrasyon kararıdır. Üretim ortamının saha kabulü mevcut plandaki son aşamada kalır.

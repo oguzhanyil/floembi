@@ -5,6 +5,9 @@
 Desktop deneyim testlerinden önce bant tabanlı belge tasarımı incelendi. Önerilen
 sıra, çok sayfalı fatura/teklif baskı denemesi, Desktop'ta düzenlenebilir şablonlar,
 ilk kullanıcı testi ve ardından rapor satırından web çıktısını açma şeklindedir.
+İlk denemenin yerel SQLite dosyası `data/SAPB1Demo-Belgeler.sqlite` hazır.
+Power BI demosunun fatura yapısıyla 409 örnek fatura ve 2.225 kalem üretildi.
+Kaynakta teklif tablosu bulunmadığı için 1, 40 ve 200 kalemli üç sentetik teklif eklendi.
 [Araç karşılaştırması, geliştirme sırası ve kabul örnekleri](docs/belge-tasarimcisi-plani.md).
 
 **Kullanıcı testi · Desktop'ta rapor hazırlama deneyimi**
