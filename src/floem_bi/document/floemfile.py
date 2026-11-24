@@ -5,7 +5,7 @@ Zip arşivi:
   model.yaml      semantik model (ModelTanimi; şifre içermez)
   diagram.json    model görünümündeki kart konumları
   report.json     rapor tanımı (H4'te doluyor)
-  documentTemplates.json   baskı şablonları (biçim 2), yerleşim araçlarıyla (biçim 3)
+  documentTemplates.json   baskı şablonları (2), yerleşim araçları (3), detay satırı bantları (4)
   data.duckdb     içe aktarılmış veri (Import modu anlık görüntüsü)
 
 Yazma atomiktir: önce geçici dosyaya yazılır, sonra yerine taşınır. Okurken yalnızca
@@ -30,7 +30,7 @@ from ..model.schema import ModelTanimi
 from .print_forms import PrintTemplate
 
 FORMAT = "floem"
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 MAX_JSON_BYTES = 50 * 1024 * 1024
 
 
@@ -61,7 +61,7 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     manifest = {
         "format": FORMAT,
-        "format_version": 3 if any(t.layout is not None for t in content.print_templates) else (2 if content.print_templates else 1),
+        "format_version": max((t.archive_version() for t in content.print_templates), default=1),
         "app": f"Floem BI Desktop {app_version}",
         "created": content.manifest.get("created", now),
         "modified": now,

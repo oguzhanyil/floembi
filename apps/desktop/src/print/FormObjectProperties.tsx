@@ -2,7 +2,7 @@ import { bands, detailLabels, formTableColumns, formWidthMm, headerLabels, type 
 
 export const limit = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(n * 10) / 10));
 
-function NumberField({ label, value, min, max, change }: {
+export function NumberField({ label, value, min, max, change }: {
   label: string; value: number; min: number; max: number; change: (value: number) => void;
 }) {
   return <label>{label}<input key={value} type="number" step=".1" min={min} max={max} defaultValue={value}
@@ -35,7 +35,8 @@ export function DetailPaint({ layout, change }: { layout: PrintLayout; change: (
 }
 
 type Cell = { r: number; c: number };
-export function FormObjectProperties({ block, guides, update, cell, selectCell, remove, reorder, first, last }: {
+export function FormObjectProperties({ block, guides, update, cell, selectCell, remove, reorder, first, last, editRow }: {
+  editRow?: (drawImmediately?: boolean) => void;
   guides: number[];
   block: FormBlock; update: (b: FormBlock) => void; cell: Cell; selectCell: (cell: Cell) => void;
   remove: () => void; reorder: (direction: number) => void; first: boolean; last: boolean;
@@ -52,6 +53,8 @@ export function FormObjectProperties({ block, guides, update, cell, selectCell, 
         <NumberField label="Kalınlık (mm)" value={block.thickness} min={.1} max={3} change={v => update({ ...block, thickness: v })} /></div>
       <label>Çizgi rengi<input type="color" value={block.color} onChange={e => update({ ...block, color: e.target.value })} /></label>
     </> : <><TableProperties table={block} update={update} cell={cell} selectCell={selectCell} />
+      <div className="form-actions"><button onClick={() => editRow?.()}>Seçili satır bandını düzenle</button>
+        <button onClick={() => editRow?.(true)} disabled={(block.rows[cell.r]?.detailBand?.parts.length ?? 1) >= 24}>Satır arasına çizgi çiz</button></div>
       {guides.length > 0 && <label>Sol kenarı kılavuza hizala<select value="" onChange={e => {
         if (e.target.value !== "") update({ ...block, x: Number(e.target.value) });
       }}><option value="">Kılavuz seçin</option>{guides.map(g => <option key={g} value={g}

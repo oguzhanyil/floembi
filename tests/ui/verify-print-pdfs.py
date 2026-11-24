@@ -2,6 +2,7 @@
 import argparse
 import re
 import sqlite3
+from collections import Counter
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
@@ -74,6 +75,43 @@ def verify_custom(db, path):
     print(f"{path.stem}: {len(actual)} özel kalem satırı, {len(pdf.pages)} A4 sayfa, satır renkleri ve kesikli çizgi doğrulandı.")
 
 
+def verify_detail_band(db, path):
+    number = path.stem.removesuffix("-Detay")
+    invoice = number.startswith("FAT")
+    header, detail, key = ("OINV", "INV1", "DocEntry") if invoice else ("OQUT", "QUT1", "TeklifDocEntry")
+    entry, total = db.execute(f"SELECT {key}, round(100*DocTotal) FROM {header} WHERE DocNum=?", (number,)).fetchone()
+    order = "LineNum" if invoice else "WhsCode, LineNum"
+    expected = db.execute(f"SELECT LineNum+1, coalesce(ItemCode,''), round(100*LineTotal), WhsCode FROM {detail} WHERE {key}=? ORDER BY {order}", (entry,)).fetchall()
+    pdf = PdfReader(path)
+    actual, totals, subtotals = [], [], []
+    for i, page in enumerate(pdf.pages, 1):
+        lines = page.extract_text().splitlines()
+        assert f"Sayfa {i} / {len(pdf.pages)}" in lines
+        row_count = 0
+        for j, line in enumerate(lines):
+            note = re.fullmatch(r"(.+) · Kalem (\d+)", line)
+            if note:
+                # Ana kalem ve ek alan aynı sayfada ve doğru sırada olmalı.
+                data = re.match(r"Kalem (\d+) ·\s*(U-\d+)? .* ([\d.,]+)$", lines[j-1]) if invoice else re.match(r"(U-\d+) (\d+) .* ([\d.,]+)$", lines[j-1])
+                assert j > 0 and data
+                ordinal, product = (data[1], data[2]) if invoice else (data[2], data[1])
+                assert ordinal == note[2]
+                actual.append((int(ordinal), product or "", cents(data[3]), note[1]))
+                row_count += 1
+            if line.startswith("Genel toplam"):
+                totals.append((i, cents(line.split()[-2])))
+            if line.startswith("Grup ara toplamı"):
+                subtotals.append(cents(line.split()[-2]))
+        colors = Counter(tuple(round(float(v)*255) for v in args) for args, op in
+                         ContentStream(page.get_contents(), pdf).operations if op == b"SCN" and len(args) == 3)
+        assert colors[22, 117, 103] == colors[196, 128, 52] == row_count
+    assert actual == expected
+    assert totals == [(len(pdf.pages), total)]
+    if not invoice:
+        assert subtotals == [n for (n,) in db.execute(f"SELECT round(100*sum(LineTotal)) FROM {detail} WHERE {key}=? GROUP BY WhsCode ORDER BY WhsCode", (entry,))]
+    print(f"{number}: {len(actual)} detay bandı, {len(actual)*2} ayraç, {len(pdf.pages)} sayfa.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sqlite", type=Path)
@@ -85,3 +123,11 @@ if __name__ == "__main__":
         custom = args.pdf_dir / "FAT-0200-Tasarim.pdf"
         if custom.exists():
             verify_custom(con, custom)
+        for path in sorted(args.pdf_dir.glob("*-Detay.pdf")):
+            verify_detail_band(con, path)
+        for path in sorted(args.pdf_dir.glob("*-Uzun.pdf")):
+            pdf = PdfReader(path)
+            text = "\n".join(page.extract_text() for page in pdf.pages)
+            assert len(pdf.pages) > 1 and re.findall(r"^N(\d\d)$", text, re.M) == [f"{n:02d}" for n in range(1, 96)], path.name
+            assert text.count("Genel toplam") == 1 and "Genel toplam" in pdf.pages[-1].extract_text()
+            print(f"{path.stem}: sayfaya sığmayan bandın 95 metin satırı tam ve sıralı.")

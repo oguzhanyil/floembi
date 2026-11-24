@@ -23,7 +23,9 @@ class LayoutItem(BaseModel):
     band: Literal["header", "beforeDetail", "footer"]
 
 
-class FormLine(LayoutItem):
+class LineShape(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=80)
     type: Literal["line"]
     x1: HorizontalMm
     x2: HorizontalMm
@@ -33,11 +35,64 @@ class FormLine(LayoutItem):
     thickness: float = Field(ge=.1, le=3, allow_inf_nan=False)
     style: Literal["solid", "dashed", "dotted"]
 
+class FormLine(LineShape, LayoutItem):
+    pass
+
+
+Percent = Annotated[float, Field(ge=0, le=100, allow_inf_nan=False)]
+PointSize = Annotated[float, Field(ge=6, le=24, allow_inf_nan=False)]
+
+
+class RowLine(LineShape):
+    x1: Percent
+    x2: Percent
+
+
+class RowData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["data"]
+
+
+class RowText(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["text"]
+    id: str = Field(min_length=1, max_length=80)
+    text: str = Field(max_length=500)
+    x: Percent
+    width: float = Field(ge=1, le=100, allow_inf_nan=False)
+    align: Literal["left", "center", "right"]
+    size: PointSize
+    bold: bool
+    color: Color
+
+    @model_validator(mode="after")
+    def fit_row(self):
+        if self.x + self.width > 100.00001:
+            raise ValueError("Metin alanı detay satırının genişliğine sığmalı.")
+        return self
+
+
+class DetailBand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    minHeight: float = Field(ge=1, le=60, allow_inf_nan=False)
+    size: PointSize
+    bold: bool
+    color: Color
+    parts: list[Annotated[RowData | RowText | RowLine, Field(discriminator="type")]] = Field(min_length=1, max_length=24)
+
+    @model_validator(mode="after")
+    def check_parts(self):
+        ids = [p.id for p in self.parts if not isinstance(p, RowData)]
+        if len(ids) + 1 != len(self.parts) or len(ids) != len(set(ids)):
+            raise ValueError("Bantta bir ana veri satırı ve benzersiz nesne kimlikleri bulunmalı.")
+        return self
+
 
 class FormTableRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
     cells: list[Annotated[str, Field(max_length=500)]] = Field(min_length=1, max_length=8)
     color: Color | None = None
+    detailBand: DetailBand | None = None
 
 
 class FormColumn(BaseModel):
@@ -81,6 +136,7 @@ class PrintLayout(BaseModel):
     blocks: list[Annotated[FormLine | FormTable, Field(discriminator="type")]] = Field(default_factory=list, max_length=80)
     guides: list[HorizontalMm] = Field(default_factory=list, max_length=40)
     hideMainDetail: bool = False
+    detailBand: DetailBand | None = None
     stripe: Color | None = None
     rule: RowRule | None = None
 
@@ -105,6 +161,14 @@ class PrintTemplate(BaseModel):
     logo: str = Field(default="", max_length=1_500_000, pattern=r"^(data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+)?$")
     sampleKey: str = Field(default="", max_length=160)
     layout: PrintLayout | None = None
+
+    def archive_version(self) -> int:
+        if self.layout is None:
+            return 2
+        if self.layout.detailBand or any(row.detailBand for block in self.layout.blocks
+                                        if isinstance(block, FormTable) for row in block.rows):
+            return 4
+        return 3
 
     @model_validator(mode="after")
     def unique_columns(self):

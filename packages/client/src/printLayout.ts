@@ -6,16 +6,31 @@ export const mmToPt = (value: number) => value * 72 / 25.4;
 export const bands = { header: "Belge başlığı", beforeDetail: "Kalemlerden önce", footer: "Belge alt bilgisi" } as const;
 export type FormBand = keyof typeof bands;
 interface FormObject { id: string; band: FormBand }
-export interface FormLine extends FormObject {
+export interface LineShape {
+  id: string;
   type: "line"; x1: number; y1: number; x2: number; y2: number;
   color: string; thickness: number; style: "solid" | "dashed" | "dotted";
+}
+export interface FormLine extends LineShape, FormObject {}
+/** Satır nesnelerinin yatay konumu satır genişliğinin yüzdesi, düşey konumu mm'dir. */
+export interface RowText {
+  type: "text"; id: string; text: string; x: number; width: number;
+  align: FormColumn["align"]; size: number; bold: boolean; color: string;
+}
+export type RowPart = { type: "data" } | RowText | LineShape;
+export interface DetailBand {
+  minHeight: number; size: number; bold: boolean; color: string; parts: RowPart[];
+}
+export const plainDetailBand: DetailBand = { minHeight: 5, size: 9, bold: false, color: "#192d37", parts: [{ type: "data" }] };
+export function scaleLineX<T extends LineShape>(line: T, scale: number): T {
+  return { ...line, x1: line.x1 * scale, x2: line.x2 * scale };
 }
 export interface FormColumn { align: "left" | "center" | "right"; weight: number }
 export interface FormTable extends FormObject {
   type: "table"; x: number; width: number; header: boolean;
   repeatRow?: number | null;
   columnFormat?: FormColumn[];
-  rows: { cells: string[]; color?: string | null }[];
+  rows: { cells: string[]; color?: string | null; detailBand?: DetailBand | null }[];
 }
 export type FormBlock = FormLine | FormTable;
 export interface RowRule {
@@ -25,6 +40,7 @@ export interface PrintLayout {
   blocks: FormBlock[];
   guides: number[];
   hideMainDetail?: boolean;
+  detailBand?: DetailBand | null;
   stripe?: string | null;
   rule?: RowRule | null;
 }
@@ -70,10 +86,10 @@ export function formCellText(text: string, head: PrintRecord["header"], detail?:
   });
 }
 export function formTableRows(table: FormTable, data: PrintRecord, layout: PrintLayout, design = false) {
-  const result: { source: number; cells: string[]; color?: string; header: boolean }[] = [];
+  const result: { source: number; cells: string[]; color?: string; header: boolean; detail?: Detail }[] = [];
   table.rows.forEach((row, source) => {
     const header = table.header && source === 0;
-    const append = (detail?: Detail, i = 0) => result.push({ source, header,
+    const append = (detail?: Detail, i = 0) => result.push({ source, header, detail,
       cells: row.cells.map(cell => formCellText(cell, data.header, detail)),
       color: (detail && formRowColor(layout, detail, i)) || row.color || (header ? "#e6eff0" : undefined) });
     if (table.repeatRow !== source) append();

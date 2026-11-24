@@ -9,7 +9,9 @@ FAT-0200'de 182 satır, iki depo, altı sayfa ve son sayfada 33.061,80 TL doğru
 Üç sentetik teklifin 1, 40 ve 200 kalemli örnekleri sırasıyla 1, 2 ve 7 sayfa.
 Tasarım görünümünde milimetre cetvelleri ve dikey kılavuzlar, fareyle çizgi çizme,
 tablo ekleme, tekrarlanan kalem satırı ve koşullu/dönüşümlü satır renkleri bulunur.
-Tüm nesneler seçilen belge bandında basılır. İleri yerleşim içeren şablonlar biçim 3,
+Standart detayda ve özel tablo satırlarında çizgi ve bağlı metin ana verinin önüne,
+arkasına veya iki öğe arasına eklenebilir. Satır bandı içeren şablonlar biçim 4,
+diğer ileri yerleşim içeren şablonlar biçim 3,
 temel şablonlar biçim 2, şablonsuz dosyalar biçim 1 ile kaydedilir.
 [Kullanım, kaynak eşlemesi ve sonraki geliştirmeler](docs/belge-tasarimcisi-plani.md).
 

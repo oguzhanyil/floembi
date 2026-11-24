@@ -1,4 +1,5 @@
-import { detailLabels, formRowColor, formTableColumns, formTableRows, groupFormLines, mmToPt, type DetailColumn, type FormBand, type PrintRecord, type PrintTemplate } from "@floem/client";
+import { detailLabels, formCellText, formRowColor, formTableColumns, formTableRows, formWidthMm, groupFormLines, mmToPt, scaleLineX,
+  type DetailBand, type DetailColumn, type FormBand, type FormColumn, type LineShape, type PrintRecord, type PrintTemplate } from "@floem/client";
 import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import pdfMake from "./pdfEngine";
 import fontLicense from "./fonts/LICENSE.txt?raw";
@@ -10,17 +11,50 @@ const ink = "#192d37", muted = "#536773", lineColor = "#dce4e5";
 const date = (s?: string) => s?.slice(0, 10).replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3.$2.$1") ?? "";
 const wrap = (s: string) => s.replace(/(\S{24})/gu, "$1\u200b");
 
+function vectorLine(line: LineShape, bottom = 0): Content {
+  const width = mmToPt(line.thickness);
+  return { canvas: [{ type: "line", x1: mmToPt(line.x1), y1: mmToPt(line.y1), x2: mmToPt(line.x2), y2: mmToPt(line.y2),
+    lineColor: line.color, lineWidth: width, ...(line.style === "solid" ? {} :
+      { dash: { length: width * (line.style === "dashed" ? 4 : 1), space: width * 2 } }) }], margin: [0, 0, 0, bottom] };
+}
+type DetailCell = { text: string; align: FormColumn["align"]; share: number };
+function bandRow(band: DetailBand, cells: DetailCell[], widthMm: number, data: PrintRecord, detail?: PrintRecord["lines"][number], fillColor?: string): TableCell[] {
+  const widthPt = mmToPt(widthMm);
+  // Olağan detay bantlarını birlikte tut. Uzun açıklamaların sonraki sayfaya akmasına izin ver.
+  const textHeight = (value: string, width: number, size: number) => value.split("\n").reduce((h, line) =>
+    h + Math.max(1, Math.ceil(line.length / Math.max(1, Math.floor(width / size)))) * size * 1.6, 0);
+  let height = 0;
+  const stack: Content[] = band.parts.map(part => {
+    if (part.type === "line") {
+      height += mmToPt(Math.max(part.y1, part.y2) + part.thickness);
+      return vectorLine(scaleLineX(part, widthMm / 100), mmToPt(part.thickness / 2));
+    }
+    if (part.type === "text") {
+      const text = formCellText(part.text, data.header, detail) || " ";
+      height += textHeight(text, widthPt * part.width / 100, part.size) + 2;
+      return { text, alignment: part.align, fontSize: part.size, bold: part.bold, color: part.color, wordBreak: "break-all",
+        margin: [widthPt * part.x / 100, 1, widthPt * (100 - part.x - part.width) / 100, 1] };
+    }
+    height += Math.max(mmToPt(band.minHeight), ...cells.map(c => textHeight(c.text, widthPt * c.share - 4, band.size) + 2));
+    return { table: { widths: cells.map(c => widthPt * c.share), heights: mmToPt(band.minHeight),
+      body: [cells.map(c => ({ text: c.text || " ", alignment: c.align, fontSize: band.size, color: band.color, bold: band.bold,
+        wordBreak: "break-all" as const, margin: [2, 1, 2, 1] as [number, number, number, number] }))] },
+      layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 } };
+  });
+  return [{ stack, colSpan: cells.length, unbreakable: height < 500, fillColor }, ...cells.slice(1).map(() => ({}))];
+}
+function maySpanPages(row: TableCell[]) {
+  const first = row[0];
+  return typeof first === "object" && first !== null && "unbreakable" in first && first.unbreakable === false;
+}
+
 function bandContent(t: PrintTemplate, band: FormBand, data: PrintRecord): Content[] {
   const content: Content[] = [];
   if (!t.layout) return content;
   for (const block of t.layout.blocks) {
     if (block.band !== band) continue;
     if (block.type === "line") {
-      const width = mmToPt(block.thickness);
-      content.push({ canvas: [{ type: "line", x1: mmToPt(block.x1), y1: mmToPt(block.y1),
-        x2: mmToPt(block.x2), y2: mmToPt(block.y2), lineColor: block.color, lineWidth: width,
-        ...(block.style === "solid" ? {} : { dash: { length: width * (block.style === "dashed" ? 4 : 1), space: width * 2 } }) }],
-        margin: [0, 0, 0, mmToPt(2)] });
+      content.push(vectorLine(block, mmToPt(2)));
       continue;
     }
     const count = block.rows[0].cells.length;
@@ -29,9 +63,15 @@ function bandContent(t: PrintTemplate, band: FormBand, data: PrintRecord): Conte
     const widths = columns.map(col => mmToPt(col.width) - border * (count + 1) / count - pad * 2);
     const rows = formTableRows(block, data, t.layout);
     if (!rows.length) continue;
-    content.push({ table: { widths, headerRows: block.header && rows.length > 1 ? 1 : 0,
-      body: rows.map(row => row.cells.map((cell, i) => ({ text: cell || " ", alignment: columns[i].align, wordBreak: "break-all",
-        bold: row.header, fillColor: row.color }))) },
+    const body: TableCell[][] = rows.map(row => {
+      const band = block.rows[row.source].detailBand;
+      if (band) return bandRow(band, row.cells.map((text, i) => ({ text, align: columns[i].align, share: columns[i].width / block.width })),
+        block.width - (2 * pad + 2 * border) / mmToPt(1), data, row.detail, row.color);
+      return row.cells.map((cell, i) => ({ text: cell || " ", alignment: columns[i].align, wordBreak: "break-all",
+        bold: row.header, fillColor: row.color }));
+    });
+    // pdfmake tekrarlanan başlığı bölünmez basar. Uzun başlık kendi sayfalarına akmalı.
+    content.push({ table: { widths, headerRows: block.header && rows.length > 1 && !maySpanPages(body[0]) ? 1 : 0, body },
       layout: { hLineWidth: () => border, vLineWidth: () => border, hLineColor: () => lineColor, vLineColor: () => lineColor,
         paddingLeft: () => pad, paddingRight: () => pad, paddingTop: () => pad, paddingBottom: () => pad },
       margin: [mmToPt(block.x), 0, 0, mmToPt(2)] });
@@ -70,6 +110,11 @@ export async function printFormPdf(t: PrintTemplate, data: PrintRecord): Promise
     const body: TableCell[][] = [...headers];
     for (const row of rows) {
       const fillColor = formRowColor(t.layout, row, detailIndex++);
+      if (t.layout?.detailBand) {
+        body.push(bandRow(t.layout.detailBand, t.columns.map(c => ({ text: formCellText("{" + c + "}", h, row),
+          align: numeric.has(c) ? "right" : "left", share: widths[c] / totalWidth })), formWidthMm - 8 / mmToPt(1), data, row, fillColor));
+        continue;
+      }
       body.push(t.columns.map(c => {
         const value = row[c];
         let text = String(value ?? "—");
@@ -83,7 +128,7 @@ export async function printFormPdf(t: PrintTemplate, data: PrintRecord): Promise
       const cents = rows.reduce((sum, row) => sum + Math.round(row.LineTotal * 100), 0);
       body.push(spanning(`Grup ara toplamı   ${money(cents / 100)}`, "#eff4f4"));
     }
-    content.push({ table: { headerRows: headers.length, keepWithHeaderRows: 1,
+    content.push({ table: { headerRows: headers.length, keepWithHeaderRows: maySpanPages(body[headers.length]) ? 0 : 1,
       widths: t.columns.map(c => `${100 * widths[c] / totalWidth}%`), body },
       layout: { hLineWidth: () => 0.4, vLineWidth: () => 0, hLineColor: () => lineColor,
         paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 4, paddingBottom: () => 4 },

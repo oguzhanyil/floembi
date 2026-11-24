@@ -83,4 +83,84 @@ export async function testPrintLayout({ call, evaluate, waitFor, open, click, di
     await copyFile(pdf, join(outputs, "FAT-0200-Tasarim.pdf"));
   }
   console.log("PASS: cetvel ve yakalama, fareyle çizgi, özel tekrar satırı, satır biçimleri, kaydet/aç ve A4 dışa aktarım.");
+  const detailPath = join(dir, "Belge-Detay-Bandi.floem");
+  await copyFile(path, detailPath);
+  await evaluate(`window.fixture.detailForm=${JSON.stringify(detailPath)}`);
+  await open("detailForm");
+  async function editDetailBand() {
+    await click("Detay satırını düzenle");
+    await waitFor("document.querySelector('.detail-inspector')");
+    await setInput(`${label("En az satır yüksekliği (mm)")}.querySelector('input')`, "7");
+    await setInput(`${label("Yazı boyutu (pt)")}.querySelector('input')`, "10");
+    await click("Alan / metin ekle");
+    await setInput(`${label("Satır metni")}.querySelector('textarea')`, "{WhsCode} · Kalem {LineNum}");
+    await setInput(`${label("Alan genişliği (%)")}.querySelector('input')`, "93");
+    await setInput(`${label("Soldan (%)")}.querySelector('input')`, "3");
+    await setInput(`${label("Metin boyutu (pt)")}.querySelector('input')`, "8");
+    await click("Arkasına çizgi çiz");
+    const drawRow = "tr.band-part .form-line-surface.drawing";
+    await waitFor(`document.querySelector(${JSON.stringify(drawRow)})`);
+    await drag(await point(drawRow, .03, .12), await point(drawRow, .97, .12));
+    await choose("Ayraç biçimi", "dotted");
+    await setInput(`${label("Ayraç rengi")}.querySelector('input')`, "#167567");
+    await choose("Banttaki öğe", "data");
+    await click("Yatay ayraç ekle");
+    await setInput(`${label("X2 (%)")}.querySelector('input')`, "12");
+    await setInput(`${label("X1 (%)")}.querySelector('input')`, "3");
+    await setInput(`${label("Ayraç rengi")}.querySelector('input')`, "#c48034");
+    await click("Düzenlemeyi bitir");
+  }
+  await editDetailBand();
+  await click("Teklif");
+  await waitFor("document.querySelector('.form-detail-table')");
+  await choose("Belge", "2");
+  await waitFor("document.querySelector('.print-stage-tools span')?.textContent.includes('TEK-0002')");
+  await editDetailBand();
+  await evaluate("document.querySelector('.ribbon-btn[title=\"Ctrl+S\"]').click()");
+  await waitFor("!document.querySelector('.dirty')");
+  await open("detailForm");
+  const bandDownloads = join(dir, "detay-bandi-pdf");
+  await mkdir(bandDownloads);
+  await call("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: bandDownloads });
+  for (const [kind, number, grid] of [["Fatura", "FAT-0200", ".form-custom-table"], ["Teklif", "TEK-0002", ".form-detail-table"]]) {
+    await click(kind);
+    await waitFor(`document.querySelectorAll('${grid} tr.band-part').length === 12`);
+    assert.match(await evaluate(`document.querySelector('${grid} .band-text').innerText`), /Depo .+ · Kalem \d+/);
+    await click("A4 önizleme");
+    await waitFor(`document.querySelector('.print-download')?.download === '${number}.pdf'`);
+    await evaluate("document.querySelector('.print-download').click()");
+    const file = join(bandDownloads, number + ".pdf");
+    for (let i = 0; i < 100 && !(await stat(file).catch(() => null))?.size; i++) await new Promise(done => setTimeout(done, 100));
+    assert((await stat(file)).size > 1000);
+    if (outputs) await copyFile(file, join(outputs, number + "-Detay.pdf"));
+  }
+  if (outputs) await copyFile(detailPath, join(outputs, "Belge-Detay-Bandi.floem"));
+  console.log("PASS: özel ve standart detay bandında veri alanı, iki satır arası çizgi, çok sayfalı baskı ve kaydet/aç.");
+  const overflow = join(dir, "uzun-bant");
+  await mkdir(overflow);
+  await call("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: overflow });
+  const notes = Array.from({ length: 95 }, (_, i) => "N" + String(i + 1).padStart(2, "0")).join("\n");
+  for (const [kind, number] of [["Teklif", "TEK-0001"], ["Fatura", "FAT-0200"]]) {
+    await click(kind); await click("Tasarım");
+    if (kind === "Teklif") {
+      await choose("Belge", "1");
+      await waitFor("document.querySelector('.print-stage-tools span')?.textContent.includes('TEK-0001')");
+      await click("Detay satırını düzenle");
+    } else {
+      await waitFor("document.querySelector('.form-custom-table button')");
+      await cell(1, 1); await click("Seçili satır bandını düzenle");
+    }
+    await click("Alan / metin ekle");
+    await setInput(`${label("Satır metni")}.querySelector('textarea')`, notes);
+    await setInput(`${label("Metin boyutu (pt)")}.querySelector('input')`, "14");
+    await click("A4 önizleme");
+    await waitFor(`document.querySelector('.print-download')?.download === '${number}.pdf'`);
+    await evaluate("document.querySelector('.print-download').click()");
+    const file = join(overflow, number + ".pdf");
+    for (let i = 0; i < 100 && !(await stat(file).catch(() => null))?.size; i++) await new Promise(done => setTimeout(done, 100));
+    assert((await stat(file)).size > 1000);
+    if (outputs) await copyFile(file, join(outputs, number + "-Uzun.pdf"));
+  }
+  await evaluate("document.querySelector('.ribbon-btn[title=\"Ctrl+S\"]').click()");
+  await waitFor("!document.querySelector('.dirty')");
 }

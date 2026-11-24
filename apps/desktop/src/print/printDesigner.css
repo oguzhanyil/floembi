@@ -62,3 +62,10 @@
 .print-paper .form-custom-table td { border: .5pt solid #bfcfd2; padding: 0; white-space: pre-wrap; }
 .print-paper .form-custom-table button { display:block; width:100%; border:0; padding:3pt; border-radius:0; background:transparent; color:#192d37; font:inherit; text-align:left; overflow-wrap:anywhere; white-space:pre-wrap; }
 .print-paper .form-custom-table button.active-cell { outline: 1.5px solid #247aa2; outline-offset:-1px; }
+.print-paper .form-detail-cell, .print-paper button.band-text { display: block; width: 100%; background: transparent; border: 0; padding: 0; text-align: inherit; color: inherit; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.print-paper .band-data td { vertical-align: top; }
+.print-paper .band-data td button { color: inherit; }
+.print-paper tr.band-part > td { padding: 0; border-top: 0; border-bottom: 0; }
+.print-paper .band-part.active { outline: 1px dashed #247aa2; outline-offset: -1px; }
+.print-paper .band-active-data { outline: 1px solid #247aa2; outline-offset: -1px; }
+.print-paper button.band-text { padding: 1pt 0; }

@@ -70,3 +70,27 @@ def test_custom_print_layout_round_trip(tmp_path):
             PrintLayout(blocks=[table | invalid])
     with pytest.raises(ValueError, match="benzersiz"):
         PrintLayout(blocks=[line, line])
+
+
+def test_record_band_archive_and_validation(tmp_path):
+    from floem_bi.document.print_forms import DetailBand
+
+    line = dict(id="separator", type="line", x1=3, x2=99, y1=1, y2=1, color="#668899", thickness=.3, style="dotted")
+    note = dict(id="note", type="text", x=10, width=80, text="Depo {WhsCode}", align="left", size=8, bold=False, color="#003355")
+    band = DetailBand(minHeight=8, size=10, color="#113344", bold=True, parts=[{"type": "data"}, note, line])
+    custom = dict(id="custom", type="table", band="beforeDetail", x=0, width=120, header=False, repeatRow=0,
+                  rows=[{"cells": ["{ItemCode}"], "detailBand": band}])
+    for layout in [PrintLayout(detailBand=band), PrintLayout(blocks=[custom])]:
+        tmpl = PrintTemplate(kind="quote", title="Teklif", columns=["ItemCode"], layout=layout)
+        path = tmp_path / "band.floem"
+        with closing(Document.new(tmp_path)) as doc:
+            doc.content.print_templates = [tmpl]
+            doc.save(path)
+        with ZipFile(path) as arc:
+            assert json.loads(arc.read("manifest.json"))["format_version"] == 4
+        with closing(Document.open(tmp_path, path)) as doc:
+            assert doc.content.print_templates == [tmpl]
+    for invalid in [[note, line], [{"type": "data"}] * 2, [{"type": "data"}, line, line],
+                    [{"type": "data"}, note | {"width": 99}], [{"type": "data"}, line | {"x2": 105}]]:
+        with pytest.raises(ValueError):
+            DetailBand.model_validate(band.model_dump() | {"parts": invalid})
