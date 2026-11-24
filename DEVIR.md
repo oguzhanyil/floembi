@@ -1,5 +1,16 @@
 # Floem BI: devir notu (24.11.2026)
 
+**Sıradaki aşama · Desktop'ta rapor hazırlama deneyimi**
+
+Kullanıcı kendi seçtiği raporları Floem BI Desktop arayüzünde hazırlayacak. Hangi
+işlemleri kendi başına tamamlayabildiğini, nerede yardıma ihtiyaç duyduğunu ve
+hangi sonucu elde edemediğini deneyecek. Arayüz ve rapor hazırlama akışındaki
+revizyonların önceliği bu denemelerden gelen geri bildirimlerle belirlenecek.
+
+Canlı pilotta Floemway kaydı ve zamanlanmış yenileme, gerçek şirket verisiyle
+mutabakat, Windows hizmeti kurulumu, Docker'da yedekten dönüş, eşzamanlı kullanım
+testi ve canlı Analytics bağlantısı son aşamada ele alınacak.
+
 **24.11.2026 H7–H9** · Floemway yenilemesi gerçek SQL Server'da salt okunur bir sorguyla
 kabul edildi. H8 günlük saat/saat dilimi, kalıcı kuyruk ve sahip bildirimleri web'de hazır.
 Paketli Floemway, elle başlatılan Windows hizmet yükleyicisi, PostgreSQL/Compose dağıtımı
@@ -13,7 +24,7 @@ SQL bağlayıcı testi atlandı. Kayıtlı Desktop bağlantısı ile gerçek SQL
 koşuya dahildi. Chromium ürün turu ve 22 tasarım kontrolü geçti. Canlı pilotun sağlık
 ucu HTTPS üzerinden 200, oturumsuz rapor ve yenileme ayarları 401 döndürdü.
 
-Güncel geliştirme: F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. Gerçek kaynak/kullanıcı kabulü ve F14 canlı Analytics adaptörü açık. Sırada gerçek süreç üzerinde kabul; ERP'ye işlem yazma ayrı tasarım/yetkilendirme kapsamında.
+F10A, F08, F09, F11 ve F13 uygulandı. F12 yerel süreç pilotları, F14 BI ölçü/uyarı altyapısı ve F15 senaryo/uygulama içi öneri-onay-geçmişi hazır. ERP'ye işlem yazma ayrı tasarım ve yetkilendirme kapsamında.
 Power BI dosyaları Desktop Aç/Ctrl+O ile açılır. Dört kaynak dalındaki 260 ayrı
 formül FDX'te derlendi. Yedi ana raporun alan eşlemeleri ve ölçü kabulü
 `data/FDX-Test` altında. İki dosyanın kayıtlı verisi, diğer projelerin ayrıca
