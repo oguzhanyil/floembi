@@ -1,6 +1,7 @@
 import type { AnalyticsConfig, MetricEvidence, MetricReceipt } from "./analytics";
 import type { FormKind, PrintChoices, PrintRecord, PrintTemplate } from "./printForms";
 export * from "./printForms";
+export * from "./printLayout";
 import type { ScenarioDefinition, ScenarioQuery, ScenarioReceipt, ScenarioWorkflow } from "./scenarios";
 export type { ScenarioDefinition, ScenarioParameter, ScenarioOutput, ScenarioQuery, ScenarioReceipt, ScenarioProposal, ScenarioScope, ScenarioProposalInput, ScenarioHistory, ScenarioWorkflow } from "./scenarios";
 export type { AnalyticsConfig, AnalyticsMetric, AnalyticsRule, MetricEvidence, MetricReceipt } from "./analytics";

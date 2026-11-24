@@ -1,3 +1,5 @@
+import type { PrintLayout } from "./printLayout";
+
 export type FormKind = "invoice" | "quote";
 export const detailLabels = {
   LineNum: "Sıra", ItemCode: "Ürün kodu", Dscription: "Açıklama", WhsCode: "Depo",
@@ -5,6 +7,7 @@ export const detailLabels = {
 } as const;
 export type DetailColumn = keyof typeof detailLabels;
 export interface PrintTemplate {
+  layout?: PrintLayout | null;
   version: 1;
   kind: FormKind;
   title: string;

@@ -6,7 +6,18 @@
 
 **Aç → `data/Belge-Demo.floem`** ile hazır raporu açın. Dosya, tasarımcıda FAT-0200 faturasını seçer. Kendi açık raporunuzda aynı ekrana üst şeritteki **Belge Tasarımcısı** düğmesiyle geçebilirsiniz. **A4 önizleme** bütün kalemleri gerçek sayfalarda gösterir. **PDF indir** aynı çıktıyı kaydeder. Önizlemedeki yazıcı simgesi yazdırma penceresini açar.
 
-**Fatura** ve **Teklif** ayrı şablonlardır. Sol panelde firma, başlık, PNG/JPEG logo, vurgu rengi, detay sütunları, depo/ürün gruplaması, ara toplam ve not düzenlenir. Sütunlar sürüklenerek veya ok düğmeleriyle sıralanır. **Ctrl+S** iki şablonu ve seçilen örnekleri `.floem` dosyasına yazar. Şablonlar biçim 2 arşivindeki `documentTemplates.json` dosyasında saklanır. Düzenleyici, açık yerel modelin anlık görüntüsünü okur.
+**Fatura** ve **Teklif** ayrı şablonlardır. Sol panelde firma, başlık, PNG/JPEG logo, vurgu rengi, detay sütunları, depo/ürün gruplaması, ara toplam ve not düzenlenir. Sütunlar sürüklenerek veya ok düğmeleriyle sıralanır. **Ctrl+S** iki şablonu ve seçilen örnekleri `.floem` dosyasına yazar. Şablonlar `documentTemplates.json` içinde saklanır. Temel şablonlar biçim 2, cetvel kılavuzları, çizgiler, özel tablolar veya satır kuralları içeren şablonlar biçim 3 kullanır.
+
+### Kendi belge düzeninizi hazırlama
+
+1. **Tasarım** görünümünde üst cetvele tıklayarak dikey kılavuz ekleyin. İşareti sürükleyerek taşıyın. Odaklanmış işareti Delete ile kaldırın. Cetveller baskı alanının başlangıcından itibaren milimetre gösterir.
+2. **Bölüm** listesinden başlığı, kalemlerin önünü veya alt bilgiyi seçin. **Çizgi çiz** ile başlangıçtan bitişe sürükleyin. Seçili çizginin gövdesini veya uçlarını taşıyabilir, sol panelde koordinat, renk, kalınlık ve çizgi biçimini girebilirsiniz. **Hizalamaya yakala** uçları milimetreye ve yakın dikey kılavuza oturtur.
+3. **Tablo ekle** ile bir tablo yerleştirin. Hücreye tıklayın, sol panelden metin girin veya bir veri alanı seçin. Satır ve sütun ekleyip silebilir, tablonun sol kenarını bir kılavuza hizalayabilirsiniz. **Sütun genişlik payı** açıklamaya daha fazla yer ayırır. **Sütun hizası** ile tutarları sağa yaslayabilirsiniz. Belge numarası için `{DocNum}`, müşteri için `{CardName}` kullanılır.
+4. Kendi kalem tablonuz için başlığın altındaki bir hücreyi seçin. **Seçili satırı her kalemde tekrarla** seçeneğini açın. Hücrelere ürün, açıklama, miktar veya tutar bağlayın. Özel tablo kaynak kalem sırasını kullanır. Yalnız bu kalem listesini basmak istediğinizde **Standart kalem tablosunu göster** seçimini kaldırın. Gruplama ve grup ara toplamları standart kalem tablosunda uygulanır.
+5. **Satır boyama** alanında iki satırda bir tekrarlayan rengi veya sayısal koşulu seçin. Örneğin *Net tutar > 200* olan satırları yeşil yapabilirsiniz. Koşul önce, dönüşümlü renk sonra uygulanır. Özel tablodaki diğer satırlar kendilerine verilmiş rengi taşır.
+6. Tasarım örnek kalemleri gösterir. **A4 önizleme** bütün kalemleri sayfalandırır, başlık satırını devam sayfalarında tekrarlar ve baskı kılavuzlarını dışarıda bırakır. **PDF indir** ile önizlediğiniz çıktıyı alın.
+
+Cetvel, çizginin baskı stili ve koşullu bölüm rengi için SAP Crystal Reports 2025 kılavuzu incelendi. Tekrarlanan kalem satırı için Microsoft Report Builder’ın statik başlık ve dinamik detay ayrımı kullanıldı. [SAP kılavuzları](https://help.sap.com/docs/SAP_CRYSTAL_REPORTS/dfc124becfa845ffa91b1e717b20e3ec/475cfde06e041014910aba7db0e91070.html) · [SAP çizgi ayarları](https://help.sap.com/docs/SAP_CRYSTAL_REPORTS/dfc124becfa845ffa91b1e717b20e3ec/47550a7e6e041014910aba7db0e91070.html) · [SAP koşullu bölüm rengi](https://help.sap.com/docs/SAP_CRYSTAL_REPORTS/dfc124becfa845ffa91b1e717b20e3ec/477ef3176e041014910aba7db0e91070.html) · [Microsoft Learn, tabloda detay satırları](https://learn.microsoft.com/en-us/sql/reporting-services/report-design/tablix-data-region-cells-rows-and-columns-report-builder-and-ssrs)
 
 | Kabul belgesi | PDF'deki kalem | Depo | A4 sayfa | Son sayfada tek genel toplam |
 |---|---:|---:|---:|---:|
@@ -15,7 +26,9 @@
 | TEK-0002 | 40 | 3 | 2 | 2.886,00 TL |
 | TEK-0003 | 200 | 3 | 7 | 14.766,00 TL |
 
-İlk sürüm aşağıdaki SAP B1 demo alanlarını kullanır. Sıradaki tasarım işleri başka modeller için elle alan eşleme, boş şablon ve nesneleri bant içinde milimetreyle konumlandırmadır. Web'de yetkili rapor satırından belge açma üçüncü aşamadadır.
+`data/Belge-Tasarim-Ornegi.floem` içindeki özel kalem tablosu aynı FAT-0200'ü beş sayfaya yerleştirir. Başlık her sayfada tekrar eder. Net tutarı 200 TL'yi aşan kalemler yeşildir. PDF'deki 182 sıra, ürün ve net tutar SQLite ile karşılaştırıldı.
+
+Bu sürüm aşağıdaki SAP B1 demo alanlarını kullanır. Sonraki tasarım işleri başka modeller için elle alan eşleme, boş şablon ve hazır başlık, müşteri, toplam alanlarının serbest yerleşimidir. Web'de yetkili rapor satırından belge açma üçüncü aşamadadır.
 
 Hazır raporu aynı kaynaktan yeni bir yola tekrar üretmek için depo kökünde aşağıdaki komutu kullanın.
 
@@ -56,7 +69,7 @@ Teklif şablonunda aynı bantlarla **geçerlilik tarihi, teslim ve ödeme koşul
 | Mevcut dayanak | Planlanan geliştirme |
 |---|---|
 | [Desktop tasarımcısı](../packages/designer/src/ReportDesigner.tsx) alan paneli, seçim, hizalama ve geri alma içeriyor. | Belge düzenleyicisi aynı etkileşimleri kullanır. Bantların içinde mm cinsinden konumlar saklanır. Ayrıntı satırları çoğaldıkça alttaki bantların başlangıcını sayfalama motoru belirler. |
-| [.floem arşivi](../src/floem_bi/document/floemfile.py) ve [belge şablonu tanımı](../packages/client/src/printForms.ts) | Şablonlar arşivde ayrı bir `documentTemplates.json` girdisinde saklanır. Böylece rapor görsellerini düzenleyen bir kayıt işlemi şablonları korur. Eski dosya boş şablon listesiyle açılır. Şablon içeren rapor biçim 2 olarak kaydedilir. |
+| [.floem arşivi](../src/floem_bi/document/floemfile.py) ve [belge şablonu tanımı](../packages/client/src/printForms.ts) | Şablonlar arşivde ayrı bir `documentTemplates.json` girdisinde saklanır. Rapor görsellerini düzenleyen bir kayıt işlemi şablonları korur. Şablonsuz dosya biçim 1, temel şablonlu dosya biçim 2, yerleşim araçlarıyla düzenlenen dosya biçim 3 olarak kaydedilir. |
 | [Sorgu motoru](../src/floem_bi/report/query.py) alanları, filtreleri ve FDX ölçülerini çözüyor. [Yayımlanmış rapor ve App sorguları](../src/floem_bi/server/app.py) kullanıcı yetkisini ve RLS'yi uyguluyor. | Aynı güvenlik ve model bağlamında tek belgenin başlığını, sıralı kaynak satırlarını ve toplamlarını getiren belge sorgusu eklenir. Seçici, önizleme ve PDF aynı yetkili veri sürümünü kullanır. Baskı sürerken sürüm değişirse yeniden önizleme istenir. |
 | [Satır eylemi](../packages/report/src/visualActions.ts) bugün seçili hücrenin değerini taşıyor. | **Belgeyi aç** eylemi şablonu ve tam belge anahtarını taşır. Tekil birleşik anahtar varsa doğrudan kullanılır. Firma, belge türü ve iç numara ayrı sütunlardaysa alanların birlikte eşlenmesi gerekir. Ürün filtresi faturayı bulmaya yardım eder. Baskıda seçili faturanın bütün yetkili kalemleri alınır. Kapsamı eksik bir belge tam fatura olarak üretilmez. |
 | [PDF aktarımı](../packages/report/src/tablePdf.ts) pdfmake 0.3.14, gömülü Türkçe font, tekrarlı sütun başlığı ve sayfa numarası kullanıyor. [Büyük tablo aktarımının](f09-buyuk-grid-ve-aktarim.md) kendi grup sınırları var. | Ayrı bir belge üreticisi aynı PDF altyapısını kullanır. Önce fiziksel ölçü, satır akışı ve grup kuralları sınanır. Önizleme, indirme ve yazdırma aynı üretilmiş PDF'yi kullanır. Eksik satırlı PDF indirmesi engellenir ve sorunlu alan/bant tasarımda gösterilir. pdfmake'in yerel paket lisansı MIT, kullanılan Roboto fontları Apache-2.0'dır. [pdfmake 0.3 belgeleri](https://pdfmake.github.io/docs/0.3/) · [Floem font kaydı](../packages/report/src/fonts/README.md) |

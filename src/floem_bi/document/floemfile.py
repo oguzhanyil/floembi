@@ -5,7 +5,7 @@ Zip arşivi:
   model.yaml      semantik model (ModelTanimi; şifre içermez)
   diagram.json    model görünümündeki kart konumları
   report.json     rapor tanımı (H4'te doluyor)
-  documentTemplates.json   düzenlenebilir baskı şablonları (biçim 2)
+  documentTemplates.json   baskı şablonları (biçim 2), yerleşim araçlarıyla (biçim 3)
   data.duckdb     içe aktarılmış veri (Import modu anlık görüntüsü)
 
 Yazma atomiktir: önce geçici dosyaya yazılır, sonra yerine taşınır. Okurken yalnızca
@@ -30,7 +30,7 @@ from ..model.schema import ModelTanimi
 from .print_forms import PrintTemplate
 
 FORMAT = "floem"
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 MAX_JSON_BYTES = 50 * 1024 * 1024
 
 
@@ -61,7 +61,7 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     manifest = {
         "format": FORMAT,
-        "format_version": FORMAT_VERSION if content.print_templates else 1,
+        "format_version": 3 if any(t.layout is not None for t in content.print_templates) else (2 if content.print_templates else 1),
         "app": f"Floem BI Desktop {app_version}",
         "created": content.manifest.get("created", now),
         "modified": now,
@@ -75,7 +75,7 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
             z.writestr("diagram.json", json.dumps(content.diagram, ensure_ascii=False, indent=2))
             z.writestr("report.json", json.dumps(content.report or {"version": 1, "pages": []}, ensure_ascii=False))
             if content.print_templates:
-                z.writestr("documentTemplates.json", json.dumps([t.model_dump() for t in content.print_templates], ensure_ascii=False))
+                z.writestr("documentTemplates.json", json.dumps([t.model_dump(exclude_none=True) for t in content.print_templates], ensure_ascii=False))
             # DuckDB dosyası zaten sıkıştırılmış; tekrar sıkıştırmak yalnızca yavaşlatır
             z.write(db_file, "data.duckdb", compress_type=zipfile.ZIP_STORED)
         os.replace(tmp, path)

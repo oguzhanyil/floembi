@@ -29,3 +29,35 @@
 .print-paper th, .print-paper td { padding: 6px 4px; text-align: left; } .print-paper th { color: white; }
 .print-paper td { border-bottom: 1px solid #dce4e5; } .print-paper p { white-space: pre-wrap; }
 @media (max-width: 760px) { .print-body { grid-template-columns: minmax(165px, 34%) minmax(0,1fr); } .print-settings { padding: 8px; } }
+.form-object-tools, .form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; }
+.form-object-tools { padding: 7px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.form-object-tools label { display: inline-flex; align-items: center; gap: 4px; }
+.form-object-tools select { max-width: 190px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px; }
+.form-actions { margin: 6px 0; } .form-actions button { padding: 4px 7px; }
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; align-items: end; }
+.form-pair > button { margin-bottom: 7px; }
+.print-settings .form-inspector { border-left: 2px solid var(--accent); padding-left: 8px; }
+.print-paper-scroll { padding: 15px 8px; }
+.form-sheet-host { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.form-custom-table caption { caption-side: bottom; text-align: left; padding-top: 1mm; color: #536773; font-size: 8pt; }
+.print-paper.form-sheet { width: 210mm; min-height: 297mm; max-width: none; padding: 17.3mm 0 15mm; border-top: 0; }
+.form-sheet-body { width: 181mm; min-height: 264mm; margin-left: 14.111mm; position: relative; display: flow-root; }
+.form-unit,.form-ruler { position: absolute; color: #47626b; font: 8px/1 "Segoe UI", sans-serif; user-select: none; }
+.form-unit { top:-7mm; left:-7mm; } .form-ruler span { position: absolute; pointer-events: none; }
+.form-ruler.horizontal { width: 100%; height: 6mm; top: -7mm; border-bottom: 1px solid #80999e; cursor: crosshair; touch-action: none;
+  background: repeating-linear-gradient(90deg,#a7b7ba 0 .2mm,transparent .2mm 1mm) bottom / 100% 1.3mm no-repeat,
+              repeating-linear-gradient(90deg,#67828a 0 .25mm,transparent .25mm 5mm) bottom / 100% 2.3mm no-repeat; }
+.form-ruler.vertical { top: 0; bottom: 0; left: -8mm; width: 7mm; border-right: 1px solid #80999e; overflow: hidden;
+  background: repeating-linear-gradient(180deg,#a7b7ba 0 .2mm,transparent .2mm 1mm) right / 1.3mm 100% no-repeat,
+              repeating-linear-gradient(180deg,#67828a 0 .25mm,transparent .25mm 5mm) right / 2.3mm 100% no-repeat; }
+.form-ruler.vertical span { left: 0; }
+.print-studio button.form-guide-handle { position: absolute; top: 0; transform: translateX(-50%); background: transparent; color: #076eaa; border: 0; padding: 0; cursor: ew-resize; }
+.form-guide-line { position: absolute; z-index: 2; top: -1mm; bottom: 0; border-left: 1px dashed #3788a5; pointer-events: none; }
+.form-line-surface { display: block; width: 100%; touch-action: none; overflow: visible; }
+.form-line-surface.drawing { cursor: crosshair; outline: 1px dashed #548298; background: #e8f4f985; }
+.form-line-surface circle { fill: #fff; stroke: #087899; stroke-width: .55; cursor: crosshair; }
+.form-block { margin-bottom: 2mm; } .form-block.selected { outline: 1px dashed #508094; }
+.print-paper .form-custom-table { border-collapse: collapse; font-size: 9pt; }
+.print-paper .form-custom-table td { border: .5pt solid #bfcfd2; padding: 0; white-space: pre-wrap; }
+.print-paper .form-custom-table button { display:block; width:100%; border:0; padding:3pt; border-radius:0; background:transparent; color:#192d37; font:inherit; text-align:left; overflow-wrap:anywhere; white-space:pre-wrap; }
+.print-paper .form-custom-table button.active-cell { outline: 1.5px solid #247aa2; outline-offset:-1px; }

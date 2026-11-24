@@ -7,7 +7,10 @@ doğrudan FAT-0200 ile açılır. Başlık, firma, logo, renk, sütunlar, grupla
 not düzenlenebilir. Aynı A4 çıktı önizlenir, yazdırılır ve PDF olarak indirilir.
 FAT-0200'de 182 satır, iki depo, altı sayfa ve son sayfada 33.061,80 TL doğrulandı.
 Üç sentetik teklifin 1, 40 ve 200 kalemli örnekleri sırasıyla 1, 2 ve 7 sayfa.
-Yeni şablonlu dosyalar biçim 2, şablonsuz dosyalar biçim 1 ile kaydedilir.
+Tasarım görünümünde milimetre cetvelleri ve dikey kılavuzlar, fareyle çizgi çizme,
+tablo ekleme, tekrarlanan kalem satırı ve koşullu/dönüşümlü satır renkleri bulunur.
+Tüm nesneler seçilen belge bandında basılır. İleri yerleşim içeren şablonlar biçim 3,
+temel şablonlar biçim 2, şablonsuz dosyalar biçim 1 ile kaydedilir.
 [Kullanım, kaynak eşlemesi ve sonraki geliştirmeler](docs/belge-tasarimcisi-plani.md).
 
 **Kullanıcı testi · Desktop'ta rapor hazırlama deneyimi**

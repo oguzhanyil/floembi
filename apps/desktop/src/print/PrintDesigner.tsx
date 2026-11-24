@@ -1,13 +1,14 @@
-import { defaultPrintTemplate, detailLabels, type DetailColumn, type FormKind, type PrintRecord, type PrintTemplate } from "@floem/client";
+import { defaultPrintTemplate, detailLabels, emptyPrintLayout, type DetailColumn, type FormKind, type PrintRecord, type PrintTemplate } from "@floem/client";
 import { createPrintFormPdf } from "@floem/report";
 import { useEffect, useMemo, useState } from "react";
 import { useClient } from "../api";
 import { useDocument } from "../document";
+import { DetailPaint } from "./FormObjectProperties";
+import { FormLayoutDesigner } from "./FormLayoutDesigner";
 import "./printDesigner.css";
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const labels = Object.keys(detailLabels) as DetailColumn[];
-const money = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function useLoad<T>(load: () => Promise<T>) {
   const [result, setResult] = useState<{ load: typeof load; value?: T; error?: string }>();
@@ -47,6 +48,7 @@ function FormEditor({ kind }: { kind: FormKind }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(template.sampleKey);
   const [imageError, setImageError] = useState("");
+  const [inspector, setInspector] = useState<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DetailColumn | null>(null);
   const { id, revision } = doc;
   const choices = useLoad(useMemo(() => () => client.printChoices(id, kind, search.trim()), [client, id, kind, search, revision]));
@@ -78,6 +80,7 @@ function FormEditor({ kind }: { kind: FormKind }) {
   const problem = choices?.error || record?.error || currentPdf?.error || imageError;
   return <div className="print-body">
     <aside className="print-settings">
+      <div ref={setInspector} />
       <fieldset><legend>Örnek belge</legend>
         <label>Belge numarası ara<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder={kind === "invoice" ? "Fatura numarası" : "Teklif numarası"} /></label>
         <label>Belge<select value={selected} onChange={e => choose(e.target.value)}>
@@ -105,6 +108,8 @@ function FormEditor({ kind }: { kind: FormKind }) {
         {template.logo && <button onClick={() => edit({ logo: "" })}>Logoyu kaldır</button>}
       </fieldset>
       <fieldset><legend>Kalemler ve gruplama</legend>
+        <label className="print-check"><input type="checkbox" checked={!template.layout?.hideMainDetail}
+          onChange={e => edit({ layout: { ...(template.layout ?? emptyPrintLayout), hideMainDetail: !e.target.checked } })} />Standart kalem tablosunu göster</label>
         <label>Grupla<select value={template.groupBy} onChange={e => edit({ groupBy: e.target.value as PrintTemplate["groupBy"] })}>
           <option value="WhsCode">Depo</option><option value="ItemCode">Ürün kodu</option><option value="none">Gruplama yok</option>
         </select></label>
@@ -120,6 +125,7 @@ function FormEditor({ kind }: { kind: FormKind }) {
           </div>;
         })}
       </fieldset>
+      <DetailPaint layout={template.layout ?? emptyPrintLayout} change={patch => edit({ layout: { ...(template.layout ?? emptyPrintLayout), ...patch } })} />
       <fieldset><legend>Belge alt bilgisi</legend><label>{kind === "quote" ? "Teklif koşulları" : "Belge notu"}<textarea maxLength={2000} rows={3} value={template.note} onChange={e => edit({ note: e.target.value })} /></label></fieldset>
     </aside>
     <section className="print-stage">
@@ -133,20 +139,8 @@ function FormEditor({ kind }: { kind: FormKind }) {
       {mode === "preview" && (currentPdf?.url
         ? <iframe className="print-frame" title="A4 belge önizlemesi" src={currentPdf.url} />
         : !problem && <p role="status">A4 sayfaları hazırlanıyor…</p>)}
-      {mode === "design" && (data ? <div className="print-paper-scroll"><article className="print-paper" style={{ borderTopColor: template.accent }}>
-        <div className="print-band">Belge başlığı</div>
-        {template.logo && <img className="print-logo" src={template.logo} alt="Firma logosu" />}
-        {template.issuer && <strong>{template.issuer}</strong>}
-        <h1 style={{ color: template.accent }}>{template.title}</h1>
-        <div className="print-parties"><section><b>{data.header.CardName}</b><div>{data.header.Address}</div></section>
-          <section><b>{data.header.DocNum}</b><div>{data.header.DocDate}</div></section></div>
-        <div className="print-band">Detay · ilk kalem</div>
-        <table><thead style={{ background: template.accent }}><tr>{template.columns.map(c => <th key={c}>{detailLabels[c]}</th>)}</tr></thead>
-          <tbody><tr>{template.columns.map(c => <td key={c}>{data.lines[0] ? c === "LineNum" ? data.lines[0].LineNum + 1 : data.lines[0][c] ?? "—" : "—"}</td>)}</tr></tbody></table>
-        <div className="print-band">Belge alt bilgisi</div>
-        <p className="print-total">Genel toplam <b>{money(data.header.DocTotal)} {data.header.DocCur === "TRY" ? "TL" : data.header.DocCur}</b></p>
-        <p>{data.header.Comments}</p><p>{template.note}</p>
-      </article></div> : !problem && <p role="status">{selected ? "Belge okunuyor…" : "Önizleme için bir belge seçin."}</p>)}
+      {mode === "design" && (data ? <FormLayoutDesigner template={template} data={data} inspector={inspector} change={layout => edit({ layout })} />
+        : !problem && <p role="status">{selected ? "Belge okunuyor…" : "Önizleme için bir belge seçin."}</p>)}
     </section>
   </div>;
 }

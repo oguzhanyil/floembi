@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { copyFile, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { testPrintLayout } from "./print-layout-smoke.mjs";
 
 export async function testPrintForms({ call, evaluate, waitFor, open, dir, source, outputs }) {
   const path = join(dir, "Belge-UI.floem");
@@ -46,4 +47,5 @@ export async function testPrintForms({ call, evaluate, waitFor, open, dir, sourc
   await waitFor(`document.querySelector('${info}')?.textContent.includes('TEK-0003')`);
   assert.equal(await evaluate(`document.querySelector('.print-paper th').textContent`), "Ürün kodu");
   console.log("PASS: Belge Tasarımcısı, 4 A4 önizleme, sütun sırası, kaydet/aç ve örnek belge seçimi.");
+  await testPrintLayout({ call, evaluate, waitFor, open, click, dir, path, outputs });
 }

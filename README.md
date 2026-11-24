@@ -12,8 +12,9 @@ Bu depodaki ilk dilim semantik çekirdektir:
 Mimari kararlar ve gerekçeleri `research/notes/99-floem-bi-sentez.md` dosyasındadır.
 
 **Belge Tasarımcısı** Desktop üst şeridindedir. `data/Belge-Demo.floem` hazır örneğinde
-fatura veya teklifi seçip anteti, kalem sütunlarını ve gruplamayı düzenleyebilir,
-A4 çıktıyı önizleyebilir ve PDF olarak indirebilirsiniz.
+fatura veya teklifi seçip anteti ve gruplamayı düzenleyebilirsiniz. Milimetre cetveliyle
+çizgi yerleştirebilir, alanlara bağlı özel tablolar kurabilir ve kalemleri tutara göre
+renklendirebilirsiniz. A4 önizleme ve PDF aynı sayfaları kullanır.
 [Kullanım ve örnek fatura/teklif sonuçları](docs/belge-tasarimcisi-plani.md)
 
 Power BI dallarının iş mantığı, güncel demoların farkları, metin/çözünürlük sorunları ve

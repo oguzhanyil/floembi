@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,6 +12,83 @@ from .ops import phys_col, phys_table
 
 FormKind = Literal["invoice", "quote"]
 DetailColumn = Literal["LineNum", "ItemCode", "Dscription", "Quantity", "Price", "LineTotal", "WhsCode"]
+Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
+HorizontalMm = Annotated[float, Field(ge=0, le=181, allow_inf_nan=False)]
+VerticalMm = Annotated[float, Field(ge=0, le=60, allow_inf_nan=False)]
+
+
+class LayoutItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=80)
+    band: Literal["header", "beforeDetail", "footer"]
+
+
+class FormLine(LayoutItem):
+    type: Literal["line"]
+    x1: HorizontalMm
+    x2: HorizontalMm
+    y1: VerticalMm
+    y2: VerticalMm
+    color: Color
+    thickness: float = Field(ge=.1, le=3, allow_inf_nan=False)
+    style: Literal["solid", "dashed", "dotted"]
+
+
+class FormTableRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cells: list[Annotated[str, Field(max_length=500)]] = Field(min_length=1, max_length=8)
+    color: Color | None = None
+
+
+class FormColumn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    align: Literal["left", "center", "right"]
+    weight: float = Field(ge=1, le=8, allow_inf_nan=False)
+
+
+class FormTable(LayoutItem):
+    type: Literal["table"]
+    x: HorizontalMm
+    width: float = Field(ge=25, le=181, allow_inf_nan=False)
+    header: bool
+    repeatRow: int | None = Field(default=None, ge=0)
+    columnFormat: list[FormColumn] | None = Field(default=None, min_length=1, max_length=8)
+    rows: list[FormTableRow] = Field(min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def check_grid(self):
+        if self.repeatRow is not None and (self.repeatRow >= len(self.rows) or self.header and self.repeatRow == 0):
+            raise ValueError("Tekrarlanan satır geçerli bir detay satırı olmalı.")
+        if self.x + self.width > 181.00001 or len({len(row.cells) for row in self.rows}) != 1:
+            raise ValueError("Tablo baskı alanına sığmalı ve her satır aynı sayıda hücre içermeli.")
+        if self.width < 10 * len(self.rows[0].cells):
+            raise ValueError("Her sütun için en az 10 mm ayırın.")
+        if self.columnFormat is not None and len(self.columnFormat) != len(self.rows[0].cells):
+            raise ValueError("Sütun biçimleri tablonun sütun sayısıyla eşleşmeli.")
+        return self
+
+
+class RowRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    field: Literal["Quantity", "Price", "LineTotal"]
+    op: Literal["gt", "lt", "eq"]
+    value: float = Field(allow_inf_nan=False)
+    color: Color
+
+
+class PrintLayout(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    blocks: list[Annotated[FormLine | FormTable, Field(discriminator="type")]] = Field(default_factory=list, max_length=80)
+    guides: list[HorizontalMm] = Field(default_factory=list, max_length=40)
+    hideMainDetail: bool = False
+    stripe: Color | None = None
+    rule: RowRule | None = None
+
+    @model_validator(mode="after")
+    def unique_ids(self):
+        if len({b.id for b in self.blocks}) != len(self.blocks):
+            raise ValueError("Belge nesnesi kimlikleri benzersiz olmalı.")
+        return self
 
 
 class PrintTemplate(BaseModel):
@@ -27,6 +104,7 @@ class PrintTemplate(BaseModel):
     columns: list[DetailColumn] = Field(min_length=1, max_length=7)
     logo: str = Field(default="", max_length=1_500_000, pattern=r"^(data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+)?$")
     sampleKey: str = Field(default="", max_length=160)
+    layout: PrintLayout | None = None
 
     @model_validator(mode="after")
     def unique_columns(self):
