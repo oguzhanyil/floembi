@@ -27,3 +27,4 @@ export * from "./layout";
 export * from "./usePageLayout";
 export const createPrintFormPdf = async (...args: Parameters<typeof import("./printFormPdf").printFormPdf>) =>
   (await import("./printFormPdf")).printFormPdf(...args);
+export { PagedViewer, pagedPdf } from "./PagedViewer";

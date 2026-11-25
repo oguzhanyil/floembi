@@ -96,9 +96,11 @@ class SourceRef:
     schema: str | None = None
     table: str | None = None
     sql: str | None = None
+    procedure: str | None = None
+    arguments: tuple = ()
 
     def label(self) -> str:
-        return f"{self.schema}.{self.table}" if self.table else "SQL sorgusu"
+        return f"{self.schema}.{self.table or self.procedure}" if self.table or self.procedure else "SQL sorgusu"
 
 
 @dataclass

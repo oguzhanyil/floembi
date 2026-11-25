@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { bands, detailLabels, emptyPrintLayout, formCellText, formRowColor, formTableColumns, formTableRows, formWidthMm, groupFormLines, plainDetailBand,
-  type DetailBand, type FormBand, type FormBlock, type FormLine, type FormTable, type LineShape, type PrintLayout, type PrintRecord, type PrintTemplate } from "@floem/client";
+  formTitleBox, headerLabels, type FreeText, type DetailBand, type FormBand, type FormBlock, type FormLine, type FormTable, type LineShape, type PrintLayout, type PrintRecord, type PrintTemplate } from "@floem/client";
+import { FreeFormArea } from "./FreeFormArea";
 import { FormSheet } from "./FormSheet";
 import { FormObjectProperties } from "./FormObjectProperties";
 import { LineSurface } from "./LineSurface";
@@ -14,10 +15,18 @@ const newLine = (band: FormBand, color: string): FormLine => ({
 type RowTarget = { table: string; row: number; instance: number };
 const headerBand: DetailBand = { ...plainDetailBand, bold: true };
 
-export function FormLayoutDesigner({ template, data, inspector, change }: {
-  template: PrintTemplate; data: PrintRecord; inspector: HTMLElement | null; change: (layout: PrintLayout) => void;
+export function FormLayoutDesigner({ template, data, inspector, change, rename }: {
+  template: PrintTemplate; data: PrintRecord; inspector: HTMLElement | null; change: (layout: PrintLayout) => void; rename:(title:string)=>void;
 }) {
   const layout = template.layout ?? emptyPrintLayout;
+  const [freeId,setFreeId]=useState("");
+  const stored=layout.freeText??[];
+  const free=stored.some(v=>v.role==="title")?stored:[formTitleBox(template),...stored];
+  const box=free.find(v=>v.id===freeId);
+  function writeBox(v:FreeText){change({...layout,freeText:free.some(b=>b.id===v.id)?free.map(b=>b.id===v.id?v:b):[...free,v]});}
+  function selectBox(id:string){setFreeId(id);select("");closeBand();setDrawing(null);}
+  function textArea(at:FormBand){return <FreeFormArea band={at} t={template} data={data} active={!!box&&box.band===at}
+    selected={freeId} write={writeBox} select={selectBox} rename={rename} snap={snap}/>;}
   const [band, setBand] = useState<FormBand>("header"), [selectedId, select] = useState(""), [drawing, setDrawing] = useState<FormLine | null>(null);
   const [rulers, setRulers] = useState(true), [snap, setSnap] = useState(true), [cell, selectCell] = useState({ r: 0, c: 0 });
   const selected = layout.blocks.find(b => b.id === selectedId);
@@ -27,9 +36,9 @@ export function FormLayoutDesigner({ template, data, inspector, change }: {
   const activeBand = (targetTable ? targetTable.rows[target!.row]?.detailBand : layout.detailBand)
     ?? (targetTable?.header && target?.row === 0 ? headerBand : plainDetailBand);
   const closeBand = () => { setTarget(null); setPending(null); };
-  const chooseObject = (id: string) => { closeBand(); select(id); };
+  const chooseObject = (id: string) => { closeBand(); select(id); setFreeId(""); };
   const editBand = (at: RowTarget, key = "data") => {
-    setTarget(at); setPart(key); setDrawing(null); select(""); setPending(null);
+    setTarget(at); setPart(key); setDrawing(null); select(""); setFreeId(""); setPending(null);
   };
   function editVisibleBand() {
     const table = layout.hideMainDetail && layout.blocks.find((b): b is FormTable => b.type === "table" && b.repeatRow != null);
@@ -109,11 +118,25 @@ export function FormLayoutDesigner({ template, data, inspector, change }: {
         width: 120, header: true, rows: [{ cells: ["Alan", "Değer"] }, { cells: ["Belge numarası", "{DocNum}"] }] })}>Tablo ekle</button>
       <button aria-pressed={!!target} disabled={!canEditDefault && !target} onClick={target ? closeBand : editVisibleBand}>Detay satırını düzenle</button>
       <button aria-pressed={rulers} onClick={() => setRulers(!rulers)}>Cetvel</button>
+      <button onClick={()=>{const v:FreeText={...formTitleBox(template),id:crypto.randomUUID(),role:"text",text:"Metin kutusu",band,
+        x:4,y:Math.min(42,Math.max(0,...free.filter(b=>b.band===band).map(b=>b.y+b.h))+2),w:70,h:12,size:12,bold:false};writeBox(v);selectBox(v.id);}}>Metin kutusu ekle</button>
       <label><input type="checkbox" checked={snap} onChange={e => setSnap(e.target.checked)} /> Hizalamaya yakala</label>
       {layout.guides.length > 0 && <button onClick={() => change({ ...layout, guides: [] })}>Kılavuzları temizle</button>}
       {layout.blocks.length > 0 && <label>Nesne <select value={selectedId} onChange={e => { chooseObject(e.target.value); selectCell({ r: 0, c: 0 }); }}>
         <option value="">Seçin</option>{layout.blocks.map((b, i) => <option key={b.id} value={b.id}>{i + 1}. {b.type === "line" ? "Çizgi" : "Tablo"} · {bands[b.band]}</option>)}</select></label>}
     </div>
+    {box&&inspector&&createPortal(<fieldset className="form-inspector"><legend>{box.role==="title"?"Belge başlığı":"Metin kutusu"}</legend>
+      <label>Bölüm<select value={box.band} disabled={box.locked} onChange={e=>writeBox({...box,band:e.target.value as FormBand})}>{Object.entries(bands).map(([k,s])=><option key={k} value={k}>{s}</option>)}</select></label>
+      <label>İçerik<textarea value={box.role==="title"?template.title:box.text} disabled={box.locked} onChange={e=>box.role==="title"?rename(e.target.value):writeBox({...box,text:e.target.value})}/></label>
+      {box.role==="text"&&<label>Alan ekle<select value="" disabled={box.locked} onChange={e=>writeBox({...box,text:box.text+"{"+e.target.value+"}"})}><option value="">Veri alanı seçin</option>{Object.entries(headerLabels).map(([k,s])=><option key={k} value={k}>{s}</option>)}</select></label>}
+      <div className="pg-pair">{(["x","y","w","h","size"] as const).map((p,i)=><label key={p}>{["X (mm)","Y (mm)","Genişlik","Yükseklik","Yazı boyutu"][i]}<input type="number" step=".5" disabled={box.locked} value={box[p]}
+        onChange={e=>{const n=e.target.valueAsNumber;if(Number.isFinite(n))writeBox({...box,[p]:Math.min([181-box.w,60-box.h,181-box.x,60-box.y,64][i],Math.max([0,0,4,3,5][i],n))});}}/></label>)}</div>
+      <label>Metin hizası<select value={box.align} disabled={box.locked} onChange={e=>writeBox({...box,align:e.target.value as FreeText["align"]})}><option value="left">Sol</option><option value="center">Orta</option><option value="right">Sağ</option></select></label>
+      <label>Metin rengi<input type="color" value={box.color} disabled={box.locked} onChange={e=>writeBox({...box,color:e.target.value})}/></label>
+      <label><input type="checkbox" checked={box.bold} disabled={box.locked} onChange={e=>writeBox({...box,bold:e.target.checked})}/> Kalın</label>
+      <label><input type="checkbox" checked={box.locked} onChange={e=>writeBox({...box,locked:e.target.checked})}/> Konumu ve içeriği kilitle</label>
+      <button onClick={()=>{const v:FreeText={...box,id:crypto.randomUUID(),role:"text",text:box.role==="title"?template.title:box.text,locked:false,x:Math.min(181-box.w,box.x+3),y:Math.min(60-box.h,box.y+3)};writeBox(v);selectBox(v.id);}}>Kutuyu çoğalt</button>
+      {box.role!=="title"&&<button disabled={box.locked} onClick={()=>{change({...layout,freeText:free.filter(v=>v.id!==box.id)});setFreeId("");}}>Kutuyu kaldır</button>}</fieldset>,inspector)}
     {selected && inspector && createPortal(<FormObjectProperties key={selected.id} block={selected} guides={layout.guides} cell={cell} selectCell={selectCell}
       editRow={selected.type === "table" ? drawImmediately => {
         const rows = formTableRows(selected, data, layout, true);
@@ -132,11 +155,11 @@ export function FormLayoutDesigner({ template, data, inspector, change }: {
       <div className="print-band">Belge başlığı</div>
       {template.logo && <img className="print-logo" src={template.logo} alt="Firma logosu" />}
       {template.issuer && <strong>{template.issuer}</strong>}
-      <h1 style={{ color: template.accent }}>{template.title}</h1>
+      {textArea("header")}
       {objects("header")}
       <div className="print-parties"><section><b>{data.header.CardName}</b><div>{data.header.Address}</div></section>
         <section><b>{data.header.DocNum}</b><div>{formCellText("{DocDate}", data.header)}</div></section></div>
-      {objects("beforeDetail")}
+      {textArea("beforeDetail")}{objects("beforeDetail")}
       {!layout.hideMainDetail && <><div className="print-band">Detay · {sample.length} örnek kalem</div>
       <table className="form-detail-table"><thead style={{ background: template.accent }}><tr>{template.columns.map(c => <th key={c}>{detailLabels[c]}</th>)}</tr></thead>
         <tbody>{(sample.length ? sample : [undefined]).map((row, i) => {
@@ -146,7 +169,7 @@ export function FormLayoutDesigner({ template, data, inspector, change }: {
             {template.columns.map(c => <td key={c}><button className="form-detail-cell" onClick={() => editBand(at)}>{formCellText("{" + c + "}", data.header, row)}</button></td>)}</DetailRowView>;
         })}</tbody></table></>}
       <div className="print-band">Belge alt bilgisi</div>
-      {objects("footer")}
+      {textArea("footer")}{objects("footer")}
       <p>{data.header.Comments}</p><p>{template.note}</p>
       <p className="print-total">Genel toplam <b>{amount(data.header.DocTotal)} {data.header.DocCur === "TRY" ? "TL" : data.header.DocCur}</b></p>
     </FormSheet></div>

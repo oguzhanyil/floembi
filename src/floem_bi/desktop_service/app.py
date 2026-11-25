@@ -33,6 +33,10 @@ from .publish import PublishClient
 from .component_library import ComponentStore
 from ..report.schema import ComponentDefinition
 from ..document.print_forms import FormKind, PrintTemplate, read_form
+from ..compiler import CompileError
+from ..paginated.schema import Library, Run as PaginatedRun
+from ..paginated.source import SnapshotSource
+from ..paginated.service import run as run_paginated
 
 
 class ConnectionIn(BaseModel):
@@ -58,13 +62,15 @@ class ImportItemIn(BaseModel):
     database: str | None = None                  # verilmezse ImportIn.database
     schema_: str | None = Field(default=None, alias="schema")
     table: str | None = None
+    procedure: str | None = Field(default=None, min_length=1, max_length=128)
+    arguments: list[str | float | int | bool | None] = Field(default_factory=list, max_length=64)
     sql: str | None = None
     name: str | None = None
 
     @model_validator(mode="after")
     def _one(self):
-        if bool(self.table) == bool(self.sql):
-            raise ValueError("Her öğede 'table' ya da 'sql' alanlarından yalnızca biri olmalı")
+        if sum(bool(x) for x in (self.table, self.sql, self.procedure)) != 1 or self.arguments and not self.procedure:
+            raise ValueError("Tablo, SQL sorgusu veya yordamdan birini seçin")
         return self
 
 
@@ -389,6 +395,26 @@ def create_app(
         print_document(document_id).set_print_template(body)
         return {"ok": True}
 
+    @app.put("/document/{document_id}/paginated", dependencies=[Depends(auth)])
+    def save_paginated(document_id: str, body: Library):
+        current = print_document(document_id)
+        with current.lock:
+            if current.closed:
+                raise DocumentError("Açık rapor değişti")
+            if body != current.content.paginated:
+                current.content.paginated = body
+                current._touch()
+        return {"ok": True}
+
+    @app.post("/document/{document_id}/paginated/run", dependencies=[Depends(auth)])
+    def preview_paginated(document_id: str, body: PaginatedRun):
+        current = print_document(document_id)
+        try:
+            with current.lock:
+                return run_paginated(current.content.paginated, body, SnapshotSource(*current._semantic_engine()))
+        except (ValueError, ModelError, CompileError, ArithmeticError) as e:
+            raise DocumentError(str(e), code="paginated") from e
+
     @app.get("/document/{document_id}/print-data/{kind}", dependencies=[Depends(auth)])
     def print_data(document_id: str, kind: FormKind, record: str | None = None, search: str = ""):
         try:
@@ -448,10 +474,12 @@ def create_app(
         spec = store.get(body.connection_id)          # şifre kayıtlı değilse credentials_required
         conn = connector_factory(spec)
         d = doc()
+        if spec.kind != "sqlserver" and any(it.procedure for it in body.items):
+            raise DocumentError("Saklı yordam için SQL Server bağlantısı seçin")
         items = [
             ImportItem(
-                SourceRef(it.database or body.database, it.schema_ or ("dbo" if spec.kind == "sqlserver" else "main"), it.table, None) if it.table
-                else SourceRef(it.database or body.database, sql=it.sql),
+                SourceRef(it.database or body.database, it.schema_ or ("dbo" if spec.kind == "sqlserver" else "main"),
+                          it.table, it.sql, it.procedure, tuple(it.arguments)),
                 it.name,
             )
             for it in body.items

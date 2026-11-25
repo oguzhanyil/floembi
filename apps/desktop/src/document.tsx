@@ -1,4 +1,4 @@
-import type { DocumentState, FormKind, Job, ModelOp, PrintTemplate } from "@floem/client";
+import type { DocumentState, FormKind, Job, ModelOp, PagedLibrary, PrintTemplate } from "@floem/client";
 import { defaultPrintTemplate } from "@floem/client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { toUiError, useClient, type UiError } from "./api";
@@ -15,6 +15,8 @@ interface DocumentApi {
   setDoc(d: DocumentState): void;
   /** Belgenin bir kısmını güncel duruma göre değiştirir (eşzamanlı güncellemelerde eski kopyayı yazmamak için) */
   patchDoc(fn: (d: DocumentState) => DocumentState): void;
+  editPaged(library: PagedLibrary): void;
+  flushPaged(): Promise<void>;
   editPrintTemplate(id: string, kind: FormKind, change: Partial<PrintTemplate>): void;
   error: UiError | null;
   setError(e: UiError | null): void;
@@ -46,6 +48,20 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const loadGeneration = useRef(0);
   const flushers = useRef(new Set<() => Promise<void>>());
   const pendingTemplates = useRef(new Map<FormKind, PrintTemplate>());
+  const pendingPaged = useRef<PagedLibrary | null>(null);
+  const pagedQueue = useRef(Promise.resolve());
+  const flushPaged = useCallback(() => {
+    const id = docRef.current?.id;
+    const work = pagedQueue.current.catch(() => {}).then(async () => {
+      const library = pendingPaged.current;
+      if (library && id && docRef.current?.id === id) {
+        await client.setPagedLibrary(id, library);
+        if (pendingPaged.current === library && docRef.current?.id === id) pendingPaged.current = null;
+      }
+    });
+    pagedQueue.current = work;
+    return work;
+  }, [client]);
   const registerFlush = useCallback((fn: () => Promise<void>) => {
     flushers.current.add(fn);
     return () => {
@@ -53,16 +69,19 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const flushAll = useCallback(async () => {
+    await flushPaged();
     for (const f of flushers.current) await f();
     const id = docRef.current?.id;
     if (id) for (const [kind, template] of pendingTemplates.current) {
       await client.setPrintTemplate(id, template.title.trim() ? template : { ...template, title: defaultPrintTemplate(kind).title });
       if (docRef.current?.id === id && pendingTemplates.current.get(kind) === template) pendingTemplates.current.delete(kind);
     }
-  }, [client]);
+  }, [client, flushPaged]);
 
   const setDoc = useCallback((d: DocumentState) => {
     if (docRef.current?.id !== d.id) pendingTemplates.current.clear();
+    if (docRef.current?.id !== d.id) pendingPaged.current = null;
+    if (pendingPaged.current) d = { ...d, paginated: pendingPaged.current, dirty: true };
     if (pendingTemplates.current.size) {
       const templates = new Map((d.documentTemplates ?? []).map(t => [t.kind, t]));
       for (const [kind, template] of pendingTemplates.current) templates.set(kind, template);
@@ -76,6 +95,10 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
   const patchDoc = useCallback((fn: (d: DocumentState) => DocumentState) => {
     const cur = docRef.current;
     if (cur) setDoc(fn(cur));
+  }, [setDoc]);
+  const editPaged = useCallback((library: PagedLibrary) => {
+    pendingPaged.current = library;
+    if (docRef.current) setDoc(docRef.current);
   }, [setDoc]);
 
   const editPrintTemplate = useCallback((id: string, kind: FormKind, change: Partial<PrintTemplate>) => {
@@ -213,7 +236,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ doc, apply, save, open, opening, newDocument, reload, setDoc, patchDoc, editPrintTemplate, error, setError, job, trackJob: setJob, registerFlush }}
+      value={{ doc, apply, save, open, opening, newDocument, reload, setDoc, patchDoc, editPaged, flushPaged, editPrintTemplate, error, setError, job, trackJob: setJob, registerFlush }}
     >
       {children}
     </Ctx.Provider>

@@ -43,3 +43,5 @@ Depo kökünde, yeni bir çıktı adıyla çalıştırın.
 ```
 
 Kütüphanede fatura dökümü, ona bağlı fatura kalemleri, iç içe depo/stok özeti ve A3 yatay çapraz tablo bulunur. Fatura numarası alanında FAT-0200 seçilidir. Altı sayfada 182 kalem ve son sayfada 33.061,80 TL genel toplam kontrol edilebilir.
+
+Serbest tasarım örneği için aynı komutu yeni çıktı adı `data\Serbest-Belge-Tasarimi.floem` ve `--serbest` seçeneğiyle çalıştırın. İlk açılan **Teslim tutanağı** tek bir A4 yüzeyine yerleştirilmiş başlık, bağlı müşteri alanları, not alanı, imza çizgileri ve barkod içerir. Her öğeyi bağımsız seçip taşıyabilirsiniz.

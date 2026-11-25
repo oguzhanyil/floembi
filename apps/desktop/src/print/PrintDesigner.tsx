@@ -5,6 +5,7 @@ import { useClient } from "../api";
 import { useDocument } from "../document";
 import { DetailPaint } from "./FormObjectProperties";
 import { FormLayoutDesigner } from "./FormLayoutDesigner";
+import { PagedDesigner } from "./PagedDesigner";
 import "./printDesigner.css";
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -23,17 +24,18 @@ function useLoad<T>(load: () => Promise<T>) {
 
 export function PrintDesigner() {
   const { doc } = useDocument();
-  const [kind, setKind] = useState<FormKind>(() =>
-    doc?.documentTemplates?.[0]?.kind ?? (doc?.model.tablolar.some(t => t.ad.toUpperCase() === "OQUT") &&
+  const [kind, setKind] = useState<FormKind | "paged">(() =>
+    doc?.paginated?.reports.length || !doc?.model.tablolar.length ? "paged" : doc?.documentTemplates?.[0]?.kind ?? (doc?.model.tablolar.some(t => t.ad.toUpperCase() === "OQUT") &&
       !doc?.model.tablolar.some(t => t.ad.toUpperCase() === "OINV") ? "quote" : "invoice"));
   return <section className="print-studio" aria-label="Belge Tasarımcısı">
     <header className="print-top"><h2>Belge Tasarımcısı</h2>
       <div className="print-tabs" aria-label="Şablon türü">
-        {(["invoice", "quote"] as const).map(k => <button key={k} aria-pressed={kind === k} onClick={() => setKind(k)}>
+        {(["invoice", "quote"] as const).map(k => <button key={k} disabled={!doc?.model.tablolar.length} aria-pressed={kind === k} onClick={() => setKind(k)}>
           {k === "invoice" ? "Fatura" : "Teklif"}</button>)}
+        <button aria-pressed={kind === "paged"} onClick={() => setKind("paged")}>Sayfalı raporlar</button>
       </div>
     </header>
-    {doc && <FormEditor key={doc.id + kind} kind={kind} />}
+    {doc && (kind === "paged" ? <PagedDesigner key={doc.id}/> : <FormEditor key={doc.id + kind} kind={kind} />)}
   </section>;
 }
 
@@ -139,7 +141,7 @@ function FormEditor({ kind }: { kind: FormKind }) {
       {mode === "preview" && (currentPdf?.url
         ? <iframe className="print-frame" title="A4 belge önizlemesi" src={currentPdf.url} />
         : !problem && <p role="status">A4 sayfaları hazırlanıyor…</p>)}
-      {mode === "design" && (data ? <FormLayoutDesigner template={template} data={data} inspector={inspector} change={layout => edit({ layout })} />
+      {mode === "design" && (data ? <FormLayoutDesigner template={template} data={data} inspector={inspector} change={layout => edit({ layout })} rename={title=>edit({title})} />
         : !problem && <p role="status">{selected ? "Belge okunuyor…" : "Önizleme için bir belge seçin."}</p>)}
     </section>
   </div>;

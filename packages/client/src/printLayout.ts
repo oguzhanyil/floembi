@@ -33,10 +33,18 @@ export interface FormTable extends FormObject {
   rows: { cells: string[]; color?: string | null; detailBand?: DetailBand | null }[];
 }
 export type FormBlock = FormLine | FormTable;
+export interface FreeText extends FormObject {
+  role: "title" | "text"; text: string; x: number; y: number; w: number; h: number;
+  size: number; color: string; bold: boolean; align: "left"|"center"|"right"; locked: boolean;
+}
+export function formTitleBox(t:PrintTemplate):FreeText {
+  return {id:"form-title",role:"title",band:"header",text:"",x:0,y:0,w:112,h:14,size:25,color:t.accent,bold:true,align:"left",locked:false};
+}
 export interface RowRule {
   field: "Quantity" | "Price" | "LineTotal"; op: "gt" | "lt" | "eq"; value: number; color: string;
 }
 export interface PrintLayout {
+  freeText?: FreeText[];
   blocks: FormBlock[];
   guides: number[];
   hideMainDetail?: boolean;

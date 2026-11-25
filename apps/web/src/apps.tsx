@@ -2,7 +2,7 @@ import {
   FloemApiError, type AppAdminView, type AppInfo, type AppItemInput, type AppItemView, type AppListItem, type ShareResult,
   type VisualQuery,
 } from "@floem/client";
-import { ReportViewer } from "@floem/report";
+import { PagedViewer, ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useLive, useSession } from "./session";
 
@@ -89,6 +89,8 @@ export function AppViewerPage({ id, itemId }: { id: number; itemId: number | nul
   }, [client, guard, id, appRev]);
 
   const current = app ? (app.items.find((i) => i.id === itemId) ?? app.items[0] ?? null) : null;
+  const [paged,setPaged] = useState(false);
+  const pagedRunner = useMemo(()=>client.appPagedRunner(id,current?.id??0),[id,current?.id,client]);
   const load = useCallback(() => {
     if (!current) return;
     setItemError(null);
@@ -190,9 +192,11 @@ export function AppViewerPage({ id, itemId }: { id: number; itemId: number | nul
                 </span>
               )}
               <button onClick={load} title="Veriyi yeniden yükle">⟳ Yenile</button>
+              {Boolean(item.definition.paginated?.reports.length) && <button onClick={()=>setPaged(!paged)}>{paged?"Rapor tuvaline dön":"Sayfalı raporları aç"}</button>}
             </div>
             <div className="report-body">
-              <ReportViewer report={item.definition} run={run} workflow={workflow} dataRev={`${current.id}:${item.dataset.version}:${rev}`} />
+              {paged && item.definition.paginated ? <PagedViewer key={rev} library={item.definition.paginated} runner={pagedRunner}/> :
+                <ReportViewer report={item.definition} run={run} workflow={workflow} dataRev={`${current.id}:${item.dataset.version}:${rev}`} />}
             </div>
           </div>
         )}

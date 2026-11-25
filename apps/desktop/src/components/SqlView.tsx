@@ -1,4 +1,4 @@
-import type { Connection, QueryResult } from "@floem/client";
+import type { Connection, ImportItem, QueryResult } from "@floem/client";
 import { useEffect, useRef, useState } from "react";
 import { toUiError, useClient, type UiError } from "../api";
 import { ErrorBox } from "./ErrorBox";
@@ -9,9 +9,10 @@ const LIMITS = [100, 1000, 10000];
 
 /** SQL penceresi: bağlantı + veritabanı seç, yalnızca SELECT çalıştır, sonucu gör. */
 export function SqlView({
-  connections, onNewConnection, onImport,
+  connections, onNewConnection, onImport, onProcedure,
 }: {
   connections: Connection[];
+  onProcedure?: (connectionId: string, item: ImportItem) => Promise<boolean>;
   onNewConnection: () => void;
   /** Sorguyu modele tablo olarak yükler (Power BI: "SQL deyimi" ile veri al) */
   onImport?: (connectionId: string, database: string | undefined, sql: string, name: string) => Promise<boolean>;
@@ -27,6 +28,9 @@ export function SqlView({
   const [running, setRunning] = useState(false);
   const [tableName, setTableName] = useState("Sorgu1");
   const editor = useRef<SqlEditorHandle>(null);
+  const [schema, setSchema] = useState("dbo");
+  const [routine, setRoutine] = useState("");
+  const [args, setArgs] = useState<string[]>([]);
 
   async function importQuery() {
     const sql = editor.current?.getRunnableText().trim();
@@ -131,6 +135,17 @@ export function SqlView({
           </>
         )}
       </div>
+      {onProcedure && sqlConnections.find(c => c.id === connId)?.kind === "sqlserver" && <details>
+        <summary>Saklı yordamdan veri al</summary>
+        <div className="toolbar"><label>Şema<input value={schema} onChange={e => setSchema(e.target.value)} /></label>
+          <label>Yordam adı<input value={routine} onChange={e => setRoutine(e.target.value)} /></label>
+          {args.map((v,i) => <label key={i}>Parametre {i+1}<input value={v} onChange={e => setArgs(args.map((a,j) => j===i ? e.target.value : a))} /></label>)}
+          <button onClick={() => setArgs([...args,""])}>Parametre ekle</button>{args.length > 0 && <button onClick={() => setArgs(args.slice(0,-1))}>Son parametreyi kaldır</button>}
+          <button disabled={!schema.trim() || !routine.trim() || !tableName.trim()} onClick={() => onProcedure(connId, {
+            database: database || undefined, procedure: routine.trim(), schema: schema.trim(), arguments: args, name: tableName.trim()
+          })}>Yordamı çalıştır ve sonucu içe aktar</button></div>
+        <small>Parametreleri yordamın tanım sırasıyla girin. İlk sonuç kümesi belgeye anlık görüntü olarak kaydedilir.</small>
+      </details>}
       <div className="sql-split">
         <SqlEditor ref={editor} initial={"SELECT TOP 100 *\nFROM "} onRun={run} />
         <div className="sql-results">

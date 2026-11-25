@@ -12,6 +12,8 @@ dependencies = [
   "sqlglot",      # MIT
   "duckdb",       # MIT
   "pydantic>=2",  # MIT
+  "segno==1.6.6",  # BSD-3, QR matrisi
+  "python-barcode==0.16.1",  # MIT, vektör çubuk dizileri
   "pyyaml",       # MIT
   "fastapi",      # MIT
   "uvicorn",      # BSD-3

@@ -131,10 +131,31 @@ class RowRule(BaseModel):
     color: Color
 
 
+class FreeText(LayoutItem):
+    role: Literal["title", "text"] = "text"
+    text: str = Field(default="", max_length=4000)
+    x: HorizontalMm = 0
+    y: VerticalMm = 0
+    w: float = Field(gt=0, le=181)
+    h: float = Field(gt=0, le=60)
+    size: float = Field(default=12, ge=5, le=64)
+    color: Color = "#192d37"
+    bold: bool = False
+    align: Literal["left", "center", "right"] = "left"
+    locked: bool = False
+
+    @model_validator(mode="after")
+    def inside(self):
+        if self.x+self.w > 181.01 or self.y+self.h > 60.01:
+            raise ValueError("Metin kutusu bölüm sınırını aşıyor")
+        return self
+
+
 class PrintLayout(BaseModel):
     model_config = ConfigDict(extra="forbid")
     blocks: list[Annotated[FormLine | FormTable, Field(discriminator="type")]] = Field(default_factory=list, max_length=80)
     guides: list[HorizontalMm] = Field(default_factory=list, max_length=40)
+    freeText: list[FreeText] = Field(default_factory=list, max_length=100)
     hideMainDetail: bool = False
     detailBand: DetailBand | None = None
     stripe: Color | None = None
@@ -142,7 +163,8 @@ class PrintLayout(BaseModel):
 
     @model_validator(mode="after")
     def unique_ids(self):
-        if len({b.id for b in self.blocks}) != len(self.blocks):
+        items = [*self.blocks, *self.freeText]
+        if len({b.id for b in items}) != len(items) or sum(t.role == "title" for t in self.freeText) > 1:
             raise ValueError("Belge nesnesi kimlikleri benzersiz olmalı.")
         return self
 
@@ -165,6 +187,8 @@ class PrintTemplate(BaseModel):
     def archive_version(self) -> int:
         if self.layout is None:
             return 2
+        if self.layout.freeText:
+            return 6
         if self.layout.detailBand or any(row.detailBand for block in self.layout.blocks
                                         if isinstance(block, FormTable) for row in block.rows):
             return 4

@@ -212,13 +212,22 @@ class SqlServerConnector:
             if not select:
                 raise ConnectorError(f"{source.label()}: içe aktarılabilir sütun yok", code="no_columns")
             sql = f"SELECT {', '.join(select)} FROM {quote(source.schema or 'dbo')}.{quote(source.table)}"
+        elif source.procedure:
+            sql = f"EXEC {quote(source.schema or 'dbo')}.{quote(source.procedure)}"
+            if source.arguments:
+                sql += " " + ", ".join("?" for _ in source.arguments)
         else:
             sql = ensure_read_only(source.sql or "", "tsql")
         with self._connect(source.database, timeout=timeout) as cn:
             cn.add_output_converter(-155, _datetimeoffset)
             cur = cn.cursor()
             try:
-                cur.execute(sql)
+                if source.procedure:
+                    cur.execute(sql, *source.arguments)
+                    while cur.description is None and cur.nextset():
+                        pass
+                else:
+                    cur.execute(sql)
             except pyodbc.Error as e:
                 raise _friendly(e, self.spec) from e
             if cur.description is None:

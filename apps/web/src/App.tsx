@@ -8,7 +8,7 @@ import { InvitePage, MailSettingsPage, UsersPage } from "./admin";
 import { SecurityPage } from "./security";
 import { AppSetupPage, AppTiles, AppViewerPage, AppsPage } from "./apps";
 import type { AppListItem } from "@floem/client";
-import { ReportViewer } from "@floem/report";
+import { PagedViewer, ReportViewer } from "@floem/report";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, SessionProvider, navigate, useLive, usePath, useSession } from "./session";
 
@@ -550,6 +550,8 @@ function ReportPage({ id }: { id: number }) {
   const [error, setError] = useState<UiError | null>(null);
   const [rev, setRev] = useState(0);
   const [sharing, setSharing] = useState(false);
+  const [paged, setPaged] = useState(false);
+  const pagedRunner = useMemo(() => client.pagedRunner(id), [id,client]);
 
   const load = useCallback(() => {
     guard(client.report(id))
@@ -616,7 +618,9 @@ function ReportPage({ id }: { id: number }) {
       </div>
       {sharing && <ShareDialog report={report} onClose={() => setSharing(false)} />}
       <div className="report-body">
-        <ReportViewer report={report.definition} run={run} workflow={workflow} dataRev={`${report.dataset.version}:${rev}`} />
+        {Boolean(report.definition.paginated?.reports.length) && <button onClick={() => setPaged(!paged)}>{paged ? "Rapor tuvaline dön" : "Sayfalı raporları aç"}</button>}
+        {paged && report.definition.paginated ? <PagedViewer key={rev} library={report.definition.paginated} runner={pagedRunner}/> :
+          <ReportViewer report={report.definition} run={run} workflow={workflow} dataRev={`${report.dataset.version}:${rev}`} />}
       </div>
     </div>
   );

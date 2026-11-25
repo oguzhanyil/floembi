@@ -28,9 +28,10 @@ from pydantic import ValidationError
 
 from ..model.schema import ModelTanimi
 from .print_forms import PrintTemplate
+from ..paginated.schema import Library
 
 FORMAT = "floem"
-FORMAT_VERSION = 4
+FORMAT_VERSION = 6
 MAX_JSON_BYTES = 50 * 1024 * 1024
 
 
@@ -48,6 +49,7 @@ class FloemContent:
     report: dict[str, Any] = field(default_factory=dict)
     manifest: dict[str, Any] = field(default_factory=dict)
     print_templates: list[PrintTemplate] = field(default_factory=list)
+    paginated: Library = field(default_factory=Library)
 
 
 def dump_model(tanim: ModelTanimi) -> str:
@@ -61,7 +63,7 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     manifest = {
         "format": FORMAT,
-        "format_version": max((t.archive_version() for t in content.print_templates), default=1),
+        "format_version": max([5 if content.paginated.reports else 1, *(t.archive_version() for t in content.print_templates)]),
         "app": f"Floem BI Desktop {app_version}",
         "created": content.manifest.get("created", now),
         "modified": now,
@@ -76,6 +78,8 @@ def write(path: str | Path, content: FloemContent, db_file: str | Path, app_vers
             z.writestr("report.json", json.dumps(content.report or {"version": 1, "pages": []}, ensure_ascii=False))
             if content.print_templates:
                 z.writestr("documentTemplates.json", json.dumps([t.model_dump(exclude_none=True) for t in content.print_templates], ensure_ascii=False))
+            if content.paginated.reports:
+                z.writestr("paginatedReports.json", content.paginated.model_dump_json(exclude_defaults=True))
             # DuckDB dosyası zaten sıkıştırılmış; tekrar sıkıştırmak yalnızca yavaşlatır
             z.write(db_file, "data.duckdb", compress_type=zipfile.ZIP_STORED)
         os.replace(tmp, path)
@@ -122,7 +126,9 @@ def read(path: str | Path, db_dest: str | Path) -> FloemContent:
         diagram = _json(z, "diagram.json", {})
         report = _json(z, "report.json", {"version": 1, "pages": []})
         try:
-            entries = _json(z, "documentTemplates.json", [] if manifest.get("format_version", 1) == 1 else None)
+            version = manifest.get("format_version", 1)
+            library = Library.model_validate(_json(z, "paginatedReports.json", None if version == 5 else {}))
+            entries = _json(z, "documentTemplates.json", None if version in (2, 3, 4, 6) else [])
             if not isinstance(entries, list):
                 raise ValueError("Belge şablonları listesi eksik veya geçersiz")
             templates = [PrintTemplate.model_validate(t) for t in entries]
@@ -135,4 +141,4 @@ def read(path: str | Path, db_dest: str | Path) -> FloemContent:
                 shutil.copyfileobj(src, dst, 1024 * 1024)
         except KeyError:
             pass  # veri yoksa (yalnızca model) boş veritabanıyla açılır
-    return FloemContent(tanim=tanim, diagram=diagram, report=report, manifest=manifest, print_templates=templates)
+    return FloemContent(tanim=tanim, diagram=diagram, report=report, manifest=manifest, print_templates=templates, paginated=library)

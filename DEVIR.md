@@ -1,5 +1,7 @@
 # Floem BI: devir notu (24.11.2026)
 
+**25.11.2026 · Serbest belge ve sayfalı rapor tasarımı.** Desktop'ta Belge Tasarımcısı → Sayfalı raporlar. Bağlantısız boş sayfa, kayıt başına form ve veri listesi başlangıçları vardır. Hazır fatura ve teklifte başlık taşınabilir, serbest metin kutularına alan eklenebilir. Yerel örnek `data/Sayfali-Rapor-Ornegi.floem` olarak üretildi. [Mimari, kullanım ve veri yolu](docs/sayfali-rapor-mimarisi.md).
+
 **Desktop · Fatura ve teklif için Belge Tasarımcısı**
 
 Üst şeritte **Belge Tasarımcısı** bulunur. Hazır yerel rapor `data/Belge-Demo.floem`

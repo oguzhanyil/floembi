@@ -46,7 +46,7 @@ function Shell() {
   useEffect(() => {
     if (!doc || openedDocId.current === doc.id) return;
     openedDocId.current = doc.id;
-    if (doc.documentTemplates?.length && !doc.report.pages.some(p => p.visuals.length)) setView("belge");
+    if ((doc.documentTemplates?.length || doc.paginated?.reports.length) && !doc.report.pages.some(p => p.visuals.length)) setView("belge");
   }, [doc]);
   const [reportToolbar, setReportToolbar] = useState<HTMLDivElement | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -296,9 +296,7 @@ function Shell() {
           {view === "belge" && (activeViewAs ? <div className="empty-state">
             <h2>Rol önizlemesi açık</h2><p>Belge tasarımına dönmek için rol önizlemesini kapatın.</p>
             <button onClick={() => setViewAs(null)}>Farklı görüntülemeyi durdur</button>
-          </div> : tableCount === 0 ? <div className="empty-state"><h2>Belge için veri ekleyin</h2>
-            <p>Fatura veya teklif başlıklarıyla bunlara bağlı kalem tablolarını yükleyin.</p>
-            <button className="primary" onClick={() => setGetData(true)}>Veri al</button></div> : <PrintDesigner key={doc?.id} />)}
+          </div> : doc && <PrintDesigner key={doc.id} />)}
           {view === "model" && (
             <ModelView
               onGetData={() => setGetData(true)}
@@ -313,6 +311,7 @@ function Shell() {
               connections={connections}
               onNewConnection={() => setGetData(true)}
               onImport={(connectionId, database, sql, name) => startImport(connectionId, [{ database, sql, name }])}
+              onProcedure={(connectionId, item) => startImport(connectionId, [item])}
             />
           )}
           {view === "veri" && tableCount > 0 && (

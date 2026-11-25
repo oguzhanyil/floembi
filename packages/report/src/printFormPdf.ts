@@ -1,4 +1,4 @@
-import { detailLabels, formCellText, formRowColor, formTableColumns, formTableRows, formWidthMm, groupFormLines, mmToPt, scaleLineX,
+import { detailLabels, formCellText, formRowColor, formTableColumns, formTableRows, formWidthMm, freeTextLines, groupFormLines, mmToPt, scaleLineX,
   type DetailBand, type DetailColumn, type FormBand, type FormColumn, type LineShape, type PrintRecord, type PrintTemplate } from "@floem/client";
 import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
 import pdfMake from "./pdfEngine";
@@ -51,6 +51,17 @@ function maySpanPages(row: TableCell[]) {
 function bandContent(t: PrintTemplate, band: FormBand, data: PrintRecord): Content[] {
   const content: Content[] = [];
   if (!t.layout) return content;
+  const boxes=t.layout.freeText?.filter(o=>o.band===band)??[];
+  if(boxes.length){
+    const height=Math.max(...boxes.map(o=>o.y+o.h));
+    const escape=(s:string)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const labels=boxes.flatMap(o=>{
+      const {size,lines}=freeTextLines(o,o.role==="title"?t.title:formCellText(o.text,data.header));
+      const x=o.x+(o.align==="right"?o.w-.4:o.align==="center"?o.w/2:.4);
+      return lines.map((line,i)=>`<text x="${x}" y="${o.y+size*(.94+1.18*i)}" fill="${o.color}" font-family="Floem" font-size="${size}" font-weight="${o.bold?"bold":"normal"}" text-anchor="${o.align==="right"?"end":o.align==="center"?"middle":"start"}">${escape(line)}</text>`);
+    });
+    content.push({svg:`<svg xmlns="http://www.w3.org/2000/svg" width="181" height="${height}" viewBox="0 0 181 ${height}">${labels.join("")}</svg>`,width:mmToPt(181),height:mmToPt(height)});
+  }
   for (const block of t.layout.blocks) {
     if (block.band !== band) continue;
     if (block.type === "line") {
@@ -80,13 +91,14 @@ function bandContent(t: PrintTemplate, band: FormBand, data: PrintRecord): Conte
 }
 
 export async function printFormPdf(t: PrintTemplate, data: PrintRecord): Promise<Blob> {
+  if(t.layout?.freeText?.length) await Promise.all([document.fonts.load("12px Floem"),document.fonts.load("bold 12px Floem")]);
   const h = data.header;
   const currency = h.DocCur === "TRY" ? "TL" : h.DocCur;
   const money = (v: number) => `${fmt.format(v)} ${currency}`;
   const content: Content[] = [];
   if (t.logo) content.push({ image: t.logo, fit: [104, 42], margin: [0, 0, 0, 8] });
   if (t.issuer) content.push({ text: wrap(t.issuer), bold: true, color: t.accent, margin: [0, 0, 0, 5] });
-  content.push({ text: wrap(t.title), fontSize: 25, bold: true, margin: [0, 0, 0, 15] });
+  if(!t.layout?.freeText?.some(o=>o.role==="title")) content.push({ text: wrap(t.title), fontSize: 25, bold: true, margin: [0, 0, 0, 15] });
   content.push(...bandContent(t, "header", data));
   content.push({ columns: [
     { width: "*", stack: [{ text: "MÜŞTERİ", color: muted, fontSize: 8 }, { text: wrap(h.CardName), bold: true, fontSize: 12, margin: [0, 3, 0, 1] }, { text: wrap(h.Address ?? ""), color: muted }] },

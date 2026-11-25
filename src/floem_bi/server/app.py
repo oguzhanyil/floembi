@@ -49,7 +49,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine import URL
 
-from ..compiler import UserInfo
+from ..compiler import CompileError, UserInfo
+from ..paginated.schema import Run as PaginatedRun
+from ..paginated.source import SnapshotSource
+from ..paginated.service import run as run_paginated
 from ..document import floemfile
 from ..document.floemfile import FloemFileError
 from ..engine.duckdb_engine import DuckDBEngine
@@ -1251,6 +1254,7 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
                 content = floemfile.read(upload, stage / "data.duckdb")
                 SemanticModel(content.tanim)
                 report_def = Report.model_validate(content.report or {"version": 1, "pages": []})
+                report_def.paginated = content.paginated if content.paginated.reports else None
             except FloemFileError as e:
                 raise ApiError(400, "file_error", e.message, e.detail) from e
             except (ModelError, ValueError) as e:
@@ -1342,6 +1346,27 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         with engine.connect() as c:
             rp, role = load_report(c, rid, user)
         return dataset_query(user, rp.dataset_id, role, q, rp.definition)
+
+    @app.post("/api/reports/{rid}/paginated/run")
+    def published_paginated(rid: int, body: PaginatedRun, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            rp, role = load_report(c, rid, user)
+        return dataset_paginated(rp.dataset_id, rp.definition, role, user, body)
+
+    def dataset_paginated(dataset_id, definition, role, user, body):
+        with engine.connect() as c:
+            library = Report.model_validate_json(definition).paginated
+            if not library:
+                raise NOT_FOUND("Sayfalı rapor")
+            ds = c.execute(select(db.datasets).where(db.datasets.c.id == dataset_id)).first()
+            model, eng, lock = engines.get(ds.id, ds.version, ds.model_yaml, ds.snapshot)
+            roles = rls_roles(c, user, ds, role, [r.ad for r in model.tanim.roller])
+        try:
+            with lock:
+                source = SnapshotSource(model, eng, UserInfo(upn=user["email"]), roles)
+                return run_paginated(library, body, source)
+        except (ValueError, ModelError, CompileError, ArithmeticError) as e:
+            raise ApiError(400, "paginated", str(e)) from e
 
     def dataset_query(user: dict, dataset_id: int, role: str, q: VisualQuery, definition: str | None = None) -> dict:
         """Görsel sorgusu; İzleyiciye RLS rolleri uygulanır (rapor ve App ortak)."""
@@ -2136,6 +2161,12 @@ def create_server(settings: ServerSettings | None = None) -> FastAPI:
         with engine.connect() as c:
             _, role, item, dsid = load_item(c, aid, iid, user)
         return dataset_query(user, dsid, role, q, item.definition)
+
+    @app.post("/api/apps/{aid}/items/{iid}/paginated/run")
+    def app_item_paginated(aid: int, iid: int, body: PaginatedRun, user: dict = Depends(current_user)):
+        with engine.connect() as c:
+            _, role, item, dsid = load_item(c, aid, iid, user)
+        return dataset_paginated(dsid, item.definition, role, user, body)
 
     # -------------------------------------------------------------- satır düzeyi güvenlik (RLS)
     def security_dataset(c, dsid: int, user: dict):

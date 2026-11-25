@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from ..paginated.schema import Library as PaginatedLibrary
 
 VisualType = Literal[
     "table",                                    # veri ızgarası (Data Grid)
@@ -488,6 +489,7 @@ class ScenarioDefinition(_B):
 
 
 class Report(_B):
+    paginated: PaginatedLibrary | None = None
     version: int = 1
     theme: ThemeSnapshot | None = None
     analytics: AnalyticsConfig | None = None

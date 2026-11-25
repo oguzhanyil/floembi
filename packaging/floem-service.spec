@@ -19,7 +19,8 @@ a = Analysis(
     ["floem_service_entry.py"],
     pathex=["../src"],
     hiddenimports=hiddenimports,
-    datas=copy_metadata("pbixray", recursive=True) + [("POWERBI-THIRD-PARTY-NOTICES.txt", ".")],
+    datas=copy_metadata("pbixray", recursive=True) + copy_metadata("segno") + copy_metadata("python-barcode")
+          + [("POWERBI-THIRD-PARTY-NOTICES.txt", ".")],
     excludes=["tkinter", "pytest", "IPython", "matplotlib", "PIL", "numpy.tests"],
     noarchive=False,
 )

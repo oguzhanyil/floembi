@@ -1,7 +1,10 @@
 import type { AnalyticsConfig, MetricEvidence, MetricReceipt } from "./analytics";
 import type { FormKind, PrintChoices, PrintRecord, PrintTemplate } from "./printForms";
+import type { PagedLibrary, PrintOutput } from "./paginated";
+export * from "./paginated";
 export * from "./printForms";
 export * from "./printLayout";
+export * from "./freeText";
 import type { ScenarioDefinition, ScenarioQuery, ScenarioReceipt, ScenarioWorkflow } from "./scenarios";
 export type { ScenarioDefinition, ScenarioParameter, ScenarioOutput, ScenarioQuery, ScenarioReceipt, ScenarioProposal, ScenarioScope, ScenarioProposalInput, ScenarioHistory, ScenarioWorkflow } from "./scenarios";
 export type { AnalyticsConfig, AnalyticsMetric, AnalyticsRule, MetricEvidence, MetricReceipt } from "./analytics";
@@ -612,6 +615,7 @@ export interface ImportAudit {
   pages: { id: string; name: string; issues: ImportFinding[]; visuals: ImportVisualAudit[] }[];
 }
 export interface ReportDefinition {
+  paginated?: PagedLibrary | null;
   scenarios?: ScenarioDefinition[];
   analytics?: AnalyticsConfig | null;
   version: number;
@@ -679,6 +683,7 @@ export interface VisualResult {
 }
 
 export interface DocumentState {
+  paginated?: PagedLibrary;
   documentTemplates?: PrintTemplate[];
   id: string;
   name: string;
@@ -759,6 +764,7 @@ export interface RelationshipProfile {
 
 // ------------------------------------------------------------------ işler
 export type ImportItem =
+  | { database?: string; schema: string; procedure: string; arguments: Scalar[]; name?: string }
   | { database?: string; schema: string; table: string; name?: string }
   | { database?: string; sql: string; name?: string };
 
@@ -844,6 +850,10 @@ export class DesktopClient extends DesktopSourceClient implements DocumentClient
   getDocument() {
     return this.doc.request<DocumentState>("GET", "/document");
   }
+  setPagedLibrary(id: string, library: PagedLibrary) {
+    return this.doc.request<{ok: boolean}>("PUT", `/document/${encodeURIComponent(id)}/paginated`, library);
+  }
+  pagedRunner(id: string) { return pagedRunner(this.doc, `/document/${encodeURIComponent(id)}/paginated/run`); }
   printChoices(id: string, kind: FormKind, search: string) {
     return this.doc.request<PrintChoices>("GET", `/document/${encodeURIComponent(id)}/print-data/${kind}`, undefined, { search });
   }
@@ -1256,7 +1266,16 @@ export interface RefreshRun {
 }
 
 /** floembi.app sunucusu istemcisi (Bearer oturum belirteci). */
+function pagedRunner(http: HttpClient, path: string) {
+  return {
+    preview: (report: string, values: Record<string,Scalar>) => http.request<PrintOutput>("POST", path, { report, values }),
+    word: (report: string, values: Record<string,Scalar>) => http.request<{word: string}>("POST", path, { report, values, output: "word" }),
+  };
+}
+
 export class WebClient {
+  appPagedRunner(app: number, item: number) { return pagedRunner(this.http, `/api/apps/${app}/items/${item}/paginated/run`); }
+  pagedRunner(id: number) { return pagedRunner(this.http, `/api/reports/${id}/paginated/run`); }
   private http: HttpClient;
 
   constructor(baseUrl: string, token: string | null) {

@@ -1,0 +1,195 @@
+.pg-studio,
+.pg-work {
+  min-height: 0;
+  flex: 1;
+}
+.pg-studio {
+  display: flex;
+  flex-direction: column;
+}
+.pg-toolbar,
+.pg-actions,
+.pg-palette,
+.pg-fields {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pg-toolbar {
+  align-items: end;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pg-toolbar label,
+.pg-panel label {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.pg-work {
+  display: grid;
+  grid-template-columns: clamp(175px, 18vw, 250px) minmax(0, 1fr) clamp(155px, 16vw, 216px);
+}
+.pg-panel,
+.pg-stage {
+  overflow: auto;
+}
+.pg-panel {
+  background: var(--surface);
+  padding: 10px;
+  border-inline: 1px solid var(--border);
+}
+.pg-panel fieldset,
+.pg-panel details {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0 12px;
+  margin: 0 0 10px;
+  min-width: 0;
+}
+.pg-panel legend,
+.pg-panel summary {
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.pg-panel input,
+.pg-panel select,
+.pg-panel textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.pg-panel input[type="checkbox"] {
+  width: auto;
+}
+.pg-panel label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+}
+.pg-panel label {
+  margin-block: 5px;
+}
+.pg-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.pg-panel button {
+  font-size: 12px;
+}
+.pg-stage {
+  padding: 20px 26px;
+  background: #e4e9ed;
+}
+.pg-sheet {
+  background: white;
+  color: #172e40;
+  box-shadow: 0 2px 9px #324b5c36;
+}
+.pg-ruler {
+  height: 20px;
+  position: relative;
+  background: #f7f9fa;
+  overflow: hidden;
+}
+.pg-ruler span {
+  position: absolute;
+  font: 9px monospace;
+  border-left: 1px solid #aab9c6;
+  padding-left: 2px;
+}
+.print-studio .pg-band-name {
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  border: 0;
+  background: #edf2f5;
+  color: #324c61;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.pg-band-name small {
+  float: right;
+}
+.pg-band {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  background-image: radial-gradient(#b9c6ce 0.6px, transparent 0.7px);
+}
+.pg-object {
+  position: absolute;
+  font-family: Floem, Arial, sans-serif;
+  line-height: 1.1;
+  cursor: move;
+  white-space: pre;
+  box-sizing: border-box;
+  outline: 1px dashed #bac6cc;
+}
+.pg-object.selected {
+  outline: 1px solid #0878bd;
+  z-index: 1;
+}
+.pg-box {
+  border: 1px solid;
+}
+.pg-handle {
+  width: 8px;
+  height: 8px;
+  background: #0878bd;
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  cursor: nwse-resize;
+}
+.pg-entry {
+  padding: 5px;
+  border-left: 2px solid var(--accent);
+  margin-block: 6px;
+}
+.pg-empty,
+.pg-notice {
+  padding: 8px 16px;
+}
+.pg-notice {
+  color: #a33d21;
+}
+.pg-object textarea {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  font: inherit;
+  color: inherit;
+  resize: none;
+  padding: 0;
+}
+.pg-object.locked {
+  cursor: default;
+}
+.pg-object {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pg-object:not(.selected) {
+  overflow: hidden;
+}
+.pg-y-ruler {
+  position: absolute;
+  left: -20px;
+  top: 0;
+  bottom: 0;
+  width: 19px;
+  background: #f4f7f9;
+  pointer-events: none;
+  overflow: hidden;
+}
+.pg-y-ruler small {
+  position: absolute;
+  right: 1px;
+  border-top: 1px solid #acbac5;
+  font: 8px monospace;
+  color: #4e6473;
+}

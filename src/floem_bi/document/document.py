@@ -212,6 +212,7 @@ class Document:
                 "diagram": self.content.diagram,
                 "report": self.content.report,
                 "documentTemplates": [t.model_dump() for t in self.content.print_templates],
+                "paginated": self.content.paginated.model_dump(),
                 "stats": {
                     t.ad: {"rows": counts.get(t.kaynak.tablo.lower()) if t.kaynak.katman == DATA_SCHEMA else None}
                     for t in self.tanim.tablolar
@@ -907,7 +908,7 @@ def _new_column(ec_name: str, mname: str, tip: str, is_pk: bool) -> Sutun:
 def _table_from(name: str, phys: str, source: SourceRef, kaynak_id: str, res: LoadResult) -> Tablo:
     mnames = unique_names([sanitize_name(c.name, "Sütun") for c in res.columns])
     cols = [_new_column(c.name, m, model_tip(dt), c.is_primary_key) for c, dt, m in zip(res.columns, res.types, mnames)]
-    sorgu = TabloSorgu(
+    sorgu = None if source.procedure else TabloSorgu(
         kaynak=kaynak_id, veritabani=source.database,
         sema=(source.schema or "dbo") if source.table else None, tablo=source.table, sql=source.sql,
     )

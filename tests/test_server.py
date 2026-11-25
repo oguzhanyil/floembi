@@ -619,6 +619,11 @@ def test_row_level_security(server, floem_file):
     seen = desk.post("/document/query?view_as=Ege", headers=H, json=q).json()
     assert seen["rows"] == [["Ege Yapı", 80.0]]                             # Farklı görüntüle
     assert desk.post("/document/query?view_as=Yok", headers=H, json=q).status_code == 400
+    docid = desk.get("/document", headers=H).json()["id"]
+    paged = {"reports": [{"id":"customers","name":"Müşteriler","table":"OCRD",
+        "params":[{"field":"CardName","label":"Cari"}],
+        "bands":[{"kind":"detail","objects":[{"id":"name","kind":"field","field":"CardName","x":0,"y":0,"w":60,"h":6}]}]}]}
+    assert desk.put(f"/document/{docid}/paginated", headers=H, json=paged).status_code == 200
     desk.post("/document/save", headers=H, json={})
 
     hy = login(server, YON)
@@ -631,6 +636,8 @@ def test_row_level_security(server, floem_file):
     r = server.get(f"/api/reports/{rid}", headers=hi)
     assert r.status_code == 403 and r.json()["error"]["code"] == "rls_no_role"
     assert server.post(f"/api/reports/{rid}/query", headers=hi, json=q).status_code == 403
+    paged_path = f"/api/reports/{rid}/paginated/run"
+    assert server.post(paged_path, headers=hi, json={"report":"customers"}).status_code == 403
     assert server.get(f"/api/datasets/{dsid}/security", headers=hi).status_code == 403
 
     sec = server.get(f"/api/datasets/{dsid}/security", headers=hy).json()
@@ -641,6 +648,9 @@ def test_row_level_security(server, floem_file):
     assert [m["email"] for m in r.json()["roles"][0]["members"]] == ["izleyici@floembi.test"]
 
     assert server.get(f"/api/reports/{rid}", headers=hi).json()["rls_roles"] == ["Ege"]
+    paged_result = server.post(paged_path, headers=hi, json={"report":"customers"}).json()
+    assert paged_result["options"]["Cari"] == ["Ege Yapı"] and paged_result["sheet"] == [["Ege Yapı"]]
+    assert server.post(paged_path, headers=hy, json={"report":"customers"}).json()["count"] == 2
     assert server.post(f"/api/reports/{rid}/query", headers=hi, json=q).json()["rows"] == [["Ege Yapı", 80.0]]
     # Yönetici RLS'den etkilenmez (Power BI: düzenleme yetkisi olanlar tüm veriyi görür)
     assert len(server.post(f"/api/reports/{rid}/query", headers=hy, json=q).json()["rows"]) == 2
