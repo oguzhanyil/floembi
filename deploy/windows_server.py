@@ -20,7 +20,7 @@ import uvicorn
 from floem_bi.server import ServerSettings, create_server, load_settings
 from floem_bi.server import pilot_config
 from floem_bi.server.pilot import run_tunnel
-from windows_transfer import export_key, restore
+from windows_transfer import export_key, export_settings, import_settings, restore
 
 
 def web_directory() -> Path:
@@ -88,10 +88,27 @@ def main() -> None:
     for command in ("kontrol", "sunucu", "tunel", "tunel-belirteci"):
         commands.add_parser(command)
     commands.add_parser("anahtari-aktar").add_argument("dosya", type=Path)
+    for command in ("ayarlari-aktar", "ayarlari-al"):
+        commands.add_parser(command).add_argument("dosya", type=Path)
     transfer = commands.add_parser("veriyi-al")
     transfer.add_argument("kaynak", type=Path)
     transfer.add_argument("anahtar_dosyasi", type=Path)
     args = parser.parse_args()
+    if args.islem in ("ayarlari-aktar", "ayarlari-al"):
+        try:
+            code = getpass.getpass("Ayar paketi aktarım kodu: ").strip()
+            if args.islem == "ayarlari-aktar":
+                if code != getpass.getpass("Aktarım kodu tekrar: ").strip():
+                    parser.error("Aktarım kodları eşleşmiyor.")
+                export_settings(args.dosya, code)
+                print("Şifreli ayar paketi hazır.")
+            else:
+                counts = import_settings(args.dosya, code)
+                print(f"AYARLAR HAZIR - Kullanıcı: {counts['users']}, çalışma alanı: {counts['workspaces']}, "
+                      f"e-posta ayarı: {counts['mail_config']}, rapor: 0, veri modeli: 0.")
+        except (ValueError, OSError) as error:
+            parser.exit(1, f"Hata: {error}\n")
+        return
     if args.islem == "anahtari-aktar":
         export_key(args.dosya)
         return

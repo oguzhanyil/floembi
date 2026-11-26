@@ -4,6 +4,7 @@ import base64
 import getpass
 import json
 import os
+import secrets
 import shutil
 import sqlite3
 import tempfile
@@ -11,8 +12,15 @@ from contextlib import closing
 from pathlib import Path, PureWindowsPath
 
 from nacl import pwhash, secret, utils
+from sqlalchemy.engine import URL
 
 from floem_bi.server import pilot_config
+from floem_bi.server import db as metadata
+from floem_bi.server.mail import SecretBox as MailSecretBox
+
+
+# Alıcı, arşivden tablo adı veya SQL almaz. Rapor, paylaşım ve model verisi kapsam dışıdır.
+ACCOUNT_TABLES = (metadata.users, metadata.workspaces, metadata.members, metadata.mail_config)
 
 
 def transfer_box(password: str, salt: bytes) -> secret.SecretBox:
@@ -20,6 +28,80 @@ def transfer_box(password: str, salt: bytes) -> secret.SecretBox:
                               opslimit=pwhash.argon2id.OPSLIMIT_MODERATE,
                               memlimit=pwhash.argon2id.MEMLIMIT_MODERATE)
     return secret.SecretBox(key)
+
+
+def export_settings(path: Path, password: str) -> None:
+    if not password:
+        raise ValueError("Aktarım kodu boş.")
+    source = pilot_config.data_dir()
+    new_secret = secrets.token_urlsafe(48)
+    tables = {}
+    with closing(sqlite3.connect((source / "floem.db").as_uri() + "?mode=ro", uri=True)) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute("BEGIN")
+        for table in ACCOUNT_TABLES:
+            fields = ", ".join(table.columns.keys())
+            tables[table.name] = [dict(row) for row in conn.execute(f"SELECT {fields} FROM {table.name}")]
+    for row in tables["mail_config"]:
+        if row["password_enc"]:
+            source_key = pilot_config.server_secret(source)
+            if not source_key:
+                raise ValueError("SMTP ayarını açmak için kaynak sunucu anahtarı gerekli.")
+            row["password_enc"] = MailSecretBox(new_secret).seal(MailSecretBox(source_key).open(row["password_enc"]))
+    payload = json.dumps({"secret": new_secret, "tables": tables}).encode()
+    salt = utils.random(pwhash.argon2id.SALTBYTES)
+    sealed = transfer_box(password, salt).encrypt(payload)
+    with path.open("xb") as target:
+        target.write(b"FLOEM-SETTINGS-1\0" + salt + sealed)
+
+
+def import_settings(path: Path, password: str) -> dict[str, int]:
+    from nacl.exceptions import CryptoError
+
+    destination = pilot_config.data_dir()
+    if destination.exists():
+        raise ValueError("Hedef veri klasörü zaten var. Mevcut kuruluma yazılmadı.")
+    header = b"FLOEM-SETTINGS-1\0"
+    with path.open("rb") as archive:
+        if archive.read(len(header)) != header:
+            raise ValueError("Geçerli bir Floem BI ayar paketi seçin.")
+        salt = archive.read(pwhash.argon2id.SALTBYTES)
+        try:
+            payload = json.loads(transfer_box(password, salt).decrypt(archive.read()))
+        except CryptoError as error:
+            raise ValueError("Aktarım kodu veya dosyanın bütünlüğü doğrulanamadı.") from error
+    new_secret = payload["secret"]
+    existing = pilot_config.server_secret(destination)
+    if existing and existing != new_secret:
+        raise ValueError("Hedef klasöre farklı bir yayın anahtarı kayıtlı.")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=destination.parent) as work:
+        stage = Path(work) / "ready"
+        stage.mkdir()
+        database = stage / "floem.db"
+        metadata.make_engine(URL.create("sqlite", database=str(database))).dispose()
+        counts = {}
+        with closing(sqlite3.connect(database)) as conn, conn:
+            conn.execute("PRAGMA foreign_keys=ON")
+            for table in ACCOUNT_TABLES:
+                fields = list(table.columns.keys())
+                rows = payload["tables"][table.name]
+                placeholders = ",".join("?" for _ in fields)
+                conn.executemany(f"INSERT INTO {table.name} ({','.join(fields)}) VALUES ({placeholders})",
+                                 ([row[field] for field in fields] for row in rows))
+                counts[table.name] = len(rows)
+            admin = conn.execute("SELECT 1 FROM users JOIN members ON users.id=members.user_id "
+                                 "WHERE users.is_admin=1 AND members.role='admin' LIMIT 1").fetchone()
+            if not admin:
+                raise ValueError("Kaynakta çalışma alanını yönetebilen bir yönetici bulunamadı.")
+        os.rename(stage, destination)
+        if not existing:
+            try:
+                pilot_config.save_server_secret(destination, new_secret)
+            except Exception:
+                os.rename(destination, stage)
+                raise
+    return counts
 
 
 def export_key(path: Path) -> None:

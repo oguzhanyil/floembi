@@ -4,7 +4,13 @@
 
 ZIP dosyasını hedef Windows x64 sunucusuna kopyalayıp uygulamaya ayrılmış bir klasöre çıkarın. **01-KONTROL.cmd** dosyasını çalıştırın. `KONTROL BASARILI` mesajı, paketteki gerçek web sayfası ve JavaScript dosyasının yüklendiğini, API'nin sağlık yanıtı verdiğini ve oturumsuz rapor isteğinin 401 döndüğünü gösterir. Kontrol geçici bir klasörde ve boş bir yerel portta çalışır. Paket kendi Python çalışma ortamını ve derlenmiş web arayüzünü içerir. Kaynaklar **FloemBI-Proje.zip** içindedir.
 
-## Mevcut Windows yayınını aynı adresle taşıma
+## Yalnızca hesapları ve e-posta ayarını taşıma
+
+Yeni sunucuda raporları sıfırdan yayımlayacaksanız kaynak bilgisayarda `FloemBI-Sunucu.exe ayarlari-aktar ayarlar.enc` çalıştırıp aktarım kodunu gizli istemde belirleyin. Ayar paketi kullanıcıların parola özetlerini, çalışma alanlarını, üyelikleri ve SMTP ayarını şifreli taşır. Bu sırada eski yayın çalışabilir.
+
+Yeni sunucuda aynı Windows hesabıyla `FloemBI-Sunucu.exe ayarlari-al ayarlar.enc` komutuna aynı kodu girip `FloemBI-Sunucu.exe sunucu` çalıştırın. Var olan hedef klasör korunur. Yeni yayında rapor ve model sayısı sıfırdır. Kullanıcılar kendi parolalarıyla yeniden oturum açar. Dış erişim ve tünel geçişi için aşağıdaki 5–7. adımları kullanın.
+
+## Mevcut Windows yayınını raporlarıyla birlikte aynı adresle taşıma
 
 1. Hedefte Floem BI'ı çalıştıracak Windows hesabını seçin. İçe aktarma, sunucu ve tünel aynı Windows hesabında çalışır. Canlı SQLite, DuckDB ve giden kutusu için hesabın erişebildiği özel bir klasör kullanın. Varsayılan hedef `%LOCALAPPDATA%\FloemBI\pilot-server` olur. Farklı bir hedef için `FLOEM_SERVER_DATA` değerini içe aktarma ve sonraki başlatmalarda aynı mutlak klasöre ayarlayın.
 2. Eski bilgisayarda paket klasöründen aşağıdaki ilk komutu çalıştırın. Aktarım parolası konsolda gizli alınır. Bu dosya, mevcut oturum imzalama ve SMTP şifreleme anahtarını parolayla korur. Tünel belirteci ayrıca hedefte girilir.
