@@ -472,6 +472,9 @@ ayar dosyası `%APPDATA%\FloemBI\gateway-<numara>.json` içindedir. Özel anahta
 Bilgisi Yöneticisi'nde tutulur. Ayrı Floemway Windows hizmet yükleyicisi de hazırlanabilir.
 Web'de anlam modelini açarak günlük saatleri, saat dilimini ve başarı bildirimlerini kaydedebilirsiniz.
 [Floemway hizmeti, zamanlama, PostgreSQL dağıtımı, yedekleme ve saha testleri](docs/h7-h9-isletim-ve-kabul.md).
+
+Mevcut Windows yayınını başka bir Windows sunucusuna RDP ile taşımak için
+[yayın paketi, veri aktarımı ve geri dönüş adımlarını](deploy/windows-yayin.md) izleyin.
 Uzak floembi.app adresi HTTPS olmalıdır; yerel geliştirmede `127.0.0.1` için HTTP kullanılabilir.
 
 Floem BI Desktop'ta kayıtlı SQL bağlantısıyla raporu kaydedip **Yayımla** düğmesine basın. Tek kayıtlı
