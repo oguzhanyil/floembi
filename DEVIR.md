@@ -1,4 +1,12 @@
-# Floem BI: devir notu (24.11.2026)
+# Floem BI devir notu (26.11.2026)
+
+**26.11.2026 · Windows yayın sunucusunda devam**
+
+Hedef sunucuda Masaüstü'ndeki `floembi-server` klasörü çalışan paket içindir. Kullanıcı bu klasördeki `01-KONTROL.cmd` denemesinin başarılı olduğunu bildirdi. Geliştirme için `main` dalını yanına, ayrı bir `floembi-kaynak` klasörüne çekin. Devir sırasında `bi.floemdata.com` eski bilgisayardan hizmet veriyordu.
+
+1. Hedefte yerel yayının ve kullanıcı ayarlarının mevcut durumunu kontrol edin. Kullanıcı **iki mevcut hesabı, çalışma alanı üyeliklerini ve SMTP ayarını koruyup boş bir rapor alanıyla** başlamak istiyor. Beklenen sonuç 1 çalışma alanı, 0 rapor ve 0 veri modelidir.
+2. Ayar aktarımı gerekiyorsa kaynak bilgisayarda hazırlanan `Sunucuya-Kopyala` klasörünü RDP üzerinden paket klasörüne alın. Hedefte içindeki `02-AYARLARI-KUR-VE-BASLAT.cmd` çalışır. Aktarım kodunu kaynak bilgisayardaki `01-AKTARIM-KODU.cmd` sağlar. Şifreli `Yayin-Ayarlari.enc` ve aktarım kodu ayrı teslim edilir. İlk dağıtılan paket `4c6c522` sürümüdür. Yanındaki aktarım aracı, Git'teki `9bbf640` ile eklenen `ayarlari-al` komutunu destekler.
+3. Sunucudaki tarayıcıda `http://127.0.0.1:8811` üzerinden mevcut yöneticiyle giriş yapın, boş çalışma alanını ve kayıtlı SMTP ayarını doğrulayın. Ardından eski ve yeni Cloudflare bağlayıcılarının geçişini koordine edin. Dış adresten oturum açma ve Desktop'tan bir deneme raporu yayımlama, geçişin son kontrolleridir. [Windows yayın rehberi](deploy/windows-yayin.md)
 
 **25.11.2026 · Serbest belge ve sayfalı rapor tasarımı.** Desktop'ta Belge Tasarımcısı → Sayfalı raporlar. Bağlantısız boş sayfa, kayıt başına form ve veri listesi başlangıçları vardır. Hazır fatura ve teklifte başlık taşınabilir, serbest metin kutularına alan eklenebilir. Yerel `data/Serbest Belge Tasarımı.lnk` kısayolu paketli Desktop'ta `data/Serbest-Belge-Tasarimi.floem` dosyasını tek sayfalık teslim tutanağıyla açar. `data/Sayfali-Rapor-Ornegi.floem` altı sayfalık FAT-0200 faturasıyla açılır. Başlık taşıma, bölümler arası sürükleme, doğrudan yazma, kilit, çoğaltma, kaydetme ve beş çıktı biçimi arayüzden sınandı. [Mimari, kullanım ve veri yolu](docs/sayfali-rapor-mimarisi.md).
 
