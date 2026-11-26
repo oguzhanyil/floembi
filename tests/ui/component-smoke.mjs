@@ -7,6 +7,10 @@ export async function testComponents({ call, evaluate, waitFor, input, dir }) {
   await call('Emulation.setDeviceMetricsOverride', { width: 1500, height: 1000, deviceScaleFactor: 1, mobile: false });
   await evaluate('window.setTestMode("components")');
   await waitFor('document.querySelector("[data-visual-id=amount] .v-card-value")?.textContent === "42"');
+  const pane = '.viz-pane';
+  assert(await evaluate(`!!document.querySelector('${pane} > h3 + .viz-group')`));
+  assert(await evaluate(`!!document.querySelector('${pane} > .viz-group + .viz-tabs')`));
+  assert.equal(await evaluate(`document.querySelectorAll('${pane} [role=tab]:disabled').length`), 2);
   const click = (text) => evaluate(`[...document.querySelectorAll('button')].find(e=>e.textContent===${JSON.stringify(text)}).click()`);
   const select = (id) => evaluate(`(()=>{const e=document.querySelector('[data-visual-id="${id}"]');e.focus();e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,ctrlKey:true}))})()`);
   const change = (selector, value) => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);
@@ -28,7 +32,15 @@ export async function testComponents({ call, evaluate, waitFor, input, dir }) {
   const root = second.find((v) => v.component), heading = second.find((v) => v.type === 'text'), card = second.find((v) => v.type === 'card');
   assert.equal(card.values[0].measure, 'Sipariş');
   await waitFor(`document.querySelector('[data-visual-id="${card.id}"] .v-card-value')?.textContent === '72'`);
-  await select(heading.id); await click('Biçim'); await formatInput('Renk', 'color', '#ff9900');
+  await select(heading.id);
+  for (const tab of ['Alanlar', 'Biçim']) {
+    await click(tab);
+    await waitFor(`document.querySelector('${pane} [aria-selected="true"][role=tab]')?.textContent === ${JSON.stringify(tab)}`);
+    for (const settings of ['.page-layout-controls', '.component-library', '.report-theme-controls', '.layout-controls']) {
+      assert(await evaluate(`!!document.querySelector('${pane} > .viz-tabs ~ .well ~ ${settings}')`), `${tab} · ${settings}`);
+    }
+  }
+  await formatInput('Renk', 'color', '#ff9900');
   await waitFor(`window.savedComponentReport.pages[1].visuals.find(v=>v.id==='${heading.id}').format.color === '#ff9900'`);
   await click('Kaynak'); await select('heading'); await formatInput('Yazı boyutu', 'number', '30');
   await click('Yeni sürüm hazırla'); await waitFor('document.querySelector("dialog[open]")'); await click('Sürümü kaydet');

@@ -353,7 +353,7 @@ try {
     await dismissMenu();
   }
   await openMenu('[data-visual-id=object-text]'); await choose('Biçim / özellikler');
-  await waitFor('document.querySelector(".viz-tabs .active")?.textContent.includes("Biçim")');
+  await waitFor(`document.querySelector('.viz-tabs [aria-selected="true"]')?.textContent === 'Biçim'`);
   if (process.env.FLOEM_UI_ARTIFACT_DIR) {
     await openMenu('[data-visual-id=object-text]');
     const screenshot = await call('Page.captureScreenshot', { format: 'png' });

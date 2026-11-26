@@ -747,7 +747,6 @@ export function VisualizationsPane({
   return (
     <aside className="viz-pane">
       <h3>Görselleştirmeler</h3>
-      {themeControls}
       {VISUAL_GROUPS.map((g) => (
         <div key={g} className="viz-group">
           <div className="viz-group-label">{g}</div>
@@ -768,17 +767,14 @@ export function VisualizationsPane({
           </div>
         </div>
       ))}
-      {layoutControls}
+      <div className="viz-tabs" role="tablist" aria-label="Seçili nesnenin ayarları">
+        <button role="tab" disabled={!visual} aria-selected={!!visual && tab === "fields"}
+          onClick={() => setTab("fields")}>Alanlar</button>
+        <button role="tab" disabled={!visual} aria-selected={!!visual && tab === "format"}
+          onClick={() => setTab("format")}>Biçim</button>
+      </div>
       {visual ? (
         <>
-          <div className="viz-tabs" role="tablist">
-            <button role="tab" className={tab === "fields" ? "active" : ""} onClick={() => setTab("fields")}>
-              Alanlar
-            </button>
-            <button role="tab" className={tab === "format" ? "active" : ""} onClick={() => setTab("format")}>
-              Biçim
-            </button>
-          </div>
           <div className="viz-selected">{VISUAL_DEFS[visual.type].label}</div>
           {tab === "fields" ? (
             VISUAL_DEFS[visual.type].wells.map((w) => (
@@ -822,6 +818,8 @@ export function VisualizationsPane({
           <PageSettings page={page} onChange={onPageChange} />
         </>
       )}
+      {themeControls}
+      {layoutControls}
     </aside>
   );
 }
